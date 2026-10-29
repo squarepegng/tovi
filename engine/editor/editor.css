@@ -60,7 +60,7 @@ aside[hidden]{display:none!important}
 /* floating toolbar */
 .bar{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:6px;background:var(--raised);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.35);z-index:20}
 .modes{display:flex;gap:2px;padding:2px;background:var(--canvas);border-radius:10px}
-.tb{display:grid;place-items:center;width:36px;height:36px;background:transparent;border:0;border-radius:8px;color:var(--ink2);position:relative}
+.tb{display:grid;place-items:center;width:40px;height:40px;background:transparent;border:0;border-radius:8px;color:var(--ink2);position:relative}
 .tb:hover{background:var(--line);color:var(--ink)}
 .tb.on{background:var(--select);color:#fff}
 .modes .tb.on{background:var(--select);color:#fff}
