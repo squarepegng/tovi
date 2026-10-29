@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import { KerfError } from './edit.mjs';
 
 export function createSession(webRoot, editor) {
@@ -51,13 +52,34 @@ export function createSession(webRoot, editor) {
     return { file: h.rel, loc: h.loc, name: h.change?.name || null, label: (s.labels || []).join(' · ') || code, code, source: h.source || 'hand' };
   };
 
-  function snapshot() {
-    if (editor.history.length > end()) versions.push({ n: versions.length + 1, at: Date.now(), from: end(), to: editor.history.length });
+  // Who made the changes: the project's git name, else this Mac's user.
+  let author = null;
+  const authorName = () => {
+    if (author) return author;
+    try { author = spawnSync('git', ['config', 'user.name'], { cwd: webRoot, encoding: 'utf8' }).stdout.trim(); } catch {}
+    if (!author) { try { author = os.userInfo().username; } catch { author = 'You'; } }
+    return author;
+  };
+  // Save a version. Autosaves happen on their own; named ones are saved (and named) by the designer.
+  // Naming with nothing new to save names the latest version instead.
+  function snapshot(opts = {}) {
+    const kind = opts.kind === 'named' || opts.name ? 'named' : 'auto';
+    const name = opts.name ? String(opts.name).trim().slice(0, 80) : null;
+    if (editor.history.length > end()) versions.push({ n: versions.length + 1, at: Date.now(), from: end(), to: editor.history.length, kind, name, by: authorName() });
+    else if (kind === 'named' && versions.length) Object.assign(versions[versions.length - 1], { kind, name: name || versions[versions.length - 1].name });
+    return list();
+  }
+  function rename(n, name) {
+    const v = versions.find((x) => x.n === n);
+    if (!v) throw new KerfError('That version no longer exists.');
+    v.name = String(name || '').trim().slice(0, 80) || null;
+    v.kind = v.name ? 'named' : v.kind || 'auto';
     return list();
   }
   function list() {
     return {
-      versions: versions.map((v) => ({ n: v.n, at: v.at, changes: entries(v.from, v.to).map(describe) })),
+      versions: versions.map((v) => ({ n: v.n, at: v.at, kind: v.kind || 'auto', name: v.name || null, by: v.by || authorName(), changes: entries(v.from, v.to).map(describe) })),
+      by: authorName(),
       draft: entries(end(), editor.history.length).map(describe),
       peeking: peek ? peek.n : null,
     };
@@ -167,5 +189,5 @@ export function createSession(webRoot, editor) {
     save();
     return direction;
   };
-  return { save, direction: () => direction, setDirection, chat: () => chat, setChat: (c) => { chat = { messages: (c.messages || []).slice(-200), notes: c.notes || [] }; save(); }, snapshot, list, restore, peekBefore, unpeek: () => { unpeekNow(); return list(); }, isPeeking: () => !!peek, repoInfo, pullRequest };
+  return { save, direction: () => direction, setDirection, chat: () => chat, setChat: (c) => { chat = { messages: (c.messages || []).slice(-200), notes: c.notes || [] }; save(); }, snapshot, rename, list, restore, peekBefore, unpeek: () => { unpeekNow(); return list(); }, isPeeking: () => !!peek, repoInfo, pullRequest };
 }

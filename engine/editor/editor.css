@@ -144,12 +144,6 @@ aside[hidden]{display:none!important}
 .dot{width:6px;height:6px;border-radius:3px;background:var(--intent);flex:0 0 auto;margin-top:5px}
 
 /* history */
-.ver{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:10px;background:transparent;border:0;width:100%;text-align:left;color:var(--ink)}
-.ver.on{background:var(--raised);box-shadow:inset 0 0 0 1.5px var(--intent)}
-.ver .vh{display:flex;justify-content:space-between;align-items:center;font-weight:600}
-.ver .vh span:last-child{color:var(--ink3);font-weight:400}
-.ver .ch{color:var(--ink2);font:400 11px/16px 'Geist Mono',ui-monospace,monospace;word-break:break-word}
-.ver .acts{justify-content:flex-start}
 .src{padding:0 5px;border:1px solid var(--line);border-radius:4px;color:var(--ink3);font-size:10px;font-weight:500}
 
 /* AI */
@@ -337,8 +331,7 @@ details.code[open] summary::before{content:'⌄ '}
 /* designer names */
 .sec.head .secH .hbs{display:flex;gap:2px}
 .sec.head .secH .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lchanges .row b,.ver .ch b{font-weight:600;color:var(--ink)}
-.ver .ch{font:400 12px/17px Geist,system-ui,sans-serif}
+.lchanges .row b,.vChanges .ch b{font-weight:600;color:var(--ink)}
 .files .frs{max-height:220px;overflow:auto;padding:4px 0}
 .files .fr b{font-weight:600}
 
@@ -356,7 +349,6 @@ details.code[open] summary::before{content:'⌄ '}
 .zoom .icon{width:24px}
 .zpct{min-width:58px;height:28px;padding:0 6px;border:0;border-radius:6px;background:transparent;color:var(--ink2);font:500 12px/1 Geist,system-ui,sans-serif;white-space:nowrap}
 .zpct:hover{background:var(--raised);color:var(--ink)}
-.ver .acts .outline{white-space:nowrap}
 .sizeRow{display:flex;align-items:center;gap:8px}
 .sizeRow .seg button{display:inline-flex;align-items:center;gap:5px}
 .sizeRow .note{white-space:nowrap}
@@ -922,3 +914,38 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .dialog.settings .dh{padding:20px 20px 8px}
 .setBody{padding:4px 20px 20px;min-height:0}
 .setRow:last-child{border-bottom:0}
+
+/* ============ Version history: a timeline like Figma's ============ */
+.vScroll{padding:4px 8px 16px}
+.vIntro{margin:8px 8px 12px;color:var(--ink3);font-size:11px;line-height:16px}
+.vTimeline{position:relative}
+.vTimeline::before{content:'';position:absolute;left:15px;top:18px;bottom:18px;width:1px;background:rgba(255,255,255,.14)}
+.vRow{position:relative;display:flex;align-items:flex-start;padding-left:32px;min-height:28px}
+.vNode{position:absolute;left:8px;top:12px;width:15px;height:15px;display:grid;place-items:center;background:var(--panel)}
+.vNode.sm{top:7px;color:var(--ink3)}
+.vRing{display:block;width:11px;height:11px;border-radius:50%;border:1.5px solid var(--ink2);background:var(--panel)}
+.vItem.cur .vRing,.vRow:first-child .vRing{border-color:var(--ink)}
+.vItem{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;padding:9px 34px 10px 10px;border-radius:6px;cursor:default}
+.vItem[data-act]{cursor:pointer}
+.vItem[data-act]:hover{background:rgba(255,255,255,.04)}
+.vItem.sel{background:var(--raised);outline:none}
+.vItem.sel:hover{background:var(--raised)}
+.vTitle{color:var(--ink);font-weight:600;font-size:12px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vSub{color:var(--ink3);font-size:11px;line-height:15px}
+.vWho{display:flex;align-items:center;gap:6px;margin-top:3px;color:var(--ink2);font-size:11px;line-height:16px}
+.vAv{display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--select);color:#fff;font:600 8px/1 Geist,system-ui,sans-serif;font-style:normal;letter-spacing:.02em}
+.vMore{position:absolute;top:6px;right:4px;width:24px;height:24px;display:grid;place-items:center;border:0;border-radius:4px;background:none;color:var(--ink3);opacity:0}
+.vItem:hover .vMore,.vItem.sel .vMore,.vMore:focus-visible{opacity:1}
+.vMore:hover{background:rgba(255,255,255,.08);color:var(--ink)}
+.vGroup{height:28px;padding:0 10px;border:0;border-radius:6px;background:none;color:var(--ink2);font:500 12px/16px Geist,system-ui,sans-serif;text-align:left}
+.vGroup:hover{color:var(--ink);background:rgba(255,255,255,.04)}
+.vPeek{align-self:flex-start;margin-top:4px;padding:2px 8px;border-radius:999px;background:rgba(233,181,71,.14);color:var(--intent);font-size:11px;line-height:16px}
+.vChanges{display:flex;flex-direction:column;gap:3px;margin:6px 0 2px}
+.vChanges .ch{color:var(--ink2);font:400 12px/17px Geist,system-ui,sans-serif;word-break:break-word}
+.vChanges .note{color:var(--ink3);font-size:11px}
+.vSave,.vName{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.vSave button{align-self:flex-start}
+.vName{margin:0}
+.vSave input,.vName input{flex:none;width:100%;min-width:0;height:28px;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--canvas);color:var(--ink);font:400 12px/16px Geist,system-ui,sans-serif}
+.vSave input:focus,.vName input:focus{outline:none;border-color:var(--select)}
+.vItem.empty{padding-left:10px}

@@ -97,7 +97,8 @@ export async function createKerf(webRoot) {
         const send2 = (status, b) => { if (status === 200 && route !== '/inspect' && route !== '/ai') session.save(); return s0(status, b); };
         const writes = ['/edit', '/undo', '/ai/apply', '/structure'];
         if (writes.includes(route) && session.isPeeking()) return send(409, { error: 'You’re looking at an earlier version. Close it to keep editing.' });
-        if (route === '/version') return send2(200, session.snapshot());
+        if (route === '/version') return send2(200, session.snapshot(body || {}));
+        if (route === '/rename') return send2(200, session.rename(Number(body.n), body.name));
         if (route === '/restore') return send2(200, session.restore(Number(body.n)));
         if (route === '/peek') return send2(200, session.peekBefore(Number(body.n)));
         if (route === '/unpeek') return send2(200, session.unpeek());

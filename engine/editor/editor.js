@@ -431,6 +431,7 @@
     branch: '<circle cx="4.5" cy="3.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="4.5" cy="12.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="11.5" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M4.5 5.1v5.8M11.5 7.6c0 2.6-7 1.4-7 3.3" fill="none" stroke="currentColor" stroke-width="1.1"/>',
     check: '<path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
     eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>',
+    dots: '<circle cx="3.5" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="12.5" cy="8" r="1.2" fill="currentColor"/>',
     gear: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g>',
     comment: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></g>',
     addEl: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></g>',
@@ -1060,16 +1061,55 @@
   }
   const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const chLabel = (c) => `${c.name ? `<b>${esc(c.name)}</b> · ` : ''}${esc(c.label)}`;
+  // Version history like Figma's: a timeline with the current version at the top, named versions as
+  // milestones, and runs of autosaves folded into one "N autosave versions" row.
+  S.vGroups = new Set(); S.vSel = null; S.vOpen = null; S.vNaming = null;
+  const when = (t) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const initials = (n) => String(n || 'You').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  const who = (n) => `<span class="vWho"><i class="vAv">${esc(initials(n))}</i>${esc(n || 'You')}</span>`;
+  const RING = '<i class="vRing"></i>';
   function historyHTML() {
-    const { versions, draft, peeking } = S.versions;
+    const { versions, draft, peeking, by } = S.versions;
     const v = versions.slice().reverse();
+    // Fold runs of autosaves; named versions stand on their own.
+    const groups = [];
+    for (const x of v) {
+      const last = groups[groups.length - 1];
+      if (x.kind !== 'named' && last?.auto) last.items.push(x);
+      else groups.push({ auto: x.kind !== 'named', items: [x] });
+    }
+    const changesList = (list) => `<div class="vChanges">${list.slice(0, 8).map((c) => `<span class="ch">${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${chLabel(c)}</span>`).join('')}${list.length > 8 ? `<span class="note">and ${list.length - 8} more</span>` : ''}</div>`;
+    const item = (x, node) => {
+      const sel = S.vSel === x.n || peeking === x.n;
+      const naming = S.vNaming === x.n;
+      return `<div class="vRow">${node ? `<span class="vNode">${RING}</span>` : ''}
+        <div class="vItem${sel ? ' sel' : ''}" data-act="vSel" data-v="${x.n}">
+          ${naming ? `<form class="vName" data-form="vname" data-n="${x.n}"><input value="${esc(x.name || '')}" placeholder="Name this version" aria-label="Version name" maxlength="80"></form>` : `<div class="vTitle">${x.name ? esc(x.name) : when(x.at)}</div>`}
+          ${x.name && !naming ? `<span class="vSub">${when(x.at)}</span>` : ''}
+          ${who(x.by || by)}
+          ${peeking === x.n ? '<span class="vPeek">Showing the screen before this</span>' : ''}
+          ${S.vOpen === x.n ? changesList(x.changes) : ''}
+          <button class="vMore" data-act="vMenu" data-v="${x.n}" aria-label="Version actions" title="Actions">${ico('dots', 16)}</button>
+        </div></div>`;
+    };
+    const body = groups.map((g) => {
+      if (!g.auto || g.items.length === 1) return g.items.map((x) => item(x, x.kind === 'named')).join('');
+      const key = g.items[0].n, open = S.vGroups.has(key) || g.items.some((x) => x.n === S.vSel || x.n === peeking);
+      return `<div class="vRow"><span class="vNode sm">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="vGroup" data-act="vGroup" data-v="${key}">${g.items.length} autosave versions</button></div>${open ? g.items.map((x) => item(x, false)).join('') : ''}`;
+    }).join('');
     return `<div class="ptabs"><button class="on">Version history</button><button class="x" data-act="history" aria-label="Close">${ico('x')}</button></div>
-      <div class="scroll" style="padding:8px;display:flex;flex-direction:column;gap:4px">
-      ${draft.length ? `<div class="ver"><div class="vh"><span>Current</span><span>${draft.length} unsaved change${draft.length === 1 ? '' : 's'}</span></div>${draft.slice(-4).reverse().map((c) => `<span class="ch">${chLabel(c)}</span>`).join('')}${draft.length > 4 ? `<span class="note">and ${draft.length - 4} more</span>` : ''}<div class="acts"><button class="outline" data-act="saveVersion">Save as a version</button><span class="note">Also saved every few minutes and when you present.</span></div></div>` : ''}
-      ${v.map((x) => `<div class="ver${peeking === x.n ? ' on' : ''}"><div class="vh"><span>Version ${x.n}</span><span>${time(x.at)}</span></div>
-        ${x.changes.slice(0, 5).map((c) => `<span class="ch">${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${chLabel(c)}</span>`).join('')}${x.changes.length > 5 ? `<span class="note">and ${x.changes.length - 5} more</span>` : ''}
-        <div class="acts"><button class="outline" data-act="peek" data-v="${x.n}">${peeking === x.n ? 'Back to now' : 'Show before'}</button><button class="ghostBtn" data-act="restore" data-v="${x.n - 1}" title="Undo this version and everything after it">Undo from here</button></div></div>`).join('')}
-      ${!v.length && !draft.length ? `<div class="empty"><b>No versions yet</b><span>Tovi saves your changes as a version every few minutes, when you move to another page, and when you present. Here you can see the screen before a version or undo back to it.</span></div>` : ''}
+      <div class="scroll vScroll">
+        <p class="vIntro">Tovi saves a version every few minutes, when you change page and when you present. Name a version to keep it as a milestone.</p>
+        <div class="vTimeline">
+          <div class="vRow"><span class="vNode">${RING}</span><div class="vItem cur${S.vSel == null && peeking == null ? ' sel' : ''}">
+            <div class="vTitle">Current version</div>
+            ${draft.length ? `<span class="vSub">${draft.length} change${draft.length === 1 ? '' : 's'} not in a version yet</span>${changesList(draft.slice().reverse())}
+              <form class="vSave" data-form="vsave"><input placeholder="Name it (optional)" aria-label="Version name" maxlength="80"><button class="primary sm">Save version</button></form>` : `<span class="vSub">Everything is saved</span>`}
+            ${who(by)}
+          </div></div>
+          ${body}
+          ${v.length ? '' : '<div class="vRow"><div class="vItem empty"><span class="vSub">No versions yet. They appear here as you work.</span></div></div>'}
+        </div>
       </div>`;
   }
   function renderPeek() {
@@ -1120,7 +1160,7 @@
   function saveVersion() {
     if (!S.count || S.count === S.verAt || S.versions.peeking) return;
     S.verAt = S.count;
-    api('/version', {}).then((v) => { S.versions = v; renderTop(); }).catch(() => {});
+    api('/version', { kind: 'auto' }).then((v) => { S.versions = v; renderTop(); if (S.side === 'history') renderPanel(); }).catch(() => {});
   }
   setInterval(saveVersion, 3 * 60 * 1000);
   // Cursors and capture layers follow the tool: arrow to select, the app's own cursors to interact, a hand to move.
@@ -1369,6 +1409,21 @@
       case 'srcScope': S.srcScope = v; renderPanel(); break;
       case 'sizeOnly': S.sizeOnly[S.device] = v === 'true'; renderPanel(); break;
       case 'reveal': S.reveal = { el: S.sel?.el, ...(S.reveal?.el === S.sel?.el ? S.reveal : {}), [v]: true }; renderPanel(); break;
+      case 'vSel': if (!e.target.closest('.vMore,.vName')) { S.vSel = S.vSel === +v ? null : +v; renderPanel(); } break;
+      case 'vGroup': S.vGroups.has(+v) ? S.vGroups.delete(+v) : S.vGroups.add(+v); renderPanel(); break;
+      case 'vMenu': {
+        const n = +v, x = S.versions.versions.find((y) => y.n === n);
+        const r = a.getBoundingClientRect();
+        S.vSel = n; renderPanel();
+        openMenu([
+          { label: S.vOpen === n ? 'Hide what changed' : `What changed (${x?.changes.length || 0})`, run: () => { S.vOpen = S.vOpen === n ? null : n; renderPanel(); } },
+          { label: S.versions.peeking === n ? 'Back to the current screen' : 'Show the screen before this', run: () => peek(n) },
+          { label: x?.name ? 'Rename…' : 'Name this version…', run: () => { S.vNaming = n; renderPanel(); setTimeout(() => document.querySelector('.vName input')?.focus(), 0); } },
+          '-',
+          { label: 'Restore this version', sub: 'Undo every change after it', danger: true, run: () => restore(n) },
+        ], { x: r.left - 180, y: r.bottom + 4 });
+        break;
+      }
       case 'saveVersion': api('/version', {}).then((v) => { S.versions = v; renderPanel(); renderTop(); toast(`Saved version ${v.versions.length}`); }).catch((e) => toast(e.message, '', true)); break;
       case 'copyLoc': navigator.clipboard?.writeText(activeLoc() || '').then(() => toast('Copied the code location', activeLoc() || '')).catch(() => {}); break;
       case 'parent': { const p = S.sel && pick(S.sel.el.parentElement); if (p) select(p); break; }
@@ -1441,6 +1496,9 @@
     preview(S.sel.el, p, n);
     commitSoon(p, n);
   });
+  // Naming a version: Escape or clicking away cancels.
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest?.('.vName')) { e.stopPropagation(); S.vNaming = null; renderPanel(); } }, true);
+  document.addEventListener('focusout', (e) => { if (e.target.closest?.('.vName') && S.vNaming != null) setTimeout(() => { if (!document.activeElement?.closest('.vName')) { S.vNaming = null; renderPanel(); } }, 120); });
   document.addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target.dataset.form;
@@ -1449,6 +1507,8 @@
     if (f === 'chat') sendChat();
     if (f === 'pick' && S.pick) { S.pick.prompt = $('pickQ').value; if (S.pick.kind === 'photo') S.pick.photos = null; else S.pick.drawings = null; runPicker(); }
     if (f === 'note') addNote();
+    if (f === 'vsave') { const name = e.target.querySelector('input').value.trim(); api('/version', { kind: 'named', name: name || null }).then((v) => { S.versions = v; S.verAt = S.count; renderPanel(); renderTop(); toast(name ? `Saved “${name}”` : 'Saved a version'); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'vname') { const n = +e.target.dataset.n, name = e.target.querySelector('input').value.trim(); api('/rename', { n, name }).then((v) => { S.versions = v; S.vNaming = null; renderPanel(); }).catch((err) => toast(err.message, '', true)); }
     if (f === 'reply') {
       const where = e.target.dataset.where, prev = S.card;
       take('replyIn', (v, atts) => runAI(v, where === 'notes' && prev?.targets ? prev.targets : visibleTargets(), where, v, true, atts));
@@ -1489,12 +1549,13 @@
     afterEdit();
   }
   async function restore(n) {
-    if (!confirm(n === 0 ? 'Undo every change from this session?' : `Undo everything after version ${n}?`)) return;
+    if (!confirm(n === 0 ? 'Undo every change from this session?' : 'Restore this version? Every change after it is undone.')) return;
     try {
       S.versions = await api('/restore', { n });
       const c = await api('/changes');
       S.count = c.length;
-      toast(n === 0 ? 'Back to how the screen started' : `Restored version ${n}`);
+      toast(n === 0 ? 'Back to how the screen started' : 'Restored that version');
+      S.vSel = null;
     } catch (e) { toast(e.message, '', true); }
     afterEdit();
   }
