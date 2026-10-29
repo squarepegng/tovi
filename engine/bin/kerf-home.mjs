@@ -105,14 +105,17 @@ nav a svg{flex:0 0 auto;color:var(--ink3)}
 nav a.on svg{color:var(--ink)}
 nav .sp{flex:1}
 nav .ver{padding:0 10px;color:var(--ink3);font-size:11px}
-main{min-width:0;padding:56px 48px 64px;max-width:960px;width:100%}
+main{min-width:0;padding:56px 48px 64px;max-width:760px;width:100%;margin:0 auto}
 .view{display:none;flex-direction:column;gap:32px}
 .view.on{display:flex}
 h1{margin:0;font-size:26px;line-height:32px;font-weight:600;letter-spacing:-.02em}
 h2{margin:0;font-size:13px;font-weight:600;color:var(--ink)}
 p{margin:6px 0 0;color:var(--ink2);max-width:560px}
-.lead{display:flex;flex-direction:column;gap:16px}
-form.openf{display:flex;gap:8px;max-width:640px}
+.lead{display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center}
+.lead p{margin-left:auto;margin-right:auto}
+.view > div:first-child:not(.lead){text-align:center}
+.view > div:first-child:not(.lead) p{margin-left:auto;margin-right:auto}
+form.openf{display:flex;gap:8px;width:100%;max-width:640px}
 input{flex:1;min-width:0;height:42px;padding:0 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;outline:none}
 input:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(43,102,217,.2)}
 button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:42px;padding:0 18px;border:0;border-radius:10px;background:var(--select);color:#fff;font:500 13px Geist,system-ui,sans-serif;cursor:pointer;text-decoration:none;white-space:nowrap}
@@ -121,7 +124,7 @@ button:disabled{opacity:.5;cursor:default}
 .ghost:hover{background:var(--panel)}
 .sm{height:32px;padding:0 12px;border-radius:8px;font-size:12px}
 .hint{color:var(--ink3);font-size:12px}
-.banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-radius:12px;background:rgba(43,102,217,.1);border:1px solid rgba(43,102,217,.35);max-width:640px}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-radius:12px;background:rgba(43,102,217,.1);border:1px solid rgba(43,102,217,.35);width:100%;max-width:640px;text-align:left}
 .banner span{color:var(--ink)}
 .card{display:flex;flex-direction:column;gap:12px;padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .status{display:flex;align-items:center;gap:10px;font-weight:500}
@@ -142,7 +145,7 @@ details.logs summary{cursor:pointer;color:var(--ink3);font-size:12px}details.log
 .pill.run{background:rgba(111,211,154,.12);color:var(--ok)}
 .pill.run::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--ok)}
 .empty{padding:28px;border:1px dashed var(--line);border-radius:14px;color:var(--ink3);text-align:center}
-.rows{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:680px}
+.rows{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .srow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.06)}
 .srow:last-child{border-bottom:0}
 .srow .tx{display:flex;flex-direction:column;gap:3px;min-width:0}
@@ -150,12 +153,12 @@ details.logs summary{cursor:pointer;color:var(--ink3);font-size:12px}details.log
 .srow form{display:flex;gap:8px;margin-top:10px}
 .srow input{height:36px;border-radius:8px}
 .ok{color:var(--ok)}
-.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;max-width:880px}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .step{padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .step i{display:grid;place-items:center;width:24px;height:24px;margin-bottom:10px;border-radius:50%;background:var(--raised);color:var(--ink);font:600 12px/1 Geist,system-ui,sans-serif;font-style:normal}
 .step b{display:block;margin-bottom:4px}
 .step span{color:var(--ink2)}
-table.keys{border-collapse:collapse;max-width:560px;width:100%}
+table.keys{border-collapse:collapse;width:100%}
 table.keys td{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);color:var(--ink2)}
 table.keys td:last-child{text-align:right}
 kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;background:var(--raised);color:var(--ink);font:500 11px/16px Geist,system-ui,sans-serif;text-align:center}
