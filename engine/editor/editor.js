@@ -527,6 +527,7 @@
       '-',
       { label: S.direction ? `Design direction: ${dirName()}` : 'Set a design direction…', run: () => openDirection() },
       { label: S.minUI ? 'Show panels' : 'Hide panels', kbd: '⇧\\', run: () => toggleMinUI() },
+      { label: S.agentsOn ? 'Hide Tovi at work' : 'Show Tovi at work', run: () => { S.agentsOn = !S.agentsOn; try { localStorage.setItem('kerf.agents', S.agentsOn ? 'on' : 'off'); } catch {} toast(S.agentsOn ? 'Tovi and its helpers show on the canvas while they work' : 'Changes apply without the helpers on the canvas'); } },
       { label: 'Keyboard shortcuts', kbd: '?', run: () => shortcuts() },
     ], at);
   }
@@ -1494,7 +1495,7 @@
   const WORDS = { fill: 'Fill', grow: 'Fill', hug: 'Hug', auto: 'Auto', row: 'Horizontal', col: 'Vertical', none: 'Off', true: 'On', false: 'Off' };
   const opLabel = (o) => { const v = String(o.value); if (o.prop === 'fontWeight') return `Weight ${({ 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold', 800: 'Extra bold' })[v] || v}`; return `${PROP_NAMES[o.prop] || o.prop} ${WORDS[v] || v}${/^-?[\d.]+$/.test(v) ? UNIT[o.prop] || '' : ''}`; };
   const structLabel = (st) => ({ token: `Colour “${st.name}”${st.which && st.which !== 'both' ? ` (${st.which})` : ''} → ${st.hex}`, code: `Code change in ${String(st.file || '').split('/').pop()}`, group: `Group into a frame (${st.className || ''})`, ungroup: 'Ungroup', replace: `Replace with: ${(st.jsx || '').slice(0, 60)}`, delete: 'Delete', duplicate: 'Duplicate', move: `Move ${st.dir || 'to ' + st.index}`, swap: `Swap → ${st.to}`, insert: `Add ${st.position}: ${(st.jsx || '').slice(0, 60)}`, image: [st.src && `Image → ${st.src}`, st.alt != null && `Alt “${st.alt}”`].filter(Boolean).join(' · ') })[st.type];
-  const editLabel = (e) => e.structure ? structLabel(e.structure) : [...e.ops.map(opLabel), ...(e.props || []).map((p) => `${p.name}: ${p.value}`), ...(e.text ? [`“${e.text}”`] : [])].join(' · ');
+  const editLabel = (e) => e.structure ? structLabel(e.structure) : [...e.ops.map(opLabel), ...(e.props || []).map((p) => `${humanize(p.name)} ${p.value}`), ...(e.text ? [`“${e.text}”`] : [])].join(' · ');
   function measure(el) {
     const c = cs(el);
     return { fontSize: c.fontSize, color: rgbHex(c.color), fill: rgbHex(c.backgroundColor), radius: c.borderTopLeftRadius, padding: c.padding, display: c.display };
@@ -1627,6 +1628,122 @@
       return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
     } catch { h2i = null; return null; }
   }
+  /* ---------- Tovi and its helpers, visible on the canvas ---------- */
+  // Tovi (amber) answers the chat. Tasks go to helpers that work in parallel, each with a name and colour.
+  // Blue stays the designer's selection and red stays for errors.
+  const AGENTS = [{ name: 'Tovi', color: '#E9B547' }, { name: 'Milo', color: '#2DB3A6' }, { name: 'Juno', color: '#E36BA8' }, { name: 'Remi', color: '#5BBF6A' }, { name: 'Nova', color: '#9B7BEA' }];
+  const helperFor = (n) => AGENTS[1 + ((Math.max(1, n) - 1) % 4)];
+  const agentNamed = (name) => AGENTS.find((a) => a.name === name) || AGENTS[0];
+  const agentOf = (m, e) => (m?.where === 'notes' && e?.note ? helperFor(e.note) : AGENTS[0]);
+  const avatar = (a, cls = '') => `<i class="agAv ${cls}" style="--ac:${a.color}" title="${a.name}">${a.name[0]}</i>`;
+  const calm = matchMedia('(prefers-reduced-motion: reduce)');
+  S.agentsOn = (() => { try { return localStorage.getItem('kerf.agents') !== 'off'; } catch { return true; } })();
+  const live = () => S.agentsOn && !calm.matches && !!D && S.mode === 'edit';
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const cursors = new Map();
+  const elOf = (loc) => (D && loc ? D.querySelector(q(loc)) : null);
+  function cursorOf(a) {
+    let c = cursors.get(a.name);
+    if (!c || !c.el.isConnected) {
+      const el = document.createElement('div');
+      el.className = 'agent';
+      el.style.setProperty('--ac', a.color);
+      el.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.5 2.5l12.5 5.2-5.4 1.7-1.8 5.3z" fill="var(--ac)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="agTag">${avatar(a)}${a.name}</span><span class="agSay" hidden></span>`;
+      $('ov').appendChild(el);
+      c = { el, a, sayT: null, hideT: null };
+      cursors.set(a.name, c);
+    }
+    clearTimeout(c.hideT);
+    return c;
+  }
+  function agentSay(a, text) {
+    const c = cursorOf(a), b = c.el.querySelector('.agSay');
+    if (!text) return;
+    b.textContent = String(text).split(/\s+/).slice(0, 7).join(' ');
+    b.hidden = false;
+    clearTimeout(c.sayT);
+    c.sayT = setTimeout(() => { b.hidden = true; }, 2200);
+  }
+  // Move a helper to an element (scrolling it into view if needed), optionally saying a few words.
+  async function agentTo(a, el, say, noScroll) {
+    if (!el?.isConnected || !W) return;
+    let r = el.getBoundingClientRect();
+    if (!noScroll && (r.bottom < 40 || r.top > W.innerHeight - 40)) {
+      W.scrollTo({ top: Math.max(0, W.scrollY + r.top - W.innerHeight / 3), behavior: calm.matches ? 'auto' : 'smooth' });
+      await wait(420);
+      r = el.getBoundingClientRect();
+    }
+    const c = cursorOf(a);
+    const x = r.left + Math.min(r.width * 0.55, Math.max(8, r.width - 10)), y = r.top + Math.min(r.height * 0.5, 36);
+    c.el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) scale(var(--iz, 1))`;
+    c.el.classList.add('on');
+    if (say) agentSay(a, say);
+  }
+  function agentsDone(names) {
+    for (const n of names) {
+      const c = cursors.get(n);
+      if (!c) continue;
+      clearTimeout(c.hideT);
+      c.hideT = setTimeout(() => c.el.classList.remove('on'), 1600);
+    }
+  }
+  // While thinking, a helper moves over the elements it actually sent to the AI (only those in view).
+  function agentTour(a, targets) {
+    if (!live()) return () => {};
+    const els = [...new Set(targets.map((t) => elOf(t.loc)).filter(Boolean))].filter((el) => { const r = el.getBoundingClientRect(); return r.width && r.bottom > 0 && r.top < W.innerHeight; }).slice(0, 12);
+    if (!els.length) return () => {};
+    let i = 0;
+    agentTo(a, els[0], `Reading ${targets.length} element${targets.length === 1 ? '' : 's'}`, true);
+    const t = setInterval(() => { i = (i + 1) % els.length; agentTo(a, els[i], null, true); }, 1100);
+    return () => { clearInterval(t); agentsDone([a.name]); };
+  }
+  // Apply a proposal so you can watch it: style changes land one by one as the helper arrives; structure,
+  // code and colour-token changes follow together (their order matters). One batch = one undo.
+  // A click or key press finishes at once.
+  async function applyLive(m, edits) {
+    const batch = Date.now();
+    m.batch = batch;
+    const styles = edits.filter((e) => !e.structure), rest = edits.filter((e) => e.structure);
+    const results = [];
+    let n = S.count, skip = !live() || edits.length > 40;
+    const onSkip = () => { skip = true; };
+    if (!skip) { window.addEventListener('pointerdown', onSkip, true); window.addEventListener('keydown', onSkip, true); W?.addEventListener('pointerdown', onSkip, true); }
+    const talked = new Set(), used = new Set();
+    try {
+      for (let k = 0; k < styles.length; k++) {
+        if (skip) { const r = await api('/ai/apply', { batch, edits: styles.slice(k) }); results.push(...r.results); n = r.n; break; }
+        const e = styles[k], a = agentOf(m, e), el = elOf(e.loc);
+        used.add(a.name);
+        // Helpers that meet on the same element say so, once.
+        for (const t of (m.talk || []).filter((x) => x.loc === e.loc && !talked.has(x))) {
+          talked.add(t);
+          const who = agentNamed(t.agent);
+          used.add(who.name);
+          await agentTo(who, el, t.text);
+          await wait(900);
+        }
+        await agentTo(a, el, S.agentsOn ? e.why : null);
+        await wait(300);
+        const r = await api('/ai/apply', { batch, edits: [e] });
+        results.push(...r.results);
+        n = r.n;
+        await wait(350);
+      }
+      if (rest.length) {
+        if (!skip) { const a = agentOf(m, rest[0]); used.add(a.name); await agentTo(a, elOf(rest[0].loc), rest[0].why); await wait(300); }
+        const r = await api('/ai/apply', { batch, edits: rest });
+        results.push(...r.results);
+        n = r.n;
+      }
+    } catch (err) {
+      return results.length ? { results, n } : { error: err.message };
+    } finally {
+      window.removeEventListener('pointerdown', onSkip, true); window.removeEventListener('keydown', onSkip, true); W?.removeEventListener('pointerdown', onSkip, true);
+      agentsDone([...used]);
+    }
+    return { results, n };
+  }
+
   async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = false) {
     text = String(text || '').trim() || (atts.length ? 'Use the attached image.' : '');
     if (!text || S.card?.busy) return;
@@ -1642,7 +1759,8 @@
       const screen = await captureScreen();
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
-      m.proposal = await api('/ai', { request: text, targets, history, screen, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
+      const stop = agentTour(AGENTS[0], targets);
+      try { m.proposal = await api('/ai', { request: text, targets, history, screen, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) }); } finally { stop(); }
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
       if (!m.proposal.edits.length) m.status = 'info';
@@ -1662,7 +1780,7 @@
       const hadError = !!D?.querySelector('vite-error-overlay');
       m.applying = true;
       renderAI();
-      const r = await api('/ai/apply', { edits: chosen(m).map((e) => (e.structure ? e : { ...e, bp: bpParam() })) }).catch((e) => ({ error: e.message }));
+      const r = await applyLive(m, chosen(m).map((e) => (e.structure ? e : { ...e, bp: bpParam() }))).catch((e) => ({ error: e.message }));
       m.applying = false;
       if (!r.error && chosen(m).some((e) => e.structure?.type === 'code')) guard(hadError);
       if (r.error) { toast(r.error, '', true); renderAI(); return; }
@@ -1743,11 +1861,12 @@
       const open = (m.openN || []).includes(g.n);
       const box = pending && g.eds.length ? `<button class="mk cbox${off ? '' : some ? ' some' : ' on'}" data-act2="noteSkip" data-i="${i}" data-n="${g.n}" role="checkbox" aria-checked="${off ? 'false' : some ? 'mixed' : 'true'}" title="${off ? 'Include this task’s changes' : 'Leave this task’s changes out'}">${off ? '' : some ? '<b></b>' : CHECK}</button>` : ico('task', 15);
       return `<div class="ng tk${off ? ' off' : ''}${open ? ' open' : ''}" data-ng="${g.n}" data-i="${i}">
-        <div class="tkH" data-act2="ngOpen" data-i="${i}" data-n="${g.n}" role="button" tabindex="0" aria-expanded="${open}">${box}<b>${g.n ? `Task ${g.n}` : 'Also'}</b><span class="tkT">${g.text ? esc(g.text) : g.n ? '' : 'changed alongside'}</span>${(g.info || g.n) && st[1] !== 'ok' ? `<span class="nSt ${st[1]}">${st[0]}</span>` : ''}<span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span></div>
+        <div class="tkH" data-act2="ngOpen" data-i="${i}" data-n="${g.n}" role="button" tabindex="0" aria-expanded="${open}">${box}${m.helpers && g.n ? avatar(helperFor(g.n)) : ''}<b>${g.n ? `Task ${g.n}` : 'Also'}</b><span class="tkT">${g.text ? esc(g.text) : g.n ? '' : 'changed alongside'}</span>${(g.info || g.n) && st[1] !== 'ok' ? `<span class="nSt ${st[1]}">${st[0]}</span>` : ''}<span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span></div>
         ${open ? `<div class="tkB">${g.info?.summary ? `<p>${esc(g.info.summary)}</p>` : ''}${g.eds.length ? `<div class="ngE">${g.eds.map(rowFor(m)).join('')}</div>` : ''}</div>` : ''}</div>`;
     }).join('');
   }
   function kerfHTML(m, i) {
+    if (m.busy && m.helpers) return `<div class="prop"><div class="helpers">${m.helpers.map((h) => `<span class="hlp" style="--ac:${agentNamed(h.name).color}">${avatar(agentNamed(h.name))}<b>${h.name}</b><span>Task ${h.n}</span><i class="hlDot"></i></span>`).join('')}</div><div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
     if (m.busy) return `<div class="prop">${stepsHTML(m, true)}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
     if (m.error) return `<div class="prop err">${stepsHTML(m)}<span class="note warn">${esc(m.error)}</span></div>`;
     const p = m.proposal;
@@ -1761,10 +1880,11 @@
     const keep = p.mode === 'explore' && m.status === 'applied' ? (m.kept ? `<div class="kSuggest"><span>Kept. Want it everywhere?</span><button data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>` : `<div class="tryOn"><span>Trying this look on your screen.</span><div class="acts"><button class="ghostBtn" data-act2="tryUndo" data-i="${i}">Undo</button><button class="primary applyBtn" data-act2="tryKeep" data-i="${i}">Keep it</button></div><button class="linkBtn" data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>`) : '';
     const head = m.applying ? `Applying ${n} change${n === 1 ? '' : 's'}…` : m.status === 'applied' ? `Applied ${m.appliedN ?? n} of ${p.edits.length}` : `${p.edits.length} proposed change${p.edits.length === 1 ? '' : 's'}`;
     return `<div class="prop${byNote ? ' byNote' : ''}">${stepsHTML(m)}${badge ? `<span class="badge">${badge}</span>` : ''}<p class="kText">${esc(cleanMsg(p.message))}</p>
+      ${m.talk?.length ? `<div class="talk">${m.talk.map((t) => `<div>${avatar(agentNamed(t.agent))}<b>${esc(t.agent)}</b><span>${esc(t.text)}</span></div>`).join('')}</div>` : ''}
       ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
       ${suggest}${keep}
       ${m.where === 'notes' && m.status === 'applied' && !p.mode?.startsWith('explore') ? `<div class="kDone">${status}<button class="ghostBtn sm" data-act2="tryUndo" data-i="${i}">Undo</button></div>` : ''}
-      ${m.status === 'pending' && p.edits.length ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.where === 'notes' && m.status === 'applied' ? '' : status}</div>`;
+      ${m.status === 'pending' && p.edits.length && !m.applying ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.where === 'notes' && m.status === 'applied' ? '' : status}</div>`;
   }
   // "Looked at 14 elements · Thought for 9s", which opens to show what Tovi read.
   function stepsHTML(m, live) {
@@ -2002,7 +2122,7 @@
         <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${ico('task', 15)}<b>Task ${i + 1}</b><span class="tkT">${esc(x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
         ${open ? `<div class="tkB"><p>${esc(x.text)}</p>${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
       </div>`; }).join('')}</div>
-      <div class="tkFoot">${busy ? `<span class="tkN"><i class="kSpin"><b></b><b></b><b></b><b></b></i>Tovi is reading ${n === 1 ? 'the task' : `${n} tasks`}…</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Apply</button>`}</div>
+      <div class="tkFoot">${busy ? `<span class="tkN"><span class="avs">${S.notes.slice(0, 4).map((x, i) => avatar(helperFor(i + 1))).join('')}</span>${S.notes.length === 1 ? `${helperFor(1).name} is on it…` : `${S.notes.slice(0, 4).map((x, i) => helperFor(i + 1).name).join(', ')} are on it…`}</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Apply</button>`}</div>
     </div>`;
   }
   function refreshTasks() {
@@ -2046,13 +2166,66 @@
     renderMarks();
     renderChat();
   }
-  function applyNotes() {
-    if (!S.notes.length) return;
-    const targets = uniq(S.notes.flatMap((n, i) => noteTargets(n, i)));
-    const request = S.notes.map((n, i) => `Note ${i + 1}: ${n.text}`).join('\n') + '\nEach element is tagged with the note it sits under.';
-    const atts = [], tagged = [];
-    S.notes.forEach((n, i) => (n.atts || []).forEach((a) => { if (atts.length < 4) { atts.push(a); tagged.push(`Attachment ${atts.length} belongs to note ${i + 1}.`); } }));
-    runAI(request + (tagged.length ? '\n' + tagged.join(' ') : ''), targets, 'notes', S.notes.map((n, i) => `${i + 1}. ${n.text}`).join('\n'), false, atts, true);
+  // Each task goes to its own helper (Milo, Juno, Remi, Nova), at most four at once, all working in parallel.
+  // Tovi then puts their answers together, says where two of them meet, and applies the lot.
+  async function applyNotes() {
+    if (!S.notes.length || S.card?.busy) return;
+    const notes = S.notes.slice();
+    const per = notes.map((n, i) => noteTargets(n, i));
+    const all = uniq(per.flat());
+    if (!all.length) { toast('Nothing on screen to work with yet. Wait for the page to load.', '', true); return; }
+    const history = historyFor();
+    S.chat.push({ role: 'user', text: notes.map((n, i) => `Note ${i + 1}: ${n.text}`).join('\n'), shown: notes.map((n, i) => `${i + 1}. ${n.text}`).join('\n'), ctx: `${notes.length} task${notes.length === 1 ? '' : 's'}`, where: 'notes', atts: [] });
+    const m = { role: 'kerf', busy: true, status: 'pending', where: 'notes', targets: all, noteTexts: notes.map((n) => n.text), skip: [], started: Date.now(), looked: all.map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: all.length, helpers: notes.map((n, i) => ({ n: i + 1, name: helperFor(i + 1).name })) };
+    S.chat.push(m);
+    S.card = m;
+    renderAI();
+    const screen = await captureScreen();
+    m.mode = S.modeOnce || S.styleMode;
+    S.modeOnce = null;
+    const run = async (k) => {
+      if (!per[k].length) return { error: 'Nothing is under this mark any more (the page may have moved). Draw it again.' };
+      const a = helperFor(k + 1), stop = agentTour(a, per[k]);
+      const atts = (notes[k].atts || []).slice(0, 4);
+      try {
+        const p = await api('/ai', { request: `Note ${k + 1}: ${notes[k].text}\nEach element is tagged with the note it sits under.`, targets: per[k], history, screen, context: aiContext(), mode: m.mode, images: atts.map((x) => ({ name: x.name, media_type: x.type, data: x.data, orig: x.orig })) });
+        return { p };
+      } catch (e) { return { error: e.message }; } finally { stop(); }
+    };
+    const out = [];
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(4, notes.length) }, async () => { while (next < notes.length) { const k = next++; out[k] = await run(k); } }));
+    // Put the answers together, one row per task.
+    const edits = [], rows = [];
+    out.forEach((o, k) => {
+      const nn = k + 1;
+      if (o.error) { rows.push({ note: nn, status: 'not_possible', summary: o.error }); return; }
+      o.p.edits.forEach((e) => edits.push({ ...e, note: nn }));
+      const own = o.p.notes?.find((x) => x.note === nn) || o.p.notes?.[0];
+      const st = own?.status || (o.p.scope === 'done' ? 'done' : o.p.edits.length ? 'partial' : 'not_possible');
+      rows.push({ note: nn, status: st, summary: own?.summary || cleanMsg(o.p.message) });
+    });
+    // Where two helpers change the same element, they say so (and Tovi applies them in task order).
+    const byLoc = new Map();
+    edits.forEach((e) => byLoc.set(e.loc, [...new Set([...(byLoc.get(e.loc) || []), e.note])]));
+    const talk = [];
+    for (const [loc, ns] of byLoc) {
+      if (ns.length < 2) continue;
+      const [first, ...later] = ns.sort((a, b) => a - b), el = elOf(loc), what = el ? dName(el) : 'this element';
+      talk.push({ loc, agent: helperFor(later[0]).name, text: `Also changing ${what}` });
+      talk.push({ loc, agent: 'Tovi', text: `${helperFor(first).name} first, then ${later.map((x) => helperFor(x).name).join(', ')}` });
+    }
+    const names = m.helpers.map((h) => h.name);
+    m.talk = talk;
+    m.proposal = { scope: rows.every((r) => r.status === 'done') ? 'done' : edits.length ? 'partial' : 'not_yet', message: `${names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]} worked on ${notes.length === 1 ? 'the task' : `${notes.length} tasks at the same time`}.`, notes: rows, edits, suggest: null, mode: m.mode };
+    S.amber = edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
+    if (edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
+    if (!edits.length) m.status = 'info';
+    m.busy = false;
+    m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
+    renderAI();
+    if (m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
+    saveChat();
   }
   let draw = null;
   const ovPoint = (e) => { const r = $('ov').getBoundingClientRect(); return { x: (e.clientX - r.left) / S.z + W.scrollX, y: (e.clientY - r.top) / S.z + W.scrollY }; };
@@ -2128,7 +2301,8 @@
         if (!m) return;
         (async () => {
           let undone = 0;
-          for (let k = 0; k < (m.appliedN || 0); k++) { const r = await api('/undo', {}).catch(() => null); if (!r?.undone) break; S.count = r.n; undone++; }
+          if (m.batch) { const r = await api('/undo', {}).catch(() => null); if (r?.undone) { S.count = r.n; undone = r.count || 1; } }
+          else for (let k = 0; k < (m.appliedN || 0); k++) { const r = await api('/undo', {}).catch(() => null); if (!r?.undone) break; S.count = r.n; undone++; }
           m.status = 'undone';
           const what = m.where === 'notes' ? 'Undid' : 'Undid the look:';
           toast(undone ? `${what} ${undone} change${undone === 1 ? '' : 's'}` : 'Nothing to undo');

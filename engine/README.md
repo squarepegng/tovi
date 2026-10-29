@@ -153,6 +153,12 @@ which is git-ignored. Then:
 
 All three share one conversation, which is saved, so you can follow up anywhere.
 
+**Watching Tovi work.** Tovi has an amber cursor with its name. While it thinks, it moves over the elements it
+is reading; when it applies, it visits each element and the change lands as it arrives, with a few words on what
+it's doing. Tasks go to helpers (Milo, Juno, Remi, Nova; each its own colour) that work in parallel, up to four at
+once; when two of them change the same element, they say so. One undo takes back the whole set. Click or press a
+key to finish at once; turn it off in the Tovi menu.
+
 Claude (`claude-opus-5-5`) first decides the best approach:
 - what the designer really means ("too bright" on a dark screen means lower contrast for the dark theme)
 - where the style lives
