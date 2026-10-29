@@ -204,7 +204,8 @@
   // Look-alikes: copies written separately in the code that look the same (four feature cards), and the
   // matching parts inside them (each card's title). Style edits can go to all of them, like Figma's
   // "select matching layers". Copies made by one piece of code are already "Repeated" and left out.
-  S.simScope = 'all';
+  S.simScope = (() => { try { return localStorage.getItem('kerf.sim') || 'all'; } catch { return 'all'; } })();
+  S.scaleArrows = (() => { try { return localStorage.getItem('kerf.scale') !== 'off'; } catch { return true; } })();
   const baseCls = (e) => new Set([...e.classList].filter((c) => !c.includes(':')));
   function overlap(a, b) {
     const A = baseCls(a), B = baseCls(b);
@@ -527,9 +528,47 @@
       '-',
       { label: S.direction ? `Design direction: ${dirName()}` : 'Set a design direction…', run: () => openDirection() },
       { label: S.minUI ? 'Show panels' : 'Hide panels', kbd: '⇧\\', run: () => toggleMinUI() },
+      { label: 'Settings…', kbd: '⌘,', run: () => openSettings() },
+      '-',
       { label: S.agentsOn ? 'Hide Tovi at work' : 'Show Tovi at work', run: () => { S.agentsOn = !S.agentsOn; try { localStorage.setItem('kerf.agents', S.agentsOn ? 'on' : 'off'); } catch {} toast(S.agentsOn ? 'Tovi and its helpers show on the canvas while they work' : 'Changes apply without the helpers on the canvas'); } },
       { label: 'Keyboard shortcuts', kbd: '?', run: () => shortcuts() },
     ], at);
+  }
+  /* ---------- Settings ---------- */
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  function openSettings() {
+    const m = $('modal'), p = S.project || {};
+    const tog = (id, on, label, sub) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span><button class="switch${on ? ' on' : ''}" data-act="setTog" data-v="${id}" role="switch" aria-checked="${on}" aria-label="${label}"><i></i></button></div>`;
+    const row = (label, sub, ctl) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span>${ctl}</div>`;
+    const startPage = 'http://localhost:4100/#settings';
+    m.hidden = false;
+    m.innerHTML = `<section class="dialog settings" role="dialog" aria-modal="true" aria-labelledby="setT"><div class="dh"><h2 id="setT">Settings</h2><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
+      <div class="setBody">
+        <div class="setSec"><h3>Tovi</h3>
+          ${tog('agents', S.agentsOn, 'Show Tovi at work', 'See Tovi’s cursor select and change things as it works.')}
+          ${row('AI style', 'How far Tovi may go beyond your design system.', `<div class="seg setSeg">${[['system', 'On system'], ['improve', 'Improve'], ['explore', 'Explore']].map(([v, n]) => `<button data-act="setMode" data-v="${v}" class="${S.styleMode === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
+          ${row('Design direction', S.direction ? esc(dirName()) : 'Not set. Tovi follows your design system.', `<button class="outline sm" data-act="setDir">${S.direction ? 'Change' : 'Set'}</button>`)}
+        </div>
+        <div class="setSec"><h3>Editing</h3>
+          ${tog('sim', S.simScope === 'all', 'Look-alikes change together', 'When cards look the same, style changes go to all of them.')}
+          ${tog('scale', S.scaleArrows, 'Arrow keys follow your scale', 'Arrows step through your design system’s sizes. Shift+arrow nudges 1px.')}
+          ${row('Panels', 'Put the side panels back to their usual widths.', '<button class="outline sm" data-act="setPanels">Reset</button>')}
+        </div>
+        <div class="setSec"><h3>AI keys</h3>
+          ${row('Anthropic', '<span id="setKeyA">Checking…</span>', `<a class="outline sm" href="${startPage}" target="_blank" rel="noopener">Change</a>`)}
+          ${row('Unsplash photos', '<span id="setKeyU">Checking…</span>', `<a class="outline sm" href="${startPage}" target="_blank" rel="noopener">Change</a>`)}
+          <span class="note">Keys stay on this Mac in a git-ignored file. Tovi never shows them.</span>
+        </div>
+        <div class="setSec"><h3>This project</h3>
+          ${row(esc(p.name || 'Project'), `${esc(p.repo || 'Not connected to GitHub yet')}${p.branch ? ` · branch ${esc(p.branch)}` : ''}`, '<a class="outline sm" href="http://localhost:4100" target="_blank" rel="noopener">All projects</a>')}
+          ${row('Keyboard shortcuts', 'Every key Tovi listens for.', '<button class="outline sm" data-act="keys">Show</button>')}
+        </div>
+      </div></section>`;
+    api('/keys').then((k) => {
+      const a = $('setKeyA'), u = $('setKeyU');
+      if (a) a.textContent = k.anthropic ? 'Saved. Tovi’s AI is on.' : 'No key yet. Add one to use the AI.';
+      if (u) u.textContent = k.unsplash ? 'Saved. Photo search is on.' : 'Optional. Add a free key to search photos.';
+    }).catch(() => {});
   }
   function pagesMenu(at) {
     const seen = [...new Set([S.path, ...S.pages])].slice(0, 12);
@@ -1232,6 +1271,7 @@
     const typing = t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleAI(true); return; }
+    if (mod && e.key === ',') { e.preventDefault(); openSettings(); return; }
     if (!typing && !mod && e.key === '?') { e.preventDefault(); shortcuts(); return; }
     if (!typing && !mod && e.shiftKey && (e.key === '|' || e.code === 'Backslash')) { e.preventDefault(); toggleMinUI(); return; }
     if (e.key === 'Escape' && !$('menu').hidden) { closeMenu(); return; }
@@ -1306,6 +1346,14 @@
     switch (act) {
       case 'mode': setMode(v); break;
       case 'present': setMode('preview'); break;
+      case 'setTog':
+        if (v === 'agents') { S.agentsOn = !S.agentsOn; save('kerf.agents', S.agentsOn ? 'on' : 'off'); }
+        if (v === 'sim') { S.simScope = S.simScope === 'all' ? 'one' : 'all'; save('kerf.sim', S.simScope); renderPanel(); }
+        if (v === 'scale') { S.scaleArrows = !S.scaleArrows; save('kerf.scale', S.scaleArrows ? 'on' : 'off'); }
+        openSettings(); break;
+      case 'setMode': setStyleMode(v); openSettings(); break;
+      case 'setDir': $('modal').hidden = true; openDirection(); break;
+      case 'setPanels': for (const k of Object.keys(SIDE)) { try { localStorage.removeItem(`kerf.side.${k}`); } catch {} setSide(k, SIDE[k].def); } applyDevice(); toast('Panels are back to their usual widths'); break;
       case 'simScope': S.simScope = v; renderPanel(); break;
       case 'keys': shortcuts(); break;
       case 'undo': undo(); break;
@@ -1381,7 +1429,7 @@
     if (!p || t.dataset.color || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !S.sel) return;
     e.preventDefault();
     // Arrows step through the app's own scale (so values stay on the design system); Shift is a precise 1px nudge.
-    const up = e.key === 'ArrowUp', cur = parseFloat(t.value) || 0, steps = scaleSteps(p);
+    const up = e.key === 'ArrowUp', cur = parseFloat(t.value) || 0, steps = S.scaleArrows ? scaleSteps(p) : null;
     const n = clamp(p, steps && !e.shiftKey ? (up ? steps.find((x) => x > cur + 0.01) : [...steps].reverse().find((x) => x < cur - 0.01)) ?? cur + (up ? 1 : -1) : cur + (up ? 1 : -1) * (steps || !e.shiftKey ? 1 : 10));
     t.value = n;
     preview(S.sel.el, p, n);

@@ -22,6 +22,9 @@ cd engine && npm install
 node bin/kerf-home.mjs        # then open http://localhost:4100
 ```
 
+The start page has three parts: **Projects** (open a project, recent projects), **Settings** (AI keys,
+about) and **Help** (getting started, shortcuts).
+
 Paste a GitHub link (`github.com/team/app`) or a folder path. Tovi downloads
 the repo into `~/Kerf/projects/`, finds the React + Tailwind app inside it
 (monorepos included), installs it with the repo’s own package manager, starts
@@ -43,6 +46,7 @@ Keys:
 | Hold **⌘** | Click through to the app while selecting |
 | **A** | Annotate |
 | **⌘K** | Jump to the chat (about the selection, or the whole screen) |
+| **⌘,** | Settings (Tovi at work, AI style, look-alikes, arrow keys, panels, AI keys) |
 | **⌘Z** | Undo |
 | **⌘+** / **⌘−**, pinch | Zoom in / out |
 | **⇧1** / **⇧0** | Fit / 100% |

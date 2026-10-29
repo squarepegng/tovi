@@ -899,3 +899,21 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .pickBar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 10px 10px 12px;border-radius:12px;background:rgba(43,102,217,.1);border:1px solid rgba(43,102,217,.35)}
 .pickBar span{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
 .pickBar span svg{color:#9DBBF5}
+/* Settings */
+.dialog.settings{width:min(560px,calc(100vw - 32px));max-height:min(80vh,720px);display:flex;flex-direction:column}
+.setBody{overflow:auto;display:flex;flex-direction:column;gap:20px;padding-top:4px}
+.setSec{display:flex;flex-direction:column;gap:2px}
+.setSec h3{margin:0 0 6px;font:600 11px/16px Geist,system-ui,sans-serif;color:var(--ink3);letter-spacing:.02em}
+.setRow{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.setTx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.setTx b{font-weight:500;color:var(--ink)}
+.setRow .outline.sm{flex:0 0 auto;text-decoration:none}
+.setSeg{flex:0 0 auto}
+.setSeg button{padding:0 10px}
+.switch{flex:0 0 auto;position:relative;width:34px;height:20px;padding:0;border:0;border-radius:999px;background:var(--line);cursor:pointer;transition:background .15s}
+.switch i{position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch.on{background:var(--select)}
+.switch.on i{transform:translateX(14px)}
+.switch:focus-visible{outline:2px solid var(--select);outline-offset:2px}
+.setRow a.outline{display:inline-flex;align-items:center}
+.setSeg button{flex:0 0 auto;overflow:visible}

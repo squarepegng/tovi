@@ -10,7 +10,7 @@ import { propose } from './ai.mjs';
 import { createSession } from './session.mjs';
 import { createLibrary } from './library.mjs';
 import { listTokens, tokenEdit } from './tokens.mjs';
-import { searchPhotos, photoUsed, illustrate } from './images.mjs';
+import { searchPhotos, photoUsed, illustrate, envKey } from './images.mjs';
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -67,6 +67,8 @@ export async function createKerf(webRoot) {
         }
         if (req.method === 'GET' && route === '/versions') return send(200, session.list());
         if (req.method === 'GET' && route === '/chat') return send(200, session.chat());
+        // Which AI keys are saved (never the keys themselves), for the Settings window.
+        if (req.method === 'GET' && route === '/keys') return send(200, { anthropic: !!envKey('ANTHROPIC_API_KEY'), unsplash: !!envKey('UNSPLASH_ACCESS_KEY') });
         if (req.method === 'GET' && route === '/direction') { const d = session.direction(); return send(200, d ? { ...d, refs: d.refs.map(({ data, ...r }) => r) } : null); }
         if (req.method === 'GET' && route === '/images/photos') {
           const u = new URL(req.url, 'http://x').searchParams;
