@@ -626,8 +626,8 @@
     if (S.mode === 'preview') { $('bar').innerHTML = `<button class="tb wide" data-act="mode" data-v="edit" aria-label="Stop presenting">${ico('x', 14)}<span>Stop presenting</span><span class="kbd">Esc</span></button>`; $('hint').hidden = true; return; }
     const tool = (t, icon, name, key) => `<button class="tb${S.tool === t ? ' on' : ''}" data-act="tool" data-v="${t}" aria-label="${name}" aria-pressed="${S.tool === t}">${ico(icon, 16)}${tip(name, key)}</button>`;
     $('bar').innerHTML = `<div class="modes">
-        ${tool('select', 'cursor', 'Select', 'V')}
         ${tool('interact', 'tap', 'Interact with the app', 'P')}
+        ${tool('select', 'cursor', 'Select', 'V')}
       </div>
       <span class="div"></span>
       <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
@@ -851,10 +851,13 @@
   const tabsHTML = () => '';
   function renderPanel(focusChat) {
     const p = $('panel');
-    p.hidden = !(S.mode === 'edit' || S.side === 'history');
-    // Design shows only for something selected (an element, or the page via its frame name), and not while
-    // interacting. The space stays, so the app never jumps when the panel comes and goes.
-    const idle = S.side !== 'history' && (S.tool === 'interact' || (!S.sel && !S.pageSel));
+    // While interacting, the panel goes away and the app takes its space.
+    const was = p.hidden;
+    p.hidden = !(S.mode === 'edit' || S.side === 'history') || (S.tool === 'interact' && S.side !== 'history');
+    if (p.hidden !== was) setTimeout(applyDevice, 0);
+    // Otherwise Design shows only for something selected (an element, or the page via its frame name);
+    // its space stays, so the app doesn't jump as you select and deselect.
+    const idle = S.side !== 'history' && !S.sel && !S.pageSel;
     p.classList.toggle('idle', idle);
     $('devLabel')?.classList.toggle('on', !!S.pageSel && !S.sel);
     if (p.hidden || idle) { if (idle) p.innerHTML = ''; return; }
