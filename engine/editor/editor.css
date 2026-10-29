@@ -880,3 +880,18 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .tkMore:hover{background:var(--raised);color:var(--ink)}
 #layers .lbody .comp{flex:0 0 auto}
 #layers .lbody .tasks .tkList{max-height:min(240px,35vh)}
+/* agents look and work like people in a Figma file */
+.agent{transition:opacity .25s}
+.agent svg{transition:transform .12s ease-out;transform-origin:2px 2px}
+.agent.press svg{transform:scale(.82)}
+.agBox{position:absolute;left:0;top:0;z-index:35;pointer-events:none;opacity:0;outline:calc(1.5px * var(--iz, 1)) dashed var(--ac);outline-offset:calc(2px * var(--iz, 1));border-radius:2px;transition:opacity .2s}
+.agBox.on{opacity:.9}
+.agBox.edit{outline-style:solid;outline-width:calc(2px * var(--iz, 1));outline-offset:0;background:color-mix(in srgb, var(--ac) 7%, transparent)}
+.agBoxTag{position:absolute;left:calc(-2px * var(--iz, 1));top:0;transform:translateY(-100%) scale(var(--iz, 1));transform-origin:0 100%;padding:1px 6px;border-radius:3px 3px 0 0;background:var(--ac);color:#1B1B1E;font:600 10px/15px Geist,system-ui,sans-serif;white-space:nowrap;opacity:0;transition:opacity .15s}
+.agBox.edit .agBoxTag{opacity:1}
+.agChip{position:absolute;left:0;top:0;z-index:41;pointer-events:none;transform-origin:0 0;opacity:0;max-width:280px;padding:4px 8px;border-radius:6px;background:#1B1B1E;color:#EDEDF0;border:1.5px solid var(--ac);font:500 11px/15px 'Geist Mono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 6px 16px rgba(0,0,0,.3);transition:opacity .2s}
+.agChip.on{opacity:1}
+@media (prefers-reduced-motion: reduce){.agent svg,.agBox,.agChip{transition:none}}
+.crewRow{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:12px}
+.agent.flip .agTag,.agent.flip .agSay{left:auto;right:6px}
+.agent.flip .agSay{border-radius:12px 4px 12px 12px}

@@ -128,6 +128,9 @@ export async function createKerf(webRoot) {
           return send(200, await propose({ request: body.request, targets, history: body.history, images: body.images, tokens, webRoot, screen: body.screen, context: body.context, mode: body.mode, direction: session.direction() }, theme, library));
         }
         if (route === '/ai/apply') {
+          // Everything one apply writes (styles, structure, code, tokens) belongs to its batch: one undo.
+          const h0 = editor.history.length;
+          const tagBatch = () => { if (body.batch) for (const h of editor.history.slice(h0)) h.change = { ...(h.change || {}), batch: String(body.batch) }; };
           // Apply from the bottom of each file up, structure last per element, so positions stay valid.
           const lineOf = (e) => Number(String(e.loc).split(':').slice(-2)[0]) || 0;
           const rank = (e) => (!e.structure ? 0 : e.structure.type === 'delete' ? 2 : 1);
@@ -177,6 +180,7 @@ export async function createKerf(webRoot) {
               results.push({ loc: e.loc, ok: false, error: err.message });
             }
           }
+          tagBatch();
           return send2(200, { results, n: editor.history.length });
         }
         return send(404, { error: 'Not found' });

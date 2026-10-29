@@ -1640,66 +1640,152 @@
   S.agentsOn = (() => { try { return localStorage.getItem('kerf.agents') !== 'off'; } catch { return true; } })();
   const live = () => S.agentsOn && !calm.matches && !!D && S.mode === 'edit';
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const cursors = new Map();
+  // Each agent is drawn like another person in a Figma file: a cursor with its name, a box in its colour
+  // around what it's looking at (thin) or editing (solid, with its name), and a tag for the change it makes.
+  // Positions are in the app's own pixels; labels counter-scale with the zoom (--iz).
+  const crew = new Map();
   const elOf = (loc) => (D && loc ? D.querySelector(q(loc)) : null);
-  function cursorOf(a) {
-    let c = cursors.get(a.name);
-    if (!c || !c.el.isConnected) {
-      const el = document.createElement('div');
-      el.className = 'agent';
-      el.style.setProperty('--ac', a.color);
-      el.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.5 2.5l12.5 5.2-5.4 1.7-1.8 5.3z" fill="var(--ac)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="agTag">${avatar(a)}${a.name}</span><span class="agSay" hidden></span>`;
-      $('ov').appendChild(el);
-      c = { el, a, sayT: null, hideT: null };
-      cursors.set(a.name, c);
+  function agentDom(a) {
+    let g = crew.get(a.name);
+    if (g && g.cur.isConnected) { clearTimeout(g.hideT); return g; }
+    const mk = (cls, html = '') => { const d = document.createElement('div'); d.className = cls; d.style.setProperty('--ac', a.color); d.innerHTML = html; $('ov').appendChild(d); return d; };
+    const box = mk('agBox', `<span class="agBoxTag">${a.name}</span>`);
+    const chip = mk('agChip');
+    const cur = mk('agent', `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.5 2.5l12.5 5.2-5.4 1.7-1.8 5.3z" fill="var(--ac)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="agTag">${avatar(a)}${a.name}</span><span class="agSay" hidden></span>`);
+    g = { a, cur, box, chip, x: null, y: null, el: null, mode: null, sayT: null, hideT: null, run: 0 };
+    crew.set(a.name, g);
+    return g;
+  }
+  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  function placeCur(g) {
+    g.cur.style.transform = `translate(${g.x}px, ${g.y}px) scale(var(--iz, 1))`;
+    // Near the right edge the name tag and bubble sit to the left of the cursor, so they're never cut off.
+    g.cur.classList.toggle('flip', !!W && g.x > W.innerWidth - 240 * (S.z ? 1 / S.z : 1));
+  }
+  // Glide along a gentle curve, faster over long distances, like a hand on a mouse.
+  function glide(g, x, y, ms) {
+    if (g.x == null) { g.x = x; g.y = y; placeCur(g); g.cur.classList.add('on'); return Promise.resolve(); }
+    const x0 = g.x, y0 = g.y, dx = x - x0, dy = y - y0, dist = Math.hypot(dx, dy);
+    const dur = ms ?? Math.min(900, 260 + dist * 0.9);
+    const bend = Math.min(60, dist * 0.18) * (Math.random() < 0.5 ? -1 : 1);
+    const cx = x0 + dx / 2 - (dy / (dist || 1)) * bend, cy = y0 + dy / 2 + (dx / (dist || 1)) * bend;
+    const run = ++g.run, t0 = performance.now();
+    g.cur.classList.add('on');
+    return new Promise((res) => {
+      const step = (now) => {
+        if (run !== g.run) return res();
+        const t = Math.min(1, (now - t0) / dur), k = ease(t), u = 1 - k;
+        g.x = u * u * x0 + 2 * u * k * cx + k * k * x; g.y = u * u * y0 + 2 * u * k * cy + k * k * y;
+        placeCur(g);
+        if (t < 1) requestAnimationFrame(step); else res();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  // The box follows its element every frame (it moves and resizes as the page changes).
+  function trackBoxes() {
+    let any = false;
+    for (const g of crew.values()) {
+      if (!g.el || !g.mode) { g.box.classList.remove('on', 'edit'); continue; }
+      if (!g.el.isConnected) { const fresh = g.loc ? elOf(g.loc) : null; if (fresh) g.el = fresh; else continue; }
+      const r = g.el.getBoundingClientRect();
+      Object.assign(g.box.style, { transform: `translate(${r.left}px, ${r.top}px)`, width: r.width + 'px', height: r.height + 'px' });
+      g.box.classList.add('on');
+      g.box.classList.toggle('edit', g.mode === 'edit');
+      if (g.chip.classList.contains('on')) g.chip.style.transform = `translate(${r.left}px, ${r.bottom + 6}px) scale(var(--iz, 1))`;
+      any = true;
     }
-    clearTimeout(c.hideT);
-    return c;
+    if (any) requestAnimationFrame(trackBoxes); else trackBoxes.on = false;
+  }
+  function track(g, el, mode, loc) {
+    g.el = el; g.mode = mode; g.loc = loc || null;
+    if (!trackBoxes.on) { trackBoxes.on = true; requestAnimationFrame(trackBoxes); }
   }
   function agentSay(a, text) {
-    const c = cursorOf(a), b = c.el.querySelector('.agSay');
-    if (!text) return;
+    if (!text || !S.agentsOn) return;
+    const g = agentDom(a), b = g.cur.querySelector('.agSay');
     b.textContent = String(text).split(/\s+/).slice(0, 7).join(' ');
     b.hidden = false;
-    clearTimeout(c.sayT);
-    c.sayT = setTimeout(() => { b.hidden = true; }, 2200);
+    clearTimeout(g.sayT);
+    g.sayT = setTimeout(() => { b.hidden = true; }, 2400);
   }
-  // Move a helper to an element (scrolling it into view if needed), optionally saying a few words.
-  async function agentTo(a, el, say, noScroll) {
-    if (!el?.isConnected || !W) return;
-    let r = el.getBoundingClientRect();
-    if (!noScroll && (r.bottom < 40 || r.top > W.innerHeight - 40)) {
+  const pointIn = (r, fx, fy) => [r.left + r.width * fx, r.top + Math.min(r.height * fy, r.height - 4)];
+  async function inView(el) {
+    if (!el?.isConnected || !W) return false;
+    const r = el.getBoundingClientRect();
+    if (r.bottom < 40 || r.top > W.innerHeight - 40) {
       W.scrollTo({ top: Math.max(0, W.scrollY + r.top - W.innerHeight / 3), behavior: calm.matches ? 'auto' : 'smooth' });
-      await wait(420);
-      r = el.getBoundingClientRect();
+      await wait(450);
     }
-    const c = cursorOf(a);
-    const x = r.left + Math.min(r.width * 0.55, Math.max(8, r.width - 10)), y = r.top + Math.min(r.height * 0.5, 36);
-    c.el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) scale(var(--iz, 1))`;
-    c.el.classList.add('on');
+    return true;
+  }
+  // Look an element over the way a designer does: hover it, then read across it.
+  async function lookAt(a, el, say, loc) {
+    if (!el?.isConnected) return;
+    const g = agentDom(a);
+    track(g, el, 'look', loc);
+    let r = el.getBoundingClientRect();
+    await glide(g, ...pointIn(r, 0.12 + Math.random() * 0.15, 0.3));
     if (say) agentSay(a, say);
+    r = el.getBoundingClientRect();
+    await glide(g, ...pointIn(r, 0.55 + Math.random() * 0.3, 0.45 + Math.random() * 0.2), 520 + Math.random() * 300);
+    await wait(120 + Math.random() * 200);
   }
-  function agentsDone(names) {
+  // Make one change like a person would: select the element, go to the right spot (an edge for spacing
+  // and size, the middle for colour), click, show what's changing, and drag a little as it lands.
+  async function editOn(a, el, e, apply) {
+    const g = agentDom(a);
+    if (!(await inView(el))) return apply();
+    track(g, el, 'edit', e.loc);
+    const props = (e.ops || []).map((o) => o.prop);
+    const edge = props.some((p) => /^(padX|w|mX|gap)$/.test(p)) ? 'right' : props.some((p) => /^(padY|h|mY)$/.test(p)) ? 'bottom' : props.some((p) => /^(fontSize|fontWeight|lineHeight|letterSpacing|align)$/.test(p)) || e.text ? 'text' : 'center';
+    let r = el.getBoundingClientRect();
+    const at = edge === 'right' ? [r.right - 2, r.top + r.height / 2] : edge === 'bottom' ? [r.left + r.width / 2, r.bottom - 2] : edge === 'text' ? [r.left + Math.min(14, r.width / 4), r.top + Math.min(r.height / 2, 14)] : [r.left + r.width / 2, r.top + r.height / 2];
+    await glide(g, ...at);
+    g.cur.classList.add('press');
+    setTimeout(() => g.cur.classList.remove('press'), 160);
+    g.chip.textContent = editLabel(e) || e.why || 'Updating';
+    g.chip.classList.add('on');
+    agentSay(a, e.why);
+    await wait(260);
+    const nudge = edge === 'right' ? [14, 0] : edge === 'bottom' ? [0, 12] : [0, 0];
+    const drag = glide(g, g.x + nudge[0], g.y + nudge[1], 420);
+    const res = await apply();
+    await drag;
+    await wait(380);
+    g.chip.classList.remove('on');
+    return res;
+  }
+  function release(names) {
     for (const n of names) {
-      const c = cursors.get(n);
-      if (!c) continue;
-      clearTimeout(c.hideT);
-      c.hideT = setTimeout(() => c.el.classList.remove('on'), 1600);
+      const g = crew.get(n);
+      if (!g) continue;
+      g.mode = null; g.el = null;
+      g.chip.classList.remove('on');
+      clearTimeout(g.hideT);
+      g.hideT = setTimeout(() => { g.cur.classList.remove('on'); g.x = g.y = null; }, 1400);
     }
   }
-  // While thinking, a helper moves over the elements it actually sent to the AI (only those in view).
-  function agentTour(a, targets) {
+  // While thinking, the agents split the elements they're reading and look them over (only ones in view).
+  function agentTour(agents, targets) {
     if (!live()) return () => {};
-    const els = [...new Set(targets.map((t) => elOf(t.loc)).filter(Boolean))].filter((el) => { const r = el.getBoundingClientRect(); return r.width && r.bottom > 0 && r.top < W.innerHeight; }).slice(0, 12);
+    const els = [...new Set(targets.map((t) => elOf(t.loc)).filter(Boolean))].filter((el) => { const r = el.getBoundingClientRect(); return r.width && r.bottom > 0 && r.top < W.innerHeight; }).slice(0, 18);
     if (!els.length) return () => {};
-    let i = 0;
-    agentTo(a, els[0], `Reading ${targets.length} element${targets.length === 1 ? '' : 's'}`, true);
-    const t = setInterval(() => { i = (i + 1) % els.length; agentTo(a, els[i], null, true); }, 1100);
-    return () => { clearInterval(t); agentsDone([a.name]); };
+    const team = agents.slice(0, Math.max(1, Math.min(agents.length, els.length)));
+    let stop = false;
+    team.forEach((a, k) => {
+      const mine = els.filter((x, i) => i % team.length === k);
+      (async () => {
+        await wait(k * 350);
+        agentSay(a, k === 0 ? `Reading ${targets.length} element${targets.length === 1 ? '' : 's'}` : 'Looking around');
+        for (let i = 0; !stop; i = (i + 1) % mine.length) await lookAt(a, mine[i]);
+      })();
+    });
+    return () => { stop = true; release(team.map((a) => a.name)); };
   }
-  // Apply a proposal so you can watch it: style changes land one by one as the helper arrives; structure,
-  // code and colour-token changes follow together (their order matters). One batch = one undo.
-  // A click or key press finishes at once.
+  // Apply so you can watch it: style changes are shared out to lanes (one per agent), each lane makes its
+  // changes one by one as its agent gets there; structure, code and colour-token changes follow together
+  // (their order matters). One batch = one undo. A click or key press finishes at once.
   async function applyLive(m, edits) {
     const batch = Date.now();
     m.batch = batch;
@@ -1708,29 +1794,40 @@
     let n = S.count, skip = !live() || edits.length > 40;
     const onSkip = () => { skip = true; };
     if (!skip) { window.addEventListener('pointerdown', onSkip, true); window.addEventListener('keydown', onSkip, true); W?.addEventListener('pointerdown', onSkip, true); }
-    const talked = new Set(), used = new Set();
+    const used = new Set(), done = new Set(), talked = new Set();
+    // Lanes: tasks keep their helper; chat changes are shared out by element between up to three agents.
+    const lanes = new Map();
+    const team = AGENTS.slice(0, Math.min(3, Math.max(1, new Set(styles.map((e) => e.loc)).size)));
+    const byEl = new Map();
+    for (const e of styles) {
+      const a = m.where === 'notes' && e.note ? helperFor(e.note) : (byEl.get(e.loc) || team[byEl.size % team.length]);
+      byEl.set(e.loc, a);
+      if (!lanes.has(a.name)) lanes.set(a.name, { a, list: [] });
+      lanes.get(a.name).list.push(e);
+    }
+    const one = async (e) => { const r = await api('/ai/apply', { batch, edits: [e] }); results.push(...r.results); n = Math.max(n, r.n); done.add(e); };
     try {
-      for (let k = 0; k < styles.length; k++) {
-        if (skip) { const r = await api('/ai/apply', { batch, edits: styles.slice(k) }); results.push(...r.results); n = r.n; break; }
-        const e = styles[k], a = agentOf(m, e), el = elOf(e.loc);
-        used.add(a.name);
-        // Helpers that meet on the same element say so, once.
-        for (const t of (m.talk || []).filter((x) => x.loc === e.loc && !talked.has(x))) {
-          talked.add(t);
-          const who = agentNamed(t.agent);
-          used.add(who.name);
-          await agentTo(who, el, t.text);
-          await wait(900);
+      await Promise.all([...lanes.values()].map(async ({ a, list }, k) => {
+        await wait(k * 250);
+        for (const e of list) {
+          if (skip) return;
+          used.add(a.name);
+          const el = elOf(e.loc);
+          for (const t of (m.talk || []).filter((x) => x.loc === e.loc && !talked.has(x))) {
+            talked.add(t);
+            const who = agentNamed(t.agent);
+            used.add(who.name);
+            if (el) await lookAt(who, el, t.text, e.loc);
+            await wait(700);
+          }
+          await editOn(a, el, e, () => one(e));
         }
-        await agentTo(a, el, S.agentsOn ? e.why : null);
-        await wait(300);
-        const r = await api('/ai/apply', { batch, edits: [e] });
-        results.push(...r.results);
-        n = r.n;
-        await wait(350);
-      }
+      }));
+      const left = styles.filter((e) => !done.has(e));
+      if (left.length) { const r = await api('/ai/apply', { batch, edits: left }); results.push(...r.results); n = r.n; }
       if (rest.length) {
-        if (!skip) { const a = agentOf(m, rest[0]); used.add(a.name); await agentTo(a, elOf(rest[0].loc), rest[0].why); await wait(300); }
+        const a = agentOf(m, rest[0]);
+        if (!skip) { used.add(a.name); const el = elOf(rest[0].loc); if (el) { await inView(el); await lookAt(a, el, rest[0].why, rest[0].loc); } }
         const r = await api('/ai/apply', { batch, edits: rest });
         results.push(...r.results);
         n = r.n;
@@ -1739,13 +1836,11 @@
       return results.length ? { results, n } : { error: err.message };
     } finally {
       window.removeEventListener('pointerdown', onSkip, true); window.removeEventListener('keydown', onSkip, true); W?.removeEventListener('pointerdown', onSkip, true);
-      agentsDone([...used]);
+      release([...used]);
     }
     return { results, n };
   }
 
-  // Chat and Ask apply straight away: you see Tovi make the change, with Undo right there.
-  // Only annotation tasks wait for Apply.
   async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = where !== 'notes') {
     text = String(text || '').trim() || (atts.length ? 'Use the attached image.' : '');
     if (!text || S.card?.busy) return;
@@ -1761,7 +1856,7 @@
       const screen = await captureScreen();
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
-      const stop = agentTour(AGENTS[0], targets);
+      const stop = agentTour(AGENTS.slice(0, 3), targets);
       try { m.proposal = await api('/ai', { request: text, targets, history, screen, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) }); } finally { stop(); }
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
@@ -1870,7 +1965,7 @@
   }
   function kerfHTML(m, i) {
     if (m.busy && m.helpers) return `<div class="prop"><div class="helpers">${m.helpers.map((h) => `<span class="hlp" style="--ac:${agentNamed(h.name).color}">${avatar(agentNamed(h.name))}<b>${h.name}</b><span>Task ${h.n}</span><i class="hlDot"></i></span>`).join('')}</div><div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
-    if (m.busy) return `<div class="prop">${stepsHTML(m, true)}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
+    if (m.busy) return `<div class="prop">${stepsHTML(m, true)}${live() ? `<div class="crewRow"><span class="avs">${AGENTS.slice(0, 3).map((x) => avatar(x)).join('')}</span><span>Tovi and helpers are looking it over</span></div>` : ''}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
     if (m.error) return `<div class="prop err">${stepsHTML(m)}<span class="note warn">${esc(m.error)}</span></div>`;
     const p = m.proposal;
     const badge = { partial: 'Partly possible', not_yet: 'Not possible in Tovi yet', needs_developer: 'For developers' }[p.scope];
@@ -2188,7 +2283,7 @@
     S.modeOnce = null;
     const run = async (k) => {
       if (!per[k].length) return { error: 'Nothing is under this mark any more (the page may have moved). Draw it again.' };
-      const a = helperFor(k + 1), stop = agentTour(a, per[k]);
+      const a = helperFor(k + 1), stop = agentTour([a], per[k]);
       const atts = (notes[k].atts || []).slice(0, 4);
       try {
         const p = await api('/ai', { request: `Note ${k + 1}: ${notes[k].text}\nEach element is tagged with the note it sits under.`, targets: per[k], history, screen, context: aiContext(), mode: m.mode, images: atts.map((x) => ({ name: x.name, media_type: x.type, data: x.data, orig: x.orig })) });
