@@ -97,7 +97,7 @@ export async function createKerf(webRoot) {
         if (route === '/unpeek') return send2(200, session.unpeek());
         if (route === '/pr') return send2(200, session.pullRequest(body));
         if (route === '/inspect') return send(200, editor.describe(body.loc, body.dom));
-        if (route === '/edit') return send2(200, editor.edit(body.loc, { ops: body.ops, text: body.text, props: body.props, cva: body.cva, bp: body.bp, dom: body.dom, scope: body.scope, target: body.target, name: body.name }));
+        if (route === '/edit') return send2(200, editor.edit(body.loc, { ops: body.ops, text: body.text, props: body.props, propText: body.propText, cva: body.cva, bp: body.bp, dom: body.dom, scope: body.scope, target: body.target, name: body.name }));
         if (route === '/undo') return send2(200, editor.undo());
         if (route === '/token') return send2(200, await setToken(body));
         if (route === '/images/photo-used') return send(200, await photoUsed(body.download));

@@ -48,7 +48,8 @@ Keys:
 | **⌘+** / **⌘−**, pinch | Zoom in / out |
 | **⇧1** / **⇧0** | Fit / 100% |
 
-Click to select (Shift-click for several), double-click text to retype it, and
+Click to select (Shift-click for several), double-click text to retype it (including text passed into a
+component, like a button label or a section title: Tovi changes it where the component is used), and
 drag a field’s icon to scrub its value.
 
 ## Run one app directly
@@ -141,11 +142,10 @@ repeated by a list are protected: Tovi explains and points you to the parent.
 Paste your Anthropic key on the start page once. It's saved to `engine/.env`,
 which is git-ignored. Then:
 
-- **Ask bar (Preview):** describe a change to the whole screen.
-- **Chat (Edit, ⌘K):** the same, scoped to the selection, its parents and children.
-- **Notes (A):** draw a pin, box, circle or arrow and write a note. **Apply all**
-  answers each note on its own: what Tovi changed, or why it couldn't, with a
-  switch to leave any note out.
+- **Chat (⌘K):** describe a change to the selection (with its parents and children), or to the whole screen when nothing is selected.
+- **Notes (A):** draw a pin, box, circle or arrow and write a note in the bar that opens there. Notes collect as
+  tasks in the chat; **Send to Tovi** answers each one: what Tovi will change, or why it can't, with a tick
+  to leave any task out.
 - **Attachments and voice:** paste, drop or attach images; Claude sees them and
   can place one in the design. Ask for "an illustration of…" or "a photo of…" and Tovi shows options to pick from. The mic dictates in your browser's language (Chrome, Safari).
 

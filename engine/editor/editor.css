@@ -815,3 +815,5 @@ aside.side{min-width:0}
 body[data-tool="interact"] #ov .box.hov{display:none!important}
 .tb.wide{display:flex;flex-direction:row;align-items:center;white-space:nowrap;width:auto;height:36px;gap:8px;padding:0 12px 0 10px;font:500 12px/16px Geist,system-ui,sans-serif;color:var(--ink)}
 .tb.wide .kbd{margin-left:4px}
+/* segmented choices never wrap: long names shorten instead */
+.seg button{min-width:0;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

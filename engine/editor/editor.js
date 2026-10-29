@@ -173,6 +173,18 @@
     renderLayers();
     await loadInfo();
   }
+  // Where this instance of a component is used. Components that don't pass their props through to the HTML
+  // leave no tag on the page, but React (in development) still knows each element's component and its props.
+  function usageOf(el, comp) {
+    for (let h = el; h; h = h.parentElement) if (h.getAttribute?.('data-kerf-use') && h.getAttribute('data-kerf-n') === comp) return h.getAttribute('data-kerf-use');
+    const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+    let f = key ? el[key] : null;
+    for (let i = 0; f && i < 300; i++, f = f.return) {
+      const p = f.memoizedProps;
+      if (p && p['data-kerf-n'] === comp && p['data-kerf-use']) return p['data-kerf-use'];
+    }
+    return null;
+  }
   async function loadInfo() {
     const s = S.sel;
     if (!s) return;
@@ -180,6 +192,22 @@
     const get = (loc) => (loc ? api('/inspect', { loc, dom }).catch((e) => ({ error: e.message })) : null);
     const [d, u] = await Promise.all([get(s.def), get(s.use)]);
     if (S.sel !== s) return;
+    // Text that's a component prop ({title}, {children}): edit the string where the component is used.
+    for (const inf of [d, u]) {
+      const vp = inf?.text?.viaProp;
+      if (!vp || inf.text.editable) continue;
+      const useLoc = usageOf(s.el, vp.comp);
+      const ui = !useLoc ? null : useLoc === s.use ? u : await get(useLoc);
+      if (S.sel !== s) return;
+      const file = useLoc ? useLoc.replace(/:\d+:\d+$/, '').split('/').pop() : '';
+      const val = vp.prop === 'children' ? (ui?.text?.editable ? ui.text.value : null) : (ui?.props || []).find((x) => x.name === vp.prop && x.editable && x.kind === 'string')?.value;
+      if (val != null) inf.text = { editable: true, value: String(val), via: { loc: useLoc, prop: vp.prop, file } };
+      else if (useLoc) inf.text = { editable: false, reason: `This text is passed in from ${file}, where it’s set by code. Change it there, or ask a developer.` };
+    }
+    // A component that passes everything through (<button {...props} />) gets its label where it's used.
+    if (d && !d.error && !d.text?.editable && u?.text?.editable && !d.text?.via) {
+      d.text = { editable: true, value: u.text.value, via: { loc: s.use, prop: 'children', file: s.use.replace(/:\d+:\d+$/, '').split('/').pop() } };
+    }
     s.defInfo = d;
     s.useInfo = u;
     renderPanel();
@@ -207,6 +235,17 @@
   async function commit(change) {
     const loc = activeLoc();
     if (!loc) return;
+    const via = change.text != null && !S.multi.length ? info()?.text?.via : null;
+    if (via) {
+      // The text is a prop of a component: change the string where this one is used.
+      try {
+        const who = S.sel ? dName(S.sel.el) : '';
+        const r = await api('/edit', via.prop === 'children' ? { loc: via.loc, text: change.text, name: who } : { loc: via.loc, props: [{ name: via.prop, value: change.text }], propText: true, name: who });
+        if (r.changed) { S.count = r.n; toast(`${who} · Text “${change.text}”`, `Changed where it’s used, in ${via.file}`, false, true); }
+        afterEdit();
+      } catch (e) { toast(e.message, '', true); }
+      return;
+    }
     try {
       if (S.multi.length) {
         // Several selected: apply the same change to each one, in a safe order.
@@ -777,9 +816,11 @@
     const c = s.defInfo?.cva;
     if (c) {
       const av = activeVariant(), vname = av?.variant;
-      const opts = [...(s.use ? [['here', 'Only this one']] : []), ...(vname ? [['variant', `All “${vname}”`]] : []), ['all', `Every ${s.use ? (s.useInfo?.tag || name) : name}`]];
+      // Short labels that fit the panel; the full meaning is in each button's tooltip.
+      const comp = s.use ? (s.useInfo?.tag || name) : name;
+      const opts = [...(s.use ? [['here', 'This one', 'Only this one']] : []), ...(vname ? [['variant', `All “${vname}”`, `Every ${comp} with variant “${vname}”`]] : []), ['all', 'All', `Every ${comp}`]];
       if (!opts.some(([v]) => v === S.scope)) S.scope = vname ? 'variant' : 'all';
-      return `<div class="seg">${opts.map(([v, n]) => `<button data-act="scope" data-v="${v}" class="${S.scope === v ? 'on' : ''}">${esc(n)}</button>`).join('')}</div>`;
+      return `<div class="seg">${opts.map(([v, n, t]) => `<button data-act="scope" data-v="${v}" class="${S.scope === v ? 'on' : ''}" title="${esc(t)}">${esc(n)}</button>`).join('')}</div>`;
     }
     if (s.def && s.use) return `<div class="seg"><button data-act="scope" data-v="all" class="${S.scope === 'all' ? 'on' : ''}" title="Change the component itself, everywhere it's used">Everywhere</button><button data-act="scope" data-v="here" class="${S.scope === 'here' ? 'on' : ''}" title="Change only this use of the component">Only here</button></div>`;
     return '';
@@ -875,7 +916,7 @@
     const v = versions.slice().reverse();
     return `<div class="ptabs"><button class="on">Version history</button><button class="x" data-act="history" aria-label="Close">${ico('x')}</button></div>
       <div class="scroll" style="padding:8px;display:flex;flex-direction:column;gap:4px">
-      ${draft.length ? `<div class="ver"><div class="vh"><span>Current</span><span>${draft.length} unsaved change${draft.length === 1 ? '' : 's'}</span></div>${draft.slice(-4).reverse().map((c) => `<span class="ch">${chLabel(c)}</span>`).join('')}${draft.length > 4 ? `<span class="note">and ${draft.length - 4} more</span>` : ''}<div class="acts"><button class="outline" data-act="saveVersion">Save as a version</button><span class="note">Also saved when you go back to Preview.</span></div></div>` : ''}
+      ${draft.length ? `<div class="ver"><div class="vh"><span>Current</span><span>${draft.length} unsaved change${draft.length === 1 ? '' : 's'}</span></div>${draft.slice(-4).reverse().map((c) => `<span class="ch">${chLabel(c)}</span>`).join('')}${draft.length > 4 ? `<span class="note">and ${draft.length - 4} more</span>` : ''}<div class="acts"><button class="outline" data-act="saveVersion">Save as a version</button><span class="note">Also saved every few minutes and when you present.</span></div></div>` : ''}
       ${v.map((x) => `<div class="ver${peeking === x.n ? ' on' : ''}"><div class="vh"><span>Version ${x.n}</span><span>${time(x.at)}</span></div>
         ${x.changes.slice(0, 5).map((c) => `<span class="ch">${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${chLabel(c)}</span>`).join('')}${x.changes.length > 5 ? `<span class="note">and ${x.changes.length - 5} more</span>` : ''}
         <div class="acts"><button class="outline" data-act="peek" data-v="${x.n}">${peeking === x.n ? 'Back to now' : 'Show before'}</button><button class="ghostBtn" data-act="restore" data-v="${x.n - 1}" title="Undo this version and everything after it">Undo from here</button></div></div>`).join('')}
@@ -1024,9 +1065,10 @@
       if (!picking() || S.editing) return;
       const hit = pick(e.target);
       if (!hit) return;
-      if (S.sel?.el !== hit) { S.multi = []; select(hit); }
-      const fr = frame.getBoundingClientRect();
-      setTimeout(() => contextMenu({ x: fr.left + e.clientX * S.z, y: fr.top + e.clientY * S.z }), 0);
+      // Wait for the element's code to be read, so the menu offers everything it can do (like Edit text).
+      const ready = S.sel?.el !== hit ? (S.multi = [], select(hit)) : null;
+      const fr = frame.getBoundingClientRect(), at = { x: fr.left + e.clientX * S.z, y: fr.top + e.clientY * S.z };
+      Promise.resolve(ready).catch(() => {}).then(() => { if (S.sel?.el === hit) contextMenu(at); });
     }, true);
     let lastClick = null;
     // Browsers send no click to a disabled button or input, only pointer events: select those on release.
@@ -1140,7 +1182,7 @@
   window.addEventListener('blur', () => { if (S.through || S.space) { S.through = S.space = false; syncTool(); } });
   // Move around: drag to scroll the page and the canvas, like Figma's hand.
   let pan = null;
-  $('panCap').addEventListener('pointerdown', (e) => { pan = { x: e.clientX, y: e.clientY }; $('panCap').setPointerCapture(e.pointerId); $('panCap').classList.add('grabbing'); e.preventDefault(); });
+  $('panCap').addEventListener('pointerdown', (e) => { pan = { x: e.clientX, y: e.clientY }; try { $('panCap').setPointerCapture(e.pointerId); } catch {} $('panCap').classList.add('grabbing'); e.preventDefault(); });
   $('panCap').addEventListener('pointermove', (e) => {
     if (!pan || !W) return;
     const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
@@ -1917,7 +1959,7 @@
   $('annoCap').addEventListener('pointerdown', (e) => {
     if (S.tool !== 'annotate' || !W) return;
     e.preventDefault();
-    $('annoCap').setPointerCapture(e.pointerId);
+    try { $('annoCap').setPointerCapture(e.pointerId); } catch {}
     S.noteDraft = null;
     renderMarks();
     draw = ovPoint(e);
@@ -1951,6 +1993,8 @@
     S.noteDraft = null;
     S.hintSeen = true;
     if (t !== 'select') S.hover = null;
+    // Interacting or moving around isn't editing: let go of the selection so the outline and handles go away.
+    if ((t === 'interact' || t === 'hand') && (S.sel || S.multi.length)) { S.multi = []; select(null); }
     if (t === 'annotate') S.askOpen = false;
     syncTool();
     renderBar(); renderMarks(); renderAsk();

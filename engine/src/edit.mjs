@@ -231,6 +231,41 @@ export function textInfo(el) {
   return { editable: false, reason: 'This text comes from data or code, not a fixed string. Change it in the data, or ask a developer.' };
 }
 
+// Text that is a component's prop ({title}, {children}, {props.label}): which component and which prop,
+// so the editor can change the string where the component is used.
+export function propText(code, el) {
+  const isComment = (c) => c.type === 'JSXExpressionContainer' && c.expression.type === 'JSXEmptyExpression';
+  const kids = el.children.filter((c) => !(c.type === 'JSXText' && !c.value.trim()) && !isComment(c));
+  if (kids.length !== 1 || kids[0].type !== 'JSXExpressionContainer') return null;
+  const ex = kids[0].expression;
+  const prop = ex.type === 'Identifier' ? ex.name
+    : ex.type === 'MemberExpression' && !ex.computed && ex.object.type === 'Identifier' && ex.property.type === 'Identifier' ? ex.property.name : null;
+  if (!prop) return null;
+  // The innermost component (capitalised function) around this element.
+  let best = null;
+  const consider = (name, fn) => {
+    if (!name || !/^[A-Z]/.test(name) || !fn || fn.start > el.start || fn.end < el.end) return;
+    if (!best || fn.start >= best.fn.start) best = { name, fn };
+  };
+  walk(parseCode(code).program, (n) => {
+    if (n.type === 'FunctionDeclaration') consider(n.id?.name, n);
+    else if (n.type === 'VariableDeclarator' && n.id.type === 'Identifier') {
+      let f = n.init;
+      // forwardRef(...) / memo(...) wrappers
+      while (f && f.type === 'CallExpression' && f.arguments[0]) f = f.arguments[0];
+      if (f && /^(ArrowFunctionExpression|FunctionExpression)$/.test(f.type)) consider(n.id.name, f);
+    }
+  });
+  if (!best) return null;
+  const p0 = best.fn.params[0];
+  if (ex.type === 'Identifier') {
+    if (p0?.type !== 'ObjectPattern') return null;
+    const hit = p0.properties.some((q) => q.type === 'ObjectProperty' && ((q.key.type === 'Identifier' && q.key.name === prop && (q.value.type === 'Identifier' ? q.value.name === prop : q.value.type === 'AssignmentPattern' && q.value.left.name === prop))));
+    return hit ? { comp: best.name, prop } : null;
+  }
+  return p0?.type === 'Identifier' && p0.name === ex.object.name ? { comp: best.name, prop } : null;
+}
+
 export function describe(code, line, col, ctx = {}) {
   const el = findElement(code, line, col);
   if (!el) throw new KerfError('Element not found. The file may have changed; reload and try again.');
@@ -245,7 +280,7 @@ export function describe(code, line, col, ctx = {}) {
     classKind: ci.kind,
     classReason: ci.reason,
     cva: ci.kind === 'cva' ? { name: ci.entry.name, groups: Object.fromEntries(Object.entries(ci.entry.groups).map(([g, v]) => [g, Object.keys(v)])), defaults: ci.entry.defaults } : undefined,
-    text: ti.editable ? { editable: true, value: ti.value } : { editable: false, reason: ti.reason },
+    text: ti.editable ? { editable: true, value: ti.value } : { editable: false, reason: ti.reason, viaProp: propText(code, el) || undefined },
     ...propsInfo(code, el),
     sized: sizedProps(ci.classes, ctx.theme),
     ...sourcedDescribe(code, el, ctx),
@@ -309,7 +344,7 @@ export function applyResponsive(list, ops, th, bp) {
 }
 
 // Apply class ops and/or a text change to one element. Returns the new code and a summary.
-export function editElement(code, line, col, { ops = [], text, props = [], cva, bp } = {}, theme) {
+export function editElement(code, line, col, { ops = [], text, props = [], cva, bp, propText } = {}, theme) {
   const el = findElement(code, line, col);
   if (!el) throw new KerfError('Element not found. The file may have changed; reload and try again.');
   const s = new MagicString(code);
@@ -321,6 +356,8 @@ export function editElement(code, line, col, { ops = [], text, props = [], cva, 
     } catch (e) {
       throw new KerfError(e.message);
     }
+    // Text passed in as a prop (title="…") reads as a text change, not a property change.
+    if (propText && summary.props.length === 1) { summary.text = { from: summary.props[0].from, to: summary.props[0].to }; summary.props = []; }
   }
 
   if (ops.length) {

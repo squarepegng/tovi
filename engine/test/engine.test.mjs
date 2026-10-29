@@ -382,3 +382,12 @@ test('illustrations are cleaned of scripts, event handlers and outside links', (
   assert.ok(s.includes('url(#g)') && s.includes('<use href="#g"/>'));
   assert.equal(cleanSvg('no svg here'), null);
 });
+
+test('text passed in as a component prop is traced to the prop', async () => {
+  const { propText, findElement } = await import('../src/edit.mjs');
+  const code = `export function SectionHeading({ eyebrow, title, children }) {\n  return (\n    <div>\n      <p>{eyebrow}</p>\n      <h2>{title}</h2>\n      {children}\n    </div>\n  );\n}\nconst Button = forwardRef(function Button(props, ref) { return <button ref={ref}>{props.label}</button>; });\nfunction Card({ data }) { return <h3>{data.name}</h3>; }\n`;
+  const at = (needle) => { const i = code.indexOf(needle); const before = code.slice(0, i); return findElement(code, before.split('\n').length, i - before.lastIndexOf('\n') - 1); };
+  assert.deepEqual(propText(code, at('<h2>')), { comp: 'SectionHeading', prop: 'title' });
+  assert.deepEqual(propText(code, at('<button')), { comp: 'Button', prop: 'label' });
+  assert.equal(propText(code, at('<h3>')), null);
+});
