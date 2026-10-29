@@ -551,6 +551,7 @@
     m.innerHTML = `<section class="dialog settings" role="dialog" aria-modal="true" aria-labelledby="setT"><div class="dh"><h2 id="setT">Settings</h2><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
       <div class="setBody">
         <div class="setSec"><h3>Tovi</h3>
+          <form class="setRow" data-form="person" autocomplete="off"><span class="setTx"><b>Your name</b><span class="note">Shown on the versions and changes you make.</span></span><span class="setName"><input id="setPerson" value="" maxlength="60" placeholder="Your name" aria-label="Your name"><button class="outline sm">Save</button></span></form>
           ${tog('agents', S.agentsOn, 'Show Tovi at work', 'See Tovi’s cursor select and change things as it works.')}
           ${row('AI style', 'How far Tovi may go beyond your design system.', `<div class="seg setSeg">${[['system', 'On system'], ['improve', 'Improve'], ['explore', 'Explore']].map(([v, n]) => `<button data-act="setMode" data-v="${v}" class="${S.styleMode === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
           ${row('Design direction', S.direction ? esc(dirName()) : 'Not set. Tovi follows your design system.', `<button class="outline sm" data-act="setDir">${S.direction ? 'Change' : 'Set'}</button>`)}
@@ -570,6 +571,7 @@
           ${row('Keyboard shortcuts', 'Every key Tovi listens for.', '<button class="outline sm" data-act="keys">Show</button>')}
         </div>
       </div></section>`;
+    api('/person').then((p) => { const i = $('setPerson'); if (i && !i.value) i.value = p.name; }).catch(() => {});
     api('/keys').then((k) => {
       const a = $('setKeyA'), u = $('setKeyU');
       if (a) a.textContent = k.anthropic ? 'Saved. Tovi’s AI is on.' : 'No key yet. Add one to use the AI.';
@@ -1507,6 +1509,7 @@
     if (f === 'chat') sendChat();
     if (f === 'pick' && S.pick) { S.pick.prompt = $('pickQ').value; if (S.pick.kind === 'photo') S.pick.photos = null; else S.pick.drawings = null; runPicker(); }
     if (f === 'note') addNote();
+    if (f === 'person') { const name = $('setPerson').value.trim(); if (!name) return; api('/person', { name }).then((p) => { $('setPerson').value = p.name; toast(`Versions will show ${p.name}`); }).catch((err) => toast(err.message, '', true)); }
     if (f === 'vsave') { const name = e.target.querySelector('input').value.trim(); api('/version', { kind: 'named', name: name || null }).then((v) => { S.versions = v; S.verAt = S.count; renderPanel(); renderTop(); toast(name ? `Saved “${name}”` : 'Saved a version'); }).catch((err) => toast(err.message, '', true)); }
     if (f === 'vname') { const n = +e.target.dataset.n, name = e.target.querySelector('input').value.trim(); api('/rename', { n, name }).then((v) => { S.versions = v; S.vNaming = null; renderPanel(); }).catch((err) => toast(err.message, '', true)); }
     if (f === 'reply') {

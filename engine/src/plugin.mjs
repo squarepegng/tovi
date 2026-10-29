@@ -10,6 +10,7 @@ import { loadTheme } from './tailwind.mjs';
 import { createEditor, KerfError } from './edit.mjs';
 import { propose } from './ai.mjs';
 import { createSession } from './session.mjs';
+import { readPerson, savePerson } from './person.mjs';
 import { createLibrary } from './library.mjs';
 import { listTokens, tokenEdit } from './tokens.mjs';
 import { searchPhotos, photoUsed, illustrate, envKey } from './images.mjs';
@@ -69,6 +70,7 @@ export async function createKerf(webRoot) {
           const g = session.repoInfo();
           return send(200, { name: g.repo || pkg.name || path.basename(webRoot), branch: g.git ? g.branch : null, repo: g.repo, gh: g.gh, files: g.files || [] });
         }
+        if (req.method === 'GET' && route === '/person') return send(200, { name: readPerson(webRoot) });
         if (req.method === 'GET' && route === '/versions') return send(200, session.list());
         if (req.method === 'GET' && route === '/chat') return send(200, session.chat());
         // Which AI keys are saved (never the keys themselves), for the Settings window.
@@ -97,6 +99,7 @@ export async function createKerf(webRoot) {
         const send2 = (status, b) => { if (status === 200 && route !== '/inspect' && route !== '/ai') session.save(); return s0(status, b); };
         const writes = ['/edit', '/undo', '/ai/apply', '/structure'];
         if (writes.includes(route) && session.isPeeking()) return send(409, { error: 'You’re looking at an earlier version. Close it to keep editing.' });
+        if (route === '/person') return send(200, { name: savePerson(body?.name) });
         if (route === '/version') return send2(200, session.snapshot(body || {}));
         if (route === '/rename') return send2(200, session.rename(Number(body.n), body.name));
         if (route === '/restore') return send2(200, session.restore(Number(body.n)));

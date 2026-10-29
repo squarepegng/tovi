@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
+import { readPerson } from './person.mjs';
 import { KerfError } from './edit.mjs';
 
 export function createSession(webRoot, editor) {
@@ -52,14 +53,8 @@ export function createSession(webRoot, editor) {
     return { file: h.rel, loc: h.loc, name: h.change?.name || null, label: (s.labels || []).join(' · ') || code, code, source: h.source || 'hand' };
   };
 
-  // Who made the changes: the project's git name, else this Mac's user.
-  let author = null;
-  const authorName = () => {
-    if (author) return author;
-    try { author = spawnSync('git', ['config', 'user.name'], { cwd: webRoot, encoding: 'utf8' }).stdout.trim(); } catch {}
-    if (!author) { try { author = os.userInfo().username; } catch { author = 'You'; } }
-    return author;
-  };
+  // Who made the changes: the designer's name (Settings), read fresh so a change applies at once.
+  const authorName = () => readPerson(webRoot);
   // Save a version. Autosaves happen on their own; named ones are saved (and named) by the designer.
   // Naming with nothing new to save names the latest version instead.
   function snapshot(opts = {}) {

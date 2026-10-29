@@ -949,3 +949,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .vSave input,.vName input{flex:none;width:100%;min-width:0;height:28px;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--canvas);color:var(--ink);font:400 12px/16px Geist,system-ui,sans-serif}
 .vSave input:focus,.vName input:focus{outline:none;border-color:var(--select)}
 .vItem.empty{padding-left:10px}
+
+.setName{display:flex;gap:6px;align-items:center}
+.setName input{width:170px;height:28px;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--canvas);color:var(--ink);font:400 12px/16px Geist,system-ui,sans-serif}
+.setName input:focus{outline:none;border-color:var(--select)}
