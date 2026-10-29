@@ -626,7 +626,6 @@
       <button class="tb${S.tab === 'chat' ? ' on' : ''}" data-act="chatToggle" aria-label="Chat with Tovi">${ico('spark', 16)}${tip('Chat with Tovi', '⌘K')}</button>
       <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip('Add element', 'I')}</button>
       <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('pen', 16)}${tip('Annotate', 'A')}</button>
-      ${S.tool === 'annotate' ? `<div class="shapes">${['pin', 'box', 'circle', 'arrow'].map((k, i) => `<button class="tb sm${S.shape === k ? ' on' : ''}" data-act="shape" data-v="${k}" aria-label="${k}">${ico(k, 14)}${tip(k[0].toUpperCase() + k.slice(1), String(i + 1))}</button>`).join('')}</div>` : ''}
       <span class="div"></span>
       <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 16)}${tip('Undo', '⌘Z')}</button>
       <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 16)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>`;
@@ -1162,7 +1161,6 @@
     else if (k === 'p') { if (S.mode === 'preview') setMode('edit'); setTool('interact'); }
     else if (k === 'h') setTool('hand');
     else if (k === 'a' && S.mode === 'edit') setTool(S.tool === 'annotate' ? 'select' : 'annotate');
-    else if (S.tool === 'annotate' && ['1', '2', '3', '4'].includes(k)) { S.shape = ['pin', 'box', 'circle', 'arrow'][+k - 1]; renderBar(); }
     else if (S.mode === 'edit' && k === 'enter' && S.sel) beginText();
     else return;
     e.preventDefault();
@@ -1533,7 +1531,7 @@
       return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
     } catch { h2i = null; return null; }
   }
-  async function runAI(text, targets, where, shown, followUp, atts = []) {
+  async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = false) {
     text = String(text || '').trim() || (atts.length ? 'Use the attached image.' : '');
     if (!text || S.card?.busy) return;
     if (!targets.length) { toast('Nothing on screen to work with yet. Wait for the page to load, or select something.', '', true); return; }
@@ -1556,6 +1554,8 @@
     m.busy = false;
     m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
     renderAI();
+    // Tasks: Apply means apply. Every change is undoable, and the answer has its own Undo.
+    if (autoApply && m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
     saveChat();
   }
   async function decide(m, v) {
@@ -1583,7 +1583,7 @@
     renderAI();
     saveChat();
   }
-  const STATUS = { applied: 'Applied', discarded: 'Discarded', failed: 'Couldn’t apply', info: 'No changes to your app' };
+  const STATUS = { applied: 'Applied', undone: 'Undone', discarded: 'Discarded', failed: 'Couldn’t apply', info: 'No changes to your app' };
   // Status is shown by Tovi, not written into the reply: drop a leading "Nothing changed yet." if the model adds one.
   const cleanMsg = (t) => { const x = String(t || '').replace(/^\s*(nothing (has )?changed( yet)?|no changes( were)?( made)?( yet)?|i (haven[’']t|have not) changed anything( yet)?)\s*[.:;,—–-]*\s*/i, ''); return x ? x[0].toUpperCase() + x.slice(1) : String(t || ''); };
   const chosen = (m) => m.proposal.edits.filter((e, k) => !(m.off || []).includes(k) && !(m.skip || []).includes(e.note ?? 0) && e.structure?.type !== 'imageAsk');
@@ -1593,7 +1593,7 @@
     if (m.applying) return inPlan ? 'run' : 'skip';
     if (m.status === 'applied') return !inPlan ? 'skip' : (m.failed || []).includes(e.loc) ? 'bad' : 'ok';
     if (m.status === 'failed') return 'bad';
-    if (m.status === 'discarded') return 'skip';
+    if (m.status === 'discarded' || m.status === 'undone') return 'skip';
     return inPlan ? 'pick' : 'unpick';
   }
   const CHECK = '<svg width="10" height="10" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1667,7 +1667,8 @@
     return `<div class="prop${byNote ? ' byNote' : ''}">${stepsHTML(m)}${badge ? `<span class="badge">${badge}</span>` : ''}<p class="kText">${esc(cleanMsg(p.message))}</p>
       ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
       ${suggest}${keep}
-      ${m.status === 'pending' && p.edits.length ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : status}</div>`;
+      ${m.where === 'notes' && m.status === 'applied' && !p.mode?.startsWith('explore') ? `<div class="kDone">${status}<button class="ghostBtn sm" data-act2="tryUndo" data-i="${i}">Undo</button></div>` : ''}
+      ${m.status === 'pending' && p.edits.length ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.where === 'notes' && m.status === 'applied' ? '' : status}</div>`;
   }
   // "Looked at 14 elements · Thought for 9s", which opens to show what Tovi read.
   function stepsHTML(m, live) {
@@ -1869,12 +1870,15 @@
 
   /* annotations */
   function shapeSVG(n, i, draft, hl) {
-    const st = `stroke="#2B66D9" stroke-width="${hl ? 3 : 2}" fill="${draft ? 'none' : 'rgba(43,102,217,.06)'}"`;
+    const st = `stroke="#2B66D9" stroke-width="${2 / (S.z || 1)}" stroke-dasharray="${6 / (S.z || 1)} ${4 / (S.z || 1)}" fill="rgba(43,102,217,.06)"`;
     let s = '';
+    // A written note shows only its number; its area comes back while its task is hovered.
+    const o = n;
+    if (i != null && !hl) n = { ...n, shape: n.shape === 'pin' ? 'pin' : 'none' };
     if (n.shape === 'box') s = `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6" ${st}/>`;
     else if (n.shape === 'circle') s = `<ellipse cx="${n.x + n.w / 2}" cy="${n.y + n.h / 2}" rx="${n.w / 2}" ry="${n.h / 2}" ${st}/>`;
     else if (n.shape === 'arrow') { const a = Math.atan2(n.y2 - n.y, n.x2 - n.x), L = 12; s = `<path d="M${n.x} ${n.y}L${n.x2} ${n.y2}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a - 0.5)} ${n.y2 - L * Math.sin(a - 0.5)}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a + 0.5)} ${n.y2 - L * Math.sin(a + 0.5)}" stroke="#2B66D9" stroke-width="2.5" fill="none" stroke-linecap="round"/>`; }
-    const [bx, by] = n.shape === 'pin' || n.shape === 'arrow' ? [n.x, n.y] : [n.x + n.w, n.y];
+    const [bx, by] = o.shape === 'pin' || o.shape === 'arrow' ? [o.x, o.y] : [o.x + o.w, o.y];
     if (i != null) s += `<g transform="translate(${bx} ${by}) scale(${1 / (S.z || 1)})" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${hl ? '<circle r="16" fill="rgba(43,102,217,.28)"/>' : ''}<circle r="11" fill="#2B66D9" stroke="#fff" stroke-width="2"/><text y="4" fill="#fff" font-size="11" font-weight="600" font-family="Geist,system-ui,sans-serif" text-anchor="middle">${i + 1}</text></g>`;
     else if (n.shape === 'pin') s += `<circle cx="${n.x}" cy="${n.y}" r="6" fill="#2B66D9"/>`;
     return s;
@@ -1902,7 +1906,7 @@
         <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${ico('task', 15)}<b>Task ${i + 1}</b><span class="tkT">${esc(x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
         ${open ? `<div class="tkB"><p>${esc(x.text)}</p>${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
       </div>`; }).join('')}</div>
-      <div class="tkFoot">${busy ? `<span class="tkN"><i class="kSpin"><b></b><b></b><b></b><b></b></i>Tovi is reading ${n === 1 ? 'the task' : `${n} tasks`}…</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Send to Tovi</button>`}</div>
+      <div class="tkFoot">${busy ? `<span class="tkN"><i class="kSpin"><b></b><b></b><b></b><b></b></i>Tovi is reading ${n === 1 ? 'the task' : `${n} tasks`}…</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Apply</button>`}</div>
     </div>`;
   }
   function refreshTasks() {
@@ -1952,7 +1956,7 @@
     const request = S.notes.map((n, i) => `Note ${i + 1}: ${n.text}`).join('\n') + '\nEach element is tagged with the note it sits under.';
     const atts = [], tagged = [];
     S.notes.forEach((n, i) => (n.atts || []).forEach((a) => { if (atts.length < 4) { atts.push(a); tagged.push(`Attachment ${atts.length} belongs to note ${i + 1}.`); } }));
-    runAI(request + (tagged.length ? '\n' + tagged.join(' ') : ''), targets, 'notes', S.notes.map((n, i) => `${i + 1}. ${n.text}`).join('\n'), false, atts);
+    runAI(request + (tagged.length ? '\n' + tagged.join(' ') : ''), targets, 'notes', S.notes.map((n, i) => `${i + 1}. ${n.text}`).join('\n'), false, atts, true);
   }
   let draw = null;
   const ovPoint = (e) => { const r = $('ov').getBoundingClientRect(); return { x: (e.clientX - r.left) / S.z + W.scrollX, y: (e.clientY - r.top) / S.z + W.scrollY }; };
@@ -1967,7 +1971,7 @@
   $('annoCap').addEventListener('pointermove', (e) => {
     if (!draw) return;
     const { x: x2, y: y2 } = ovPoint(e);
-    S.noteDraft = S.shape === 'pin' ? { shape: 'pin', x: x2, y: y2 } : S.shape === 'arrow' ? { shape: 'arrow', x: draw.x, y: draw.y, x2, y2 } : { shape: S.shape, x: Math.min(draw.x, x2), y: Math.min(draw.y, y2), w: Math.abs(x2 - draw.x), h: Math.abs(y2 - draw.y) };
+    S.noteDraft = { shape: 'box', x: Math.min(draw.x, x2), y: Math.min(draw.y, y2), w: Math.abs(x2 - draw.x), h: Math.abs(y2 - draw.y) };
     renderMarks();
   });
   $('annoCap').addEventListener('pointerup', () => {
@@ -2028,8 +2032,9 @@
         (async () => {
           let undone = 0;
           for (let k = 0; k < (m.appliedN || 0); k++) { const r = await api('/undo', {}).catch(() => null); if (!r?.undone) break; S.count = r.n; undone++; }
-          m.status = 'discarded';
-          toast(undone ? `Undid the look (${undone} change${undone === 1 ? '' : 's'})` : 'Nothing to undo');
+          m.status = 'undone';
+          const what = m.where === 'notes' ? 'Undid' : 'Undid the look:';
+          toast(undone ? `${what} ${undone} change${undone === 1 ? '' : 's'}` : 'Nothing to undo');
           afterEdit(); renderAI(); saveChat();
         })();
       }
@@ -2105,7 +2110,7 @@
       return;
     }
     const t = e.target.closest('[data-act="tool"],[data-act="shape"]');
-    if (t) { if (t.dataset.act === 'tool') setTool(t.dataset.v === 'annotate' && S.tool === 'annotate' ? 'select' : t.dataset.v); else { S.shape = t.dataset.v; renderBar(); } }
+    if (t) { if (t.dataset.act === 'tool') setTool(t.dataset.v === 'annotate' && S.tool === 'annotate' ? 'select' : t.dataset.v); }
   });
 
   /* ---------- structure: delete, duplicate, move, swap, insert, images ---------- */

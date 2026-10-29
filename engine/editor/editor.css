@@ -817,3 +817,4 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .tb.wide .kbd{margin-left:4px}
 /* segmented choices never wrap: long names shorten instead */
 .seg button{min-width:0;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kDone{display:flex;align-items:center;justify-content:space-between;gap:8px}

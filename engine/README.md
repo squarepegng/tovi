@@ -143,9 +143,9 @@ Paste your Anthropic key on the start page once. It's saved to `engine/.env`,
 which is git-ignored. Then:
 
 - **Chat (⌘K):** describe a change to the selection (with its parents and children), or to the whole screen when nothing is selected.
-- **Notes (A):** draw a pin, box, circle or arrow and write a note in the bar that opens there. Notes collect as
-  tasks in the chat; **Send to Tovi** answers each one: what Tovi will change, or why it can't, with a tick
-  to leave any task out.
+- **Notes (A):** drag over an area (or click for a pin) and write what should change in the bar that opens
+  there. The mark becomes a number; notes collect as tasks in the chat. **Apply** has Tovi work out and apply
+  the change for each task (or say why it can't), with one **Undo** for the lot.
 - **Attachments and voice:** paste, drop or attach images; Claude sees them and
   can place one in the design. Ask for "an illustration of…" or "a photo of…" and Tovi shows options to pick from. The mic dictates in your browser's language (Chrome, Safari).
 
