@@ -30,8 +30,8 @@ original folder or GitHub, until a PR is made.
 
 Tovi opens your app inside its editor at `/__kerf/`:
 - **Top bar:** project, branch, page, desktop/tablet/mobile, zoom, version history, Create PR.
-- **Left:** Layers. **Right:** Design and Chat.
-- **Bottom:** the toolbar: Select, Interact and Move tools, chat, add, annotate.
+- **Left:** Chat (always there) and Layers, as two tabs. **Right:** Design.
+- **Bottom:** the toolbar: Select and Interact, add, annotate, undo, changes.
 - **Present** (▶ in the top bar) shows the app full screen; Esc to come back.
 
 Keys:
@@ -41,9 +41,8 @@ Keys:
 | **V** | Select: click to select and edit |
 | **P** | Interact: use the app (links, menus, forms) |
 | Hold **⌘** | Click through to the app while selecting |
-| **H** / hold **Space** | Move around the page |
 | **A** | Annotate |
-| **⌘K** | Chat with Tovi about the selection or the screen |
+| **⌘K** | Jump to the chat (about the selection, or the whole screen) |
 | **⌘Z** | Undo |
 | **⌘+** / **⌘−**, pinch | Zoom in / out |
 | **⇧1** / **⇧0** | Fit / 100% |

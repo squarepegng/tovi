@@ -727,7 +727,7 @@ body.dragging,body.dragging *{cursor:grabbing!important;user-select:none!importa
 .linkBtn:hover{text-decoration:underline}
 
 /* resizable side panels */
-aside.side.l{flex:0 0 212px}
+aside.side.l{flex:0 0 300px}
 .rz{flex:0 0 7px;margin:0 -3px;position:relative;z-index:15;cursor:col-resize;touch-action:none}
 .rz::after{content:'';position:absolute;top:0;bottom:0;left:3px;width:1px;background:transparent;transition:background .12s}
 .rz:hover::after,body.resizing .rz::after{background:var(--select)}
@@ -810,11 +810,18 @@ aside.side{min-width:0}
 .byNote .ngs:has(+ .acts.tkFoot),.byNote .ngs:has(+ * + .acts.tkFoot){border-radius:14px 14px 0 0}
 
 /* one workspace: tools decide what a click does */
-.panCap{position:absolute;inset:0;pointer-events:auto;cursor:grab;z-index:6}
-.panCap.grabbing{cursor:grabbing}
 body[data-tool="interact"] #ov .box.hov{display:none!important}
 .tb.wide{display:flex;flex-direction:row;align-items:center;white-space:nowrap;width:auto;height:36px;gap:8px;padding:0 12px 0 10px;font:500 12px/16px Geist,system-ui,sans-serif;color:var(--ink)}
 .tb.wide .kbd{margin-left:4px}
 /* segmented choices never wrap: long names shorten instead */
 .seg button{min-width:0;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kDone{display:flex;align-items:center;justify-content:space-between;gap:8px}
+
+/* left panel: Chat and Layers as tabs */
+#layers .lbody{flex:1;min-height:0;display:flex;flex-direction:column}
+#layers .lbody .comp{padding:10px 12px 12px}
+#layers[data-left="layers"] .lhead{border-bottom:0;height:36px}
+/* the chat's "what Tovi will look at" chip sits above the message, like Figma's */
+.kcTop{display:flex;min-width:0;margin:-2px 0 2px}
+.kcTop .kcCtx{max-width:100%;border:1px solid rgba(43,102,217,.6);background:rgba(43,102,217,.12);color:#C9D8F7;border-radius:6px}
+.kcTop .kcCtx svg{color:#9DBBF5}

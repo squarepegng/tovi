@@ -16,12 +16,12 @@
     sel: null, hover: null, theme: null, project: null, scope: 'all',
     count: 0, corners: false, cpick: null, editing: null, changesOpen: false,
     chat: [], card: null, askOpen: false, shape: 'box', notes: [], noteDraft: null, amber: [],
-    versions: { versions: [], draft: [], peeking: null }, open: {}, multi: [], alt: false, handleDrag: null, path: '/', hintSeen: false, layersOpen: innerWidth >= 1180,
+    versions: { versions: [], draft: [], peeking: null }, open: {}, multi: [], alt: false, handleDrag: null, path: '/', hintSeen: false, layersOpen: innerWidth >= 900, left: (() => { try { return localStorage.getItem('kerf.left') || 'chat'; } catch { return 'chat'; } })(),
   };
   const $ = (id) => document.getElementById(id);
   // What a click on the app does: Interact (or holding ⌘) passes it to the app; Select picks the element.
   const appClicks = () => S.mode === 'preview' || S.tool === 'interact' || (S.tool === 'select' && S.through);
-  const picking = () => S.mode === 'edit' && S.tool === 'select' && !S.through && !S.space;
+  const picking = () => S.mode === 'edit' && S.tool === 'select' && !S.through;
   // ⌘ (Ctrl on Windows) held during a click while selecting: the click goes to the app.
   const thru = (e) => S.mode === 'edit' && S.tool === 'select' && !!(e.metaKey || e.ctrlKey);
   const frame = $('frame');
@@ -161,7 +161,7 @@
     S.srcScope = 'key';
     S.iconQ = null;
     closeIconPop?.();
-    if (!el) { S.multi = []; S.sel = null; S.cpick = null; renderPanel(); renderLayers(); return; }
+    if (!el) { S.multi = []; S.sel = null; S.cpick = null; renderPanel(); renderLayers(); chatCtx(); return; }
     const list = [...sameLoc(el)];
     S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null };
     if (!S.sel.def) S.scope = 'here';
@@ -171,7 +171,13 @@
     while (p) { const t = pick(p); if (!t) break; S.open[keyOf(t)] = true; p = t.parentElement; }
     renderPanel();
     renderLayers();
+    chatCtx();
     await loadInfo();
+  }
+  // The chat box says what Tovi will look at: the selection, or the whole screen.
+  function chatCtx() {
+    const c = document.querySelector('#lbody .kcCtx');
+    if (c) c.innerHTML = `${ico(S.sel ? 'frame' : 'desktop', 12)}${S.sel ? esc(dName(S.sel.el)) : 'Whole screen'}`;
   }
   // Where this instance of a component is used. Components that don't pass their props through to the HTML
   // leave no tag on the page, but React (in development) still knows each element's component and its props.
@@ -509,7 +515,7 @@
     ], at);
   }
   function shortcuts() {
-    const rows = [['Select', 'V'], ['Interact with the app', 'P'], ['Click through while selecting', 'Hold ⌘'], ['Move around', 'H · hold Space'], ['Annotate', 'A'], ['Chat with Tovi', '⌘K'], ['Undo', '⌘Z'], ['Select parent', '⇧↵'], ['Duplicate', '⌘D'], ['Delete', '⌫'], ['Move up / down', '⌥↑ ⌥↓'], ['Group / ungroup', '⌥⌘G · ⇧⌘G'], ['Add element', 'I'], ['Measure spacing', 'hold ⌥'], ['Select several', '⇧ click'], ['Zoom in / out', '⌘+ · ⌘−'], ['Fit / 100%', '⇧1 · ⇧0'], ['Hide panels', '⇧\\']];
+    const rows = [['Select', 'V'], ['Interact with the app', 'P'], ['Click through while selecting', 'Hold ⌘'], ['Annotate', 'A'], ['Ask Tovi (chat)', '⌘K'], ['Undo', '⌘Z'], ['Select parent', '⇧↵'], ['Duplicate', '⌘D'], ['Delete', '⌫'], ['Move up / down', '⌥↑ ⌥↓'], ['Group / ungroup', '⌥⌘G · ⇧⌘G'], ['Add element', 'I'], ['Measure spacing', 'hold ⌥'], ['Select several', '⇧ click'], ['Zoom in / out', '⌘+ · ⌘−'], ['Fit / 100%', '⇧1 · ⇧0'], ['Hide panels', '⇧\\']];
     const m = $('modal');
     m.hidden = false;
     m.innerHTML = `<section class="dialog keys" role="dialog" aria-modal="true" aria-labelledby="kT"><div class="dh"><h2 id="kT">Keyboard shortcuts</h2><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div><div class="db"><div class="krows">${rows.map(([a, k]) => `<div class="kr"><span>${a}</span><span class="kk">${k}</span></div>`).join('')}</div></div></section>`;
@@ -574,7 +580,7 @@
   }
   new ResizeObserver(() => applyDevice()).observe(document.getElementById('canvas'));
   // Side panels: drag their inner edge to resize, double-click to reset. Widths are remembered in this browser.
-  const SIDE = { l: { el: 'layers', def: 212, min: 168, max: 420 }, r: { el: 'panel', def: 284, min: 248, max: 520 } };
+  const SIDE = { l: { el: 'layers', def: 300, min: 260, max: 520 }, r: { el: 'panel', def: 284, min: 248, max: 520 } };
   const setSide = (k, w) => { const c = SIDE[k]; w = Math.round(Math.max(c.min, Math.min(c.max, w))); document.getElementById(c.el).style.flexBasis = w + 'px'; return w; };
   for (const k of Object.keys(SIDE)) { let w = null; try { w = +localStorage.getItem(`kerf.side.${k}`); } catch {} setSide(k, w || SIDE[k].def); }
   let sideDrag = null;
@@ -620,10 +626,8 @@
     $('bar').innerHTML = `<div class="modes">
         ${tool('select', 'cursor', 'Select', 'V')}
         ${tool('interact', 'tap', 'Interact with the app', 'P')}
-        ${tool('hand', 'hand', 'Move around', 'H')}
       </div>
       <span class="div"></span>
-      <button class="tb${S.tab === 'chat' ? ' on' : ''}" data-act="chatToggle" aria-label="Chat with Tovi">${ico('spark', 16)}${tip('Chat with Tovi', '⌘K')}</button>
       <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip('Add element', 'I')}</button>
       <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('pen', 16)}${tip('Annotate', 'A')}</button>
       <span class="div"></span>
@@ -652,10 +656,28 @@
     };
     return walk(D.body);
   }
-  function renderLayers() {
+  // The left panel: Chat (the default) and Layers, as two tabs.
+  function renderLeft(focusChat) {
     const box = $('layers');
     box.hidden = S.mode !== 'edit' || !S.layersOpen;
     if (box.hidden) return;
+    if (!box.querySelector('.ltabs')) box.innerHTML = '<div class="ptabs ltabs"></div><div class="lbody" id="lbody"></div>';
+    box.querySelector('.ltabs').innerHTML = `<button data-act="left" data-v="chat" class="${S.left === 'chat' ? 'on' : ''}">Chat <span class="kbd">⌘K</span></button><button data-act="left" data-v="layers" class="${S.left === 'layers' ? 'on' : ''}">Layers</button>`;
+    box.dataset.left = S.left;
+    if (S.left === 'layers') renderLayers(); else renderChat(focusChat);
+  }
+  function renderChat(focusChat) {
+    const box = $('lbody');
+    if (!box || S.left !== 'chat' || $('layers').hidden) return;
+    const draft = $('chatIn')?.value || '';
+    const hadFocus = document.activeElement?.id === 'chatIn';
+    box.innerHTML = chatHTML();
+    const sc = $('chatScroll'); if (sc) sc.scrollTop = sc.scrollHeight;
+    const ci = $('chatIn'); if (ci) { ci.value = draft; syncKC('chatIn'); if (focusChat || hadFocus) ci.focus(); }
+  }
+  function renderLayers() {
+    const box = $('lbody');
+    if (!box || S.left !== 'layers' || $('layers').hidden) return;
     const rows = [];
     const add = (nodes, depth) => {
       for (const n of nodes) {
@@ -675,7 +697,7 @@
     const tree = box.querySelector('.tree');
     const st = tree ? tree.scrollTop : 0;
     const changes = S.versions.draft;
-    box.innerHTML = `<div class="lhead"><span>Layers</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
+    box.innerHTML = `<div class="lhead"><span>Page</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
       <div class="tree">${rows.join('') || '<div class="empty">This page has no elements Tovi can edit yet.</div>'}</div>
       ${changes.length ? `<button class="lchanges" data-act="history" title="Open version history"><span class="dot"></span><span>${changes.length} unsaved change${changes.length === 1 ? '' : 's'}</span>${ico('chevR', 10)}</button>` : ''}`;
     box.querySelector('.tree').scrollTop = st;
@@ -824,25 +846,15 @@
     if (s.def && s.use) return `<div class="seg"><button data-act="scope" data-v="all" class="${S.scope === 'all' ? 'on' : ''}" title="Change the component itself, everywhere it's used">Everywhere</button><button data-act="scope" data-v="here" class="${S.scope === 'here' ? 'on' : ''}" title="Change only this use of the component">Only here</button></div>`;
     return '';
   }
-  function tabsHTML() {
-    return `<div class="ptabs"><button data-act="tab" data-v="design" class="${S.tab === 'design' ? 'on' : ''}">Design</button><button data-act="tab" data-v="chat" class="${S.tab === 'chat' ? 'on' : ''}">Chat <span class="kbd">⌘K</span></button></div>`;
-  }
+  const tabsHTML = () => '';
   function renderPanel(focusChat) {
     const p = $('panel');
     p.hidden = !(S.mode === 'edit' || S.side === 'history');
     if (p.hidden) return;
     if (S.side === 'history') { p.innerHTML = historyHTML(); return; }
-    if (S.tab === 'chat') {
-      const draft = $('chatIn')?.value || '';
-      const hadFocus = document.activeElement?.id === 'chatIn';
-      p.innerHTML = tabsHTML() + chatHTML();
-      const sc = $('chatScroll'); if (sc) sc.scrollTop = sc.scrollHeight;
-      const ci = $('chatIn'); if (ci) { ci.value = draft; syncKC('chatIn'); if (focusChat || hadFocus) ci.focus(); }
-      return;
-    }
     const s = S.sel;
     if (!s) {
-      p.innerHTML = tabsHTML() + `<div class="scroll"><div class="empty"><b>Nothing selected</b><span>Click anything in your app, or pick a layer on the left. Double-click text to retype it. Every change here is written to your code.</span></div>${paletteHTML()}</div>`;
+      p.innerHTML = tabsHTML() + `<div class="scroll"><div class="empty"><b>Nothing selected</b><span>Click anything in your app, or pick it in Layers on the left. Double-click text to retype it. Every change here is written to your code.</span></div>${paletteHTML()}</div>`;
       return;
     }
     const el = s.el, inf = info();
@@ -975,13 +987,11 @@
   setInterval(saveVersion, 3 * 60 * 1000);
   // Cursors and capture layers follow the tool: arrow to select, the app's own cursors to interact, a hand to move.
   function syncTool() {
-    document.body.dataset.tool = S.mode === 'preview' ? 'present' : S.space ? 'hand' : S.tool;
+    document.body.dataset.tool = S.mode === 'preview' ? 'present' : S.tool;
     D?.documentElement?.classList.toggle('kerf-pick', picking() || (S.mode === 'edit' && S.tool === 'annotate'));
-    const pan = $('panCap');
-    if (pan) pan.hidden = !(S.mode === 'edit' && (S.tool === 'hand' || S.space));
   }
   function renderAll() {
-    renderTop(); renderBar(); renderLayers(); renderPanel(); renderAsk(); renderMarks();
+    renderTop(); renderBar(); renderLeft(); renderPanel(); renderAsk(); renderMarks();
   }
 
   /* ---------- outlines follow the page ---------- */
@@ -1109,7 +1119,7 @@
     renderAll();
   }
   frame.addEventListener('load', bindApp);
-  addEventListener('resize', () => { if (innerWidth < 1000 && S.layersOpen) { S.layersOpen = false; renderLayers(); renderTop(); } });
+  addEventListener('resize', () => { if (innerWidth < 900 && S.layersOpen) { S.layersOpen = false; renderLeft(); renderTop(); } });
 
   // Clicking outside a floating card closes it.
   function closeFloating() {
@@ -1145,7 +1155,6 @@
       else if (S.askOpen) { S.askOpen = false; S.amber = []; renderAsk(); renderBar(); }
       else if (S.changesOpen) { S.changesOpen = false; renderChanges(); }
       else if (S.tool === 'annotate') setTool('select');
-      else if (S.mode === 'edit' && S.tab === 'chat') { S.tab = 'design'; renderPanel(); renderBar(); }
       else if (S.side === 'history') { S.side = 'design'; renderAll(); }
       else if (S.mode === 'edit' && S.multi.length) { S.multi = []; renderPanel(); }
       else if (S.mode === 'edit' && S.sel) select(null);
@@ -1159,7 +1168,6 @@
     const k = e.key.toLowerCase();
     if (k === 'v' || k === 'e') { if (S.mode === 'preview') setMode('edit'); setTool('select'); }
     else if (k === 'p') { if (S.mode === 'preview') setMode('edit'); setTool('interact'); }
-    else if (k === 'h') setTool('hand');
     else if (k === 'a' && S.mode === 'edit') setTool(S.tool === 'annotate' ? 'select' : 'annotate');
     else if (S.mode === 'edit' && k === 'enter' && S.sel) beginText();
     else return;
@@ -1167,36 +1175,17 @@
   }
   window.addEventListener('keydown', onKey, true);
   function holdKeys(e) {
-    const t = e.target, typing = t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
     const through = (e.metaKey || e.ctrlKey) && e.type === 'keydown';
     if (through !== S.through && (e.key === 'Meta' || e.key === 'Control' || !through)) { S.through = through; S.hover = null; syncTool(); }
-    if (e.code === 'Space' && !typing && S.mode === 'edit' && !e.repeat) {
-      const down = e.type === 'keydown';
-      if (down !== S.space) { S.space = down; S.hover = null; syncTool(); }
-      e.preventDefault();
-    } else if (e.code === 'Space' && S.space && !typing) e.preventDefault();
   }
   ['keydown', 'keyup'].forEach((k) => window.addEventListener(k, holdKeys, true));
-  window.addEventListener('blur', () => { if (S.through || S.space) { S.through = S.space = false; syncTool(); } });
-  // Move around: drag to scroll the page and the canvas, like Figma's hand.
-  let pan = null;
-  $('panCap').addEventListener('pointerdown', (e) => { pan = { x: e.clientX, y: e.clientY }; try { $('panCap').setPointerCapture(e.pointerId); } catch {} $('panCap').classList.add('grabbing'); e.preventDefault(); });
-  $('panCap').addEventListener('pointermove', (e) => {
-    if (!pan || !W) return;
-    const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
-    pan = { x: e.clientX, y: e.clientY };
-    W.scrollBy(0, -dy / S.z);
-    $('canvas').scrollLeft -= dx;
-    $('canvas').scrollTop -= dy * 0; // vertical movement scrolls the page itself
-  });
-  const panEnd = () => { pan = null; $('panCap').classList.remove('grabbing'); };
-  $('panCap').addEventListener('pointerup', panEnd);
-  $('panCap').addEventListener('pointercancel', panEnd);
-  $('panCap').addEventListener('wheel', (e) => { if (W && !e.ctrlKey && !e.metaKey) W.scrollBy(e.deltaX, e.deltaY); }, { passive: true });
-  function toggleAI(fromKey) {
+  window.addEventListener('blur', () => { if (S.through) { S.through = false; syncTool(); } });
+  function toggleAI() {
     if (S.mode === 'preview') setMode('edit');
-    { S.tab = fromKey ? 'chat' : S.tab === 'chat' ? 'design' : 'chat'; renderPanel(S.tab === 'chat'); }
-    renderBar();
+    S.left = 'chat';
+    if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); }
+    renderLeft(true);
+    $('chatIn')?.focus();
   }
 
   /* ---------- editor clicks ---------- */
@@ -1237,10 +1226,9 @@
       case 'addStroke': commit({ ops: [{ prop: 'borderW', value: 1 }, { prop: 'borderC', value: tokens().find(([n]) => n === 'border')?.[0] || 'black' }] }); break;
       case 'rmStroke': S.cpick = null; commit({ ops: [{ prop: 'borderW', value: 0 }] }); break;
       case 'setProp': commit({ props: [{ name: a.dataset.p, value: v }] }); break;
-      case 'tab': S.tab = v; renderPanel(v === 'chat'); renderBar(); break;
-      case 'chatToggle': toggleAI(false); break;
       case 'ask': toggleAI(false); break;
-      case 'layersToggle': S.layersOpen = !S.layersOpen; renderLayers(); renderTop(); break;
+      case 'layersToggle': S.layersOpen = !S.layersOpen; renderLeft(); renderTop(); setTimeout(applyDevice, 0); break;
+      case 'left': S.left = v; try { localStorage.setItem('kerf.left', v); } catch {} renderLeft(v === 'chat'); break;
       case 'device': S.device = v; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); break;
       case 'zoom': setZoom(v); break;
       case 'kerfMenu': kerfMenu(below(a)); break;
@@ -1758,10 +1746,10 @@
     const rec = mic?.id === id, has = (S.drafts[id] || '').trim() || atts.length;
     return `<form class="kc${o.big ? ' big' : ''}${o.bar ? ' slim' : ''}" data-form="${o.form}" data-where="${o.where || ''}" data-kc="${id}">
       ${atts.length ? `<div class="kcAtt">${atts.map((a, i) => `<span class="kcThumb" title="${esc(a.name)}"><img src="${a.thumb}" alt="${esc(a.name)}"><button type="button" data-act2="attX" data-id="${id}" data-i="${i}" aria-label="Remove ${esc(a.name)}">${ico('x', 10)}</button></span>`).join('')}</div>` : ''}
+      ${o.ctx ? `<div class="kcTop"><span class="kcCtx" title="What Tovi will look at">${ico(S.sel ? 'frame' : 'desktop', 12)}${o.ctx}</span></div>` : ''}
       <div class="kcRow">${o.lead || ''}<textarea id="${id}" rows="1" placeholder="${esc(o.placeholder)}" aria-label="${esc(o.placeholder)}">${esc(S.drafts[id] || '')}</textarea></div>
       <div class="kcBar">
         <button type="button" class="kcB" data-act2="attach" data-id="${id}" title="Attach images · or paste / drop them here" aria-label="Attach images">${ico(o.bar ? 'plus' : 'clip', 15)}</button>
-        ${o.ctx ? `<span class="kcCtx" title="What Tovi will look at">${ico(S.sel ? 'frame' : 'desktop', 12)}${o.ctx}</span>` : ''}
         ${o.form !== 'note' ? modePill() : ''}
         <span class="sp"></span>
         ${SR ? `<button type="button" class="kcB mic${rec ? ' rec' : ''}" data-act2="mic" data-id="${id}" title="${rec ? 'Stop dictation' : 'Dictate, in any language'}" aria-label="${rec ? 'Stop dictation' : 'Dictate'}">${ico('mic', 15)}</button>` : ''}
@@ -1911,7 +1899,7 @@
   }
   function refreshTasks() {
     renderMarks();
-    if (S.mode === 'edit' && S.tab === 'chat') renderPanel();
+    renderChat();
   }
   function renderMarks() {
     drawMarks();
@@ -1948,7 +1936,7 @@
   function renderAI() {
     renderAsk();
     renderMarks();
-    if (S.mode === 'edit' && S.tab === 'chat') renderPanel();
+    renderChat();
   }
   function applyNotes() {
     if (!S.notes.length) return;
@@ -1988,7 +1976,7 @@
     take('noteIn', (v, atts) => {
       S.notes.push({ ...S.noteDraft, text: v || 'See the attached image.', atts });
       S.noteDraft = null;
-      if (S.mode === 'edit' && S.tab !== 'chat') { S.tab = 'chat'; renderBar(); }
+      if (S.mode === 'edit' && (S.left !== 'chat' || !S.layersOpen)) { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
       refreshTasks();
     });
   }
@@ -1998,7 +1986,7 @@
     S.hintSeen = true;
     if (t !== 'select') S.hover = null;
     // Interacting or moving around isn't editing: let go of the selection so the outline and handles go away.
-    if ((t === 'interact' || t === 'hand') && (S.sel || S.multi.length)) { S.multi = []; select(null); }
+    if (t === 'interact' && (S.sel || S.multi.length)) { S.multi = []; select(null); }
     if (t === 'annotate') S.askOpen = false;
     syncTool();
     renderBar(); renderMarks(); renderAsk();
