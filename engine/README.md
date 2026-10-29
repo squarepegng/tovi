@@ -31,15 +31,19 @@ original folder or GitHub, until a PR is made.
 Tovi opens your app inside its editor at `/__kerf/`:
 - **Top bar:** project, branch, page, desktop/tablet/mobile, zoom, version history, Create PR.
 - **Left:** Layers. **Right:** Design and Chat.
-- **Bottom:** the toolbar.
+- **Bottom:** the toolbar: Select, Interact and Move tools, chat, add, annotate.
+- **Present** (▶ in the top bar) shows the app full screen; Esc to come back.
 
 Keys:
 
 | Key | Does |
 |---|---|
-| **E** / **P** | Edit / preview |
+| **V** | Select: click to select and edit |
+| **P** | Interact: use the app (links, menus, forms) |
+| Hold **⌘** | Click through to the app while selecting |
+| **H** / hold **Space** | Move around the page |
 | **A** | Annotate |
-| **⌘K** | Ask Tovi (Preview), or chat about the selection (Edit) |
+| **⌘K** | Chat with Tovi about the selection or the screen |
 | **⌘Z** | Undo |
 | **⌘+** / **⌘−**, pinch | Zoom in / out |
 | **⇧1** / **⇧0** | Fit / 100% |
@@ -164,7 +168,7 @@ are answered as developer work, with no edits.
 
 ## Versions and pull requests
 
-- **Saving versions:** a version is saved when you go from Edit back to Preview, or when you click **Save as a version** in History.
+- **Saving versions:** a version saves itself every few minutes of edits, when you move to another page and when you present, or when you click **Save as a version** in History.
 - **History:** shows each version. You can see the screen **before** it, or **undo back** to it.
 - **Create PR:** commits Tovi’s edits on a `kerf/…` branch, pushes it, and opens the pull request with GitHub’s `gh` CLI (or gives you the link to finish on GitHub).
   - The PR description lists what changed in plain words, with code details folded away.

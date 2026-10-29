@@ -12,13 +12,18 @@
 
   /* ---------- state ---------- */
   const S = {
-    mode: 'preview', tool: 'select', tab: 'design', side: 'design', device: 'desktop',
+    mode: 'edit', tool: 'select', through: false, space: false, tab: 'design', side: 'design', device: 'desktop',
     sel: null, hover: null, theme: null, project: null, scope: 'all',
     count: 0, corners: false, cpick: null, editing: null, changesOpen: false,
     chat: [], card: null, askOpen: false, shape: 'box', notes: [], noteDraft: null, amber: [],
     versions: { versions: [], draft: [], peeking: null }, open: {}, multi: [], alt: false, handleDrag: null, path: '/', hintSeen: false, layersOpen: innerWidth >= 1180,
   };
   const $ = (id) => document.getElementById(id);
+  // What a click on the app does: Interact (or holding ⌘) passes it to the app; Select picks the element.
+  const appClicks = () => S.mode === 'preview' || S.tool === 'interact' || (S.tool === 'select' && S.through);
+  const picking = () => S.mode === 'edit' && S.tool === 'select' && !S.through && !S.space;
+  // ⌘ (Ctrl on Windows) held during a click while selecting: the click goes to the app.
+  const thru = (e) => S.mode === 'edit' && S.tool === 'select' && !!(e.metaKey || e.ctrlKey);
   const frame = $('frame');
   let W = null, D = null; // the app's window and document
 
@@ -283,6 +288,9 @@
     play: '<path d="M5 3.2v9.6l7.5-4.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
     edit: '<rect x="2" y="2" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8.5 8.5l5.2 2-2.3.7-.7 2.3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
     undo: '<path d="M4 6h6a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M6.5 3.5L4 6l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+    cursor: '<path d="M4 2.5l8.5 5.2-3.7.9 2.1 4.1-1.5.8-2.1-4.2L4.6 12z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
+    tap: '<path d="M6.5 8.5V3.2a1.1 1.1 0 0 1 2.2 0v4.3m0-1.1a1.1 1.1 0 0 1 2.2 0v1.3m0-.4a1.1 1.1 0 0 1 2.1 0V10a4 4 0 0 1-4 4H8.6a3.6 3.6 0 0 1-2.9-1.5L3.4 9.4a1.1 1.1 0 0 1 1.7-1.3l1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
+    hand: '<path d="M5.2 8.6V4.4a1 1 0 0 1 2 0v3.4m0-4.6a1 1 0 0 1 2 0v4.4m0-3.4a1 1 0 0 1 2 0v3.6m0-2a1 1 0 0 1 2 0v3.4A4.6 4.6 0 0 1 8.6 14h-.4a4.4 4.4 0 0 1-3.6-1.9L2.9 9.6a1 1 0 0 1 1.5-1.3l.8.8" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
     task: '<rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.2 6h5.6M5.2 8.4h5.6M5.2 10.8h3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     list: '<path d="M5.5 4h8M5.5 8h8M5.5 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="2.8" cy="4" r=".9" fill="currentColor"/><circle cx="2.8" cy="8" r=".9" fill="currentColor"/><circle cx="2.8" cy="12" r=".9" fill="currentColor"/>',
     up: '<path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -369,6 +377,7 @@
       <div class="tmid"><div class="bps" role="radiogroup" aria-label="Screen size">${Object.keys(DEVICES).map((d) => `<button class="${S.device === d ? 'on' : ''}" data-act="device" data-v="${d}" role="radio" aria-checked="${S.device === d}" title="${DEV_LABEL[d]} · ${devRange(d)}">${ico(d, 14)}<span>${DEV_LABEL[d]}</span></button>`).join('')}</div></div>
       <div class="tside r">
         <button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
+        <button class="icon" data-act="present" title="Present: the app full screen" aria-label="Present">${ico('play', 16)}</button>
         <button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
         <button class="primary" data-act="pr" ${n ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>
       </div>`;
@@ -461,7 +470,7 @@
     ], at);
   }
   function shortcuts() {
-    const rows = [['Edit / Preview', 'E · P'], ['Annotate', 'A'], ['Ask Tovi', '⌘K'], ['Undo', '⌘Z'], ['Select parent', '⇧↵'], ['Duplicate', '⌘D'], ['Delete', '⌫'], ['Move up / down', '⌥↑ ⌥↓'], ['Group / ungroup', '⌥⌘G · ⇧⌘G'], ['Add element', 'I'], ['Measure spacing', 'hold ⌥'], ['Select several', '⇧ click'], ['Zoom in / out', '⌘+ · ⌘−'], ['Fit / 100%', '⇧1 · ⇧0'], ['Hide panels', '⇧\\']];
+    const rows = [['Select', 'V'], ['Interact with the app', 'P'], ['Click through while selecting', 'Hold ⌘'], ['Move around', 'H · hold Space'], ['Annotate', 'A'], ['Chat with Tovi', '⌘K'], ['Undo', '⌘Z'], ['Select parent', '⇧↵'], ['Duplicate', '⌘D'], ['Delete', '⌫'], ['Move up / down', '⌥↑ ⌥↓'], ['Group / ungroup', '⌥⌘G · ⇧⌘G'], ['Add element', 'I'], ['Measure spacing', 'hold ⌥'], ['Select several', '⇧ click'], ['Zoom in / out', '⌘+ · ⌘−'], ['Fit / 100%', '⇧1 · ⇧0'], ['Hide panels', '⇧\\']];
     const m = $('modal');
     m.hidden = false;
     m.innerHTML = `<section class="dialog keys" role="dialog" aria-modal="true" aria-labelledby="kT"><div class="dh"><h2 id="kT">Keyboard shortcuts</h2><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div><div class="db"><div class="krows">${rows.map(([a, k]) => `<div class="kr"><span>${a}</span><span class="kk">${k}</span></div>`).join('')}</div></div></section>`;
@@ -566,15 +575,17 @@
 
   /* ---------- toolbar ---------- */
   function renderBar() {
+    // Presenting: the app alone, with one way back.
+    if (S.mode === 'preview') { $('bar').innerHTML = `<button class="tb wide" data-act="mode" data-v="edit" aria-label="Stop presenting">${ico('x', 14)}<span>Stop presenting</span><span class="kbd">Esc</span></button>`; $('hint').hidden = true; return; }
+    const tool = (t, icon, name, key) => `<button class="tb${S.tool === t ? ' on' : ''}" data-act="tool" data-v="${t}" aria-label="${name}" aria-pressed="${S.tool === t}">${ico(icon, 16)}${tip(name, key)}</button>`;
     $('bar').innerHTML = `<div class="modes">
-        <button class="tb${S.mode === 'preview' ? ' on' : ''}" data-act="mode" data-v="preview" aria-label="Preview">${ico('play', 16)}${tip('Preview', 'P')}</button>
-        <button class="tb${S.mode === 'edit' ? ' on' : ''}" data-act="mode" data-v="edit" aria-label="Edit">${ico('edit', 16)}${tip('Edit', 'E')}</button>
+        ${tool('select', 'cursor', 'Select', 'V')}
+        ${tool('interact', 'tap', 'Interact with the app', 'P')}
+        ${tool('hand', 'hand', 'Move around', 'H')}
       </div>
       <span class="div"></span>
-      ${S.mode === 'preview'
-        ? `<button class="tb${S.askOpen ? ' on' : ''}" data-act="ask" aria-label="Ask Tovi">${ico('spark', 16)}${tip('Ask Tovi', '⌘K')}</button>`
-        : `<button class="tb${S.tab === 'chat' ? ' on' : ''}" data-act="chatToggle" aria-label="Chat with Tovi">${ico('spark', 16)}${tip('Chat with Tovi', '⌘K')}</button>`}
-      ${S.mode === 'edit' ? `<button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip('Add element', 'I')}</button>` : ''}
+      <button class="tb${S.tab === 'chat' ? ' on' : ''}" data-act="chatToggle" aria-label="Chat with Tovi">${ico('spark', 16)}${tip('Chat with Tovi', '⌘K')}</button>
+      <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip('Add element', 'I')}</button>
       <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('pen', 16)}${tip('Annotate', 'A')}</button>
       ${S.tool === 'annotate' ? `<div class="shapes">${['pin', 'box', 'circle', 'arrow'].map((k, i) => `<button class="tb sm${S.shape === k ? ' on' : ''}" data-act="shape" data-v="${k}" aria-label="${k}">${ico(k, 14)}${tip(k[0].toUpperCase() + k.slice(1), String(i + 1))}</button>`).join('')}</div>` : ''}
       <span class="div"></span>
@@ -582,7 +593,7 @@
       <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 16)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>`;
     const h = $('hint');
     h.hidden = true;
-    if (!h.hidden) h.innerHTML = `Use your app normally. Press <span class="kbd">E</span> to edit a screen, <span class="kbd">A</span> to annotate, or <span class="kbd">⌘K</span> to ask Tovi.`;
+    if (!h.hidden) h.innerHTML = `Click anything to select it. Press <span class="kbd">P</span> to use your app, hold <span class="kbd">⌘</span> to click through, or <span class="kbd">⌘K</span> to ask Tovi.`;
   }
 
   /* ---------- layers ---------- */
@@ -868,7 +879,7 @@
       ${v.map((x) => `<div class="ver${peeking === x.n ? ' on' : ''}"><div class="vh"><span>Version ${x.n}</span><span>${time(x.at)}</span></div>
         ${x.changes.slice(0, 5).map((c) => `<span class="ch">${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${chLabel(c)}</span>`).join('')}${x.changes.length > 5 ? `<span class="note">and ${x.changes.length - 5} more</span>` : ''}
         <div class="acts"><button class="outline" data-act="peek" data-v="${x.n}">${peeking === x.n ? 'Back to now' : 'Show before'}</button><button class="ghostBtn" data-act="restore" data-v="${x.n - 1}" title="Undo this version and everything after it">Undo from here</button></div></div>`).join('')}
-      ${!v.length && !draft.length ? `<div class="empty"><b>No versions yet</b><span>Each time you go from Edit back to Preview, Tovi saves your changes as a version. Here you can see the screen before a version or undo back to it.</span></div>` : ''}
+      ${!v.length && !draft.length ? `<div class="empty"><b>No versions yet</b><span>Tovi saves your changes as a version every few minutes, when you move to another page, and when you present. Here you can see the screen before a version or undo back to it.</span></div>` : ''}
       </div>`;
   }
   function renderPeek() {
@@ -904,14 +915,30 @@
     S.mode = m;
     S.hintSeen = true;
     if (m === 'preview') {
-      S.sel = null; S.hover = null; S.changesOpen = false; S.tab = 'design';
+      S.hover = null; S.changesOpen = false; S.noteDraft = null; S.tool = S.tool === 'annotate' ? 'select' : S.tool;
       if (S.editing) S.editing.blur();
-      api('/version', {}).then((v) => { S.versions = v; renderTop(); }).catch(() => {});
+      saveVersion();
       renderChanges();
     } else { S.askOpen = false; if (S.side === 'history') S.side = 'design'; }
+    syncTool();
     renderAll();
     // Panels open or close with the mode, so the presentation re-fits.
     setTimeout(applyDevice, 0);
+  }
+  // Versions save themselves: after a few minutes of edits, when you move to another page, or when you present.
+  S.verAt = 0;
+  function saveVersion() {
+    if (!S.count || S.count === S.verAt || S.versions.peeking) return;
+    S.verAt = S.count;
+    api('/version', {}).then((v) => { S.versions = v; renderTop(); }).catch(() => {});
+  }
+  setInterval(saveVersion, 3 * 60 * 1000);
+  // Cursors and capture layers follow the tool: arrow to select, the app's own cursors to interact, a hand to move.
+  function syncTool() {
+    document.body.dataset.tool = S.mode === 'preview' ? 'present' : S.space ? 'hand' : S.tool;
+    D?.documentElement?.classList.toggle('kerf-pick', picking() || (S.mode === 'edit' && S.tool === 'annotate'));
+    const pan = $('panCap');
+    if (pan) pan.hidden = !(S.mode === 'edit' && (S.tool === 'hand' || S.space));
   }
   function renderAll() {
     renderTop(); renderBar(); renderLayers(); renderPanel(); renderAsk(); renderMarks();
@@ -941,7 +968,7 @@
   function frameStep() {
     refind();
     const edit = S.mode === 'edit';
-    place($('hov'), edit && S.tool !== 'annotate' && S.hover !== S.sel?.el ? S.hover : null, S.hover ? labelOf(S.hover) : '');
+    place($('hov'), picking() && S.hover !== S.sel?.el ? S.hover : null, S.hover ? labelOf(S.hover) : '');
     place($('sel'), edit ? S.sel?.el : null, S.sel ? labelOf(S.sel.el) : '');
     if (edit && S.sel?.el?.isConnected) {
       const r = S.sel.el.getBoundingClientRect(), dim = $('sel').querySelector('.dim');
@@ -958,6 +985,7 @@
     if (W && W.location.pathname + W.location.search !== S.path) {
       S.path = W.location.pathname + W.location.search;
       S.pages = [S.path, ...S.pages.filter((x) => x !== S.path)].slice(0, 20);
+      saveVersion();
       if (document.activeElement?.id !== 'pathIn') { const pi = $('pathIn'); if (pi) pi.value = S.path; }
       layersSoon();
     }
@@ -972,8 +1000,20 @@
     let touched = false;
     W.addEventListener('pointerdown', () => { touched = true; }, true);
     [0, 300, 1200].forEach((ms) => setTimeout(() => { const a = D.activeElement; if (!touched && a && a !== D.body && /^(input|textarea|select)$/i.test(a.tagName)) a.blur(); }, ms));
+    // Selecting shows a plain arrow over the app; interacting keeps the app's own cursors.
+    const st = D.createElement('style');
+    st.textContent = 'html.kerf-pick, html.kerf-pick *{cursor:default!important}';
+    (D.head || D.documentElement).appendChild(st);
+    syncTool();
+    // ⌘-clicking a link would open a new browser tab: follow it in place instead.
+    let passing = false;
+    W.addEventListener('click', (e) => {
+      if (!thru(e) || !e.isTrusted) return;
+      const a = e.target.closest?.('a[href]');
+      if (a) { e.preventDefault(); e.stopImmediatePropagation(); passing = true; try { a.click(); } finally { passing = false; } }
+    }, true);
     const block = (e) => {
-      if (S.mode !== 'edit' && S.tool !== 'annotate') return;
+      if (passing || appClicks() || thru(e)) return;
       if (S.editing && S.editing.contains(e.target)) return;
       e.preventDefault(); e.stopPropagation();
     };
@@ -981,7 +1021,7 @@
     W.addEventListener('pointerdown', () => { closeMenu(); closeIconPop(); }, true);
     W.addEventListener('scroll', () => closeMenu(), true);
     W.addEventListener('contextmenu', (e) => {
-      if (S.mode !== 'edit' || S.tool === 'annotate' || S.editing) return;
+      if (!picking() || S.editing) return;
       const hit = pick(e.target);
       if (!hit) return;
       if (S.sel?.el !== hit) { S.multi = []; select(hit); }
@@ -990,10 +1030,10 @@
     }, true);
     let lastClick = null;
     // Browsers send no click to a disabled button or input, only pointer events: select those on release.
-    W.addEventListener('pointerup', (e) => { if (S.mode === 'edit' && e.button === 0 && e.target.closest?.(':disabled')) onCanvasClick(e); }, true);
+    W.addEventListener('pointerup', (e) => { if (picking() && !thru(e) && e.button === 0 && e.target.closest?.(':disabled')) onCanvasClick(e); }, true);
     W.addEventListener('click', onCanvasClick, true);
     function onCanvasClick(e) {
-      if (S.mode !== 'edit') { closeFloating(); return; }
+      if (passing || !picking() || thru(e)) { closeFloating(); return; }
       if (S.editing && S.editing.contains(e.target)) return;
       block(e);
       closeFloating();
@@ -1014,13 +1054,14 @@
       select(hit);
     }
     W.addEventListener('dblclick', (e) => {
-      if (S.mode !== 'edit') return;
+      if (!picking() || thru(e)) return;
       block(e);
       if (S.sel && S.sel.el.contains(e.target)) beginText();
     }, true);
-    W.addEventListener('pointermove', (e) => { S.hover = S.mode === 'edit' ? pick(e.target) : null; }, true);
+    W.addEventListener('pointermove', (e) => { S.hover = picking() && !thru(e) ? pick(e.target) : null; }, true);
     W.addEventListener('pointerleave', () => { S.hover = null; });
     W.addEventListener('keydown', onKey, true);
+    ['keydown', 'keyup'].forEach((k) => W.addEventListener(k, holdKeys, true));
     W.addEventListener('wheel', pinch, { passive: false });
     // Re-read layers when the app's DOM changes (navigation, data loading, hot reload).
     new W.MutationObserver(() => layersSoon()).observe(D.body, { childList: true, subtree: true });
@@ -1053,6 +1094,8 @@
     if (e.shiftKey && !mod && !typing && (e.code === 'Digit1' || e.code === 'Digit0')) { e.preventDefault(); setZoom(e.code === 'Digit1' ? 'fit' : 1); return; }
     if (e.key === 'Escape') {
       if (S.editing) return;
+      // While interacting, Escape belongs to the app (closing its menus and dialogs).
+      if (S.mode === 'edit' && S.tool === 'interact' && t?.ownerDocument === D) return;
       e.preventDefault();
       if (!$('modal').hidden) { $('modal').hidden = true; }
       else if (S.cpick) { S.cpick = null; renderPanel(); }
@@ -1065,25 +1108,54 @@
       else if (S.side === 'history') { S.side = 'design'; renderAll(); }
       else if (S.mode === 'edit' && S.multi.length) { S.multi = []; renderPanel(); }
       else if (S.mode === 'edit' && S.sel) select(null);
-      else if (S.mode === 'edit') setMode('preview');
+      else if (S.mode === 'preview') setMode('edit');
+      else if (S.tool !== 'select') setTool('select');
       return;
     }
     if (typing) return;
     if (mod && e.key.toLowerCase() === 'z' && S.mode === 'edit') { e.preventDefault(); undo(); return; }
     if (mod || e.altKey) return;
     const k = e.key.toLowerCase();
-    if (k === 'e') setMode('edit');
-    else if (k === 'p') setMode('preview');
-    else if (k === 'a') setTool(S.tool === 'annotate' ? 'select' : 'annotate');
+    if (k === 'v' || k === 'e') { if (S.mode === 'preview') setMode('edit'); setTool('select'); }
+    else if (k === 'p') { if (S.mode === 'preview') setMode('edit'); setTool('interact'); }
+    else if (k === 'h') setTool('hand');
+    else if (k === 'a' && S.mode === 'edit') setTool(S.tool === 'annotate' ? 'select' : 'annotate');
     else if (S.tool === 'annotate' && ['1', '2', '3', '4'].includes(k)) { S.shape = ['pin', 'box', 'circle', 'arrow'][+k - 1]; renderBar(); }
     else if (S.mode === 'edit' && k === 'enter' && S.sel) beginText();
     else return;
     e.preventDefault();
   }
   window.addEventListener('keydown', onKey, true);
+  function holdKeys(e) {
+    const t = e.target, typing = t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
+    const through = (e.metaKey || e.ctrlKey) && e.type === 'keydown';
+    if (through !== S.through && (e.key === 'Meta' || e.key === 'Control' || !through)) { S.through = through; S.hover = null; syncTool(); }
+    if (e.code === 'Space' && !typing && S.mode === 'edit' && !e.repeat) {
+      const down = e.type === 'keydown';
+      if (down !== S.space) { S.space = down; S.hover = null; syncTool(); }
+      e.preventDefault();
+    } else if (e.code === 'Space' && S.space && !typing) e.preventDefault();
+  }
+  ['keydown', 'keyup'].forEach((k) => window.addEventListener(k, holdKeys, true));
+  window.addEventListener('blur', () => { if (S.through || S.space) { S.through = S.space = false; syncTool(); } });
+  // Move around: drag to scroll the page and the canvas, like Figma's hand.
+  let pan = null;
+  $('panCap').addEventListener('pointerdown', (e) => { pan = { x: e.clientX, y: e.clientY }; $('panCap').setPointerCapture(e.pointerId); $('panCap').classList.add('grabbing'); e.preventDefault(); });
+  $('panCap').addEventListener('pointermove', (e) => {
+    if (!pan || !W) return;
+    const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+    pan = { x: e.clientX, y: e.clientY };
+    W.scrollBy(0, -dy / S.z);
+    $('canvas').scrollLeft -= dx;
+    $('canvas').scrollTop -= dy * 0; // vertical movement scrolls the page itself
+  });
+  const panEnd = () => { pan = null; $('panCap').classList.remove('grabbing'); };
+  $('panCap').addEventListener('pointerup', panEnd);
+  $('panCap').addEventListener('pointercancel', panEnd);
+  $('panCap').addEventListener('wheel', (e) => { if (W && !e.ctrlKey && !e.metaKey) W.scrollBy(e.deltaX, e.deltaY); }, { passive: true });
   function toggleAI(fromKey) {
-    if (S.mode === 'edit') { S.tab = fromKey ? 'chat' : S.tab === 'chat' ? 'design' : 'chat'; renderPanel(S.tab === 'chat'); }
-    else { S.askOpen = fromKey ? true : !S.askOpen; if (!S.askOpen) S.amber = []; renderAsk(); }
+    if (S.mode === 'preview') setMode('edit');
+    { S.tab = fromKey ? 'chat' : S.tab === 'chat' ? 'design' : 'chat'; renderPanel(S.tab === 'chat'); }
     renderBar();
   }
 
@@ -1106,6 +1178,7 @@
     const act = a.dataset.act, v = a.dataset.v;
     switch (act) {
       case 'mode': setMode(v); break;
+      case 'present': setMode('preview'); break;
       case 'undo': undo(); break;
       case 'changes': S.changesOpen = !S.changesOpen; renderChanges(); break;
       case 'toastClose': $('toast').hidden = true; break;
@@ -1877,7 +1950,9 @@
     S.tool = t;
     S.noteDraft = null;
     S.hintSeen = true;
-    if (t === 'annotate') { S.hover = null; S.askOpen = false; }
+    if (t !== 'select') S.hover = null;
+    if (t === 'annotate') S.askOpen = false;
+    syncTool();
     renderBar(); renderMarks(); renderAsk();
   }
   // AI buttons use data-act2 so they never collide with the editor's own actions.
@@ -1986,7 +2061,7 @@
       return;
     }
     const t = e.target.closest('[data-act="tool"],[data-act="shape"]');
-    if (t) { if (t.dataset.act === 'tool') setTool(S.tool === t.dataset.v ? 'select' : t.dataset.v); else { S.shape = t.dataset.v; renderBar(); } }
+    if (t) { if (t.dataset.act === 'tool') setTool(t.dataset.v === 'annotate' && S.tool === 'annotate' ? 'select' : t.dataset.v); else { S.shape = t.dataset.v; renderBar(); } }
   });
 
   /* ---------- structure: delete, duplicate, move, swap, insert, images ---------- */
@@ -2358,7 +2433,7 @@
   window.addEventListener('keydown', structKeys, true);
   function structKeys(e) {
     const t = e.target;
-    if (S.mode !== 'edit' || !S.sel || S.editing || (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName)))) return;
+    if (!picking() || !S.sel || S.editing || (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName)))) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); e.stopImmediatePropagation(); deleteSelected(); }
     else if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyG') { e.preventDefault(); e.stopImmediatePropagation(); groupSelected(); }
     else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === 'KeyG') { e.preventDefault(); e.stopImmediatePropagation(); structure({ type: 'ungroup' }); }
@@ -2373,7 +2448,7 @@
     if (!W) return;
     W.addEventListener('keydown', structKeys, true);
     W.addEventListener('pointerdown', (e) => {
-      if (S.mode !== 'edit' || S.tool === 'annotate' || !S.sel || !S.sel.el.contains(e.target) || S.editing) return;
+      if (!picking() || thru(e) || !S.sel || !S.sel.el.contains(e.target) || S.editing) return;
       const el = S.sel.el, parent = el.parentElement;
       if (!parent) return;
       const sibs = [...parent.children].filter((c) => c.matches('[data-kerf],[data-kerf-use]'));

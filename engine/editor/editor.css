@@ -808,3 +808,10 @@ aside.side{min-width:0}
 .ng.tk .nSt{margin-left:auto}
 .acts.tkFoot{border:1px solid var(--line);border-top:0;border-radius:0 0 14px 14px;margin-top:-1px;background:var(--panel)}
 .byNote .ngs:has(+ .acts.tkFoot),.byNote .ngs:has(+ * + .acts.tkFoot){border-radius:14px 14px 0 0}
+
+/* one workspace: tools decide what a click does */
+.panCap{position:absolute;inset:0;pointer-events:auto;cursor:grab;z-index:6}
+.panCap.grabbing{cursor:grabbing}
+body[data-tool="interact"] #ov .box.hov{display:none!important}
+.tb.wide{display:flex;flex-direction:row;align-items:center;white-space:nowrap;width:auto;height:36px;gap:8px;padding:0 12px 0 10px;font:500 12px/16px Geist,system-ui,sans-serif;color:var(--ink)}
+.tb.wide .kbd{margin-left:4px}
