@@ -400,3 +400,11 @@ test('a variant the usage does not set yet can be added from its options', async
   assert.throws(() => editElement(code, 2, 23, { props: [{ name: 'variant', value: 'huge', options: ['primary', 'outline'] }] }, { colors: {}, spacing: {} }));
   assert.throws(() => editElement(code, 2, 23, { props: [{ name: 'onClick', value: 'x', options: ['x'] }] }, { colors: {}, spacing: {} }));
 });
+
+test('a picture can replace an icon, keeping its size', async () => {
+  const { structureEdit } = await import('../src/structure.mjs');
+  const code = `import { Leaf, Truck } from 'lucide-react';\nexport const A = () => (<div>\n  <Leaf className="h-6 w-6 text-primary" />\n  <Truck className="h-6 w-6" />\n</div>);\n`;
+  const { code: out } = structureEdit(code, 3, 2, { type: 'image', src: '/kerf/leaf.svg', alt: 'Leaf drawing', kind: 'illustration' }, {});
+  assert.match(out, /<img src="\/kerf\/leaf.svg" alt="Leaf drawing" className="h-16 w-16 object-contain" \/>/);
+  assert.match(out, /import \{ Truck \} from 'lucide-react'/);
+});

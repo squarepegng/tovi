@@ -895,3 +895,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .crewRow{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:12px}
 .agent.flip .agTag,.agent.flip .agSay{left:auto;right:6px}
 .agent.flip .agSay{border-radius:12px 4px 12px 12px}
+/* when Tovi needs pictures to finish: one clear step */
+.pickBar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 10px 10px 12px;border-radius:12px;background:rgba(43,102,217,.1);border:1px solid rgba(43,102,217,.35)}
+.pickBar span{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
+.pickBar span svg{color:#9DBBF5}

@@ -255,6 +255,17 @@ export function structureEdit(code, line, col, op, ctx) {
     s.overwrite(el.start, el.end, op.jsx.trim());
     removedNames = componentNames(el);
     label = `Replaced <${name}>`;
+  } else if (op.type === 'image' && name !== 'img') {
+    // A picture in place of an icon (or another element): an <img> that keeps its size classes.
+    if (!op.src) throw new KerfError('Choose a picture first.');
+    const cls = el.openingElement.attributes.find((a) => a.type === 'JSXAttribute' && a.name.name === 'className');
+    const keep = cls?.value?.type === 'StringLiteral' ? cls.value.value : '';
+    // Icons are small (24px); an illustration in their place needs room to read, so small sizes become 64px.
+    const grow = (c) => (op.kind === 'illustration' ? c.replace(/^(h|w|size)-(\d+(?:\.\d+)?)$/, (m, p, n) => (+n < 12 ? `${p}-16` : m)) : c);
+    const classes = [...new Set([...keep.split(/\s+/).filter((c) => c && !/^(text|stroke|fill)-/.test(c)).map(grow), 'object-contain'])].join(' ');
+    s.overwrite(el.start, el.end, `<img src=${JSON.stringify(op.src)} alt=${JSON.stringify(String(op.alt || ''))} className=${JSON.stringify(classes)} />`);
+    removedNames = componentNames(el);
+    label = `Replaced ${/^[A-Z]/.test(name) ? 'icon' : `<${name}>`} with ${op.kind === 'illustration' ? 'an illustration' : 'an image'}${op.credit ? ` (${String(op.credit).slice(0, 120)})` : ''}`;
   } else if (op.type === 'image') {
     if (name !== 'img') throw new KerfError('Select an image to change it.');
     const attr = (k) => el.openingElement.attributes.find((a) => a.type === 'JSXAttribute' && a.name.name === k);

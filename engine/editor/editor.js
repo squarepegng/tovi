@@ -1781,7 +1781,7 @@
       g.chip.textContent = 'Thinking…';
       g.chip.classList.add('on');
     })();
-    return () => { stop = true; const g = crew.get(a.name); if (g) g.chip.classList.remove('on'); };
+    return () => { stop = true; const g = crew.get(a.name); if (g) g.chip.classList.remove('on'); release([a.name]); };
   }
   // Apply so you can watch it: style changes are shared out to lanes (one per agent), each lane makes its
   // changes one by one as its agent gets there; structure, code and colour-token changes follow together
@@ -1900,6 +1900,7 @@
   const chosen = (m) => m.proposal.edits.filter((e, k) => !(m.off || []).includes(k) && !(m.skip || []).includes(e.note ?? 0) && e.structure?.type !== 'imageAsk');
   // Each proposed change shows where it stands: to do, applying, done, failed or left out.
   function rowState(m, e) {
+    if (e.structure?.type === 'imageAsk') return m.status === 'pending' ? 'todo' : 'skip';
     const inPlan = chosen(m).includes(e);
     if (m.applying) return inPlan ? 'run' : 'skip';
     if (m.status === 'applied') return !inPlan ? 'skip' : (m.failed || []).includes(e.loc) ? 'bad' : 'ok';
@@ -1982,7 +1983,8 @@
       ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
       ${suggest}${keep}
       ${m.status === 'applied' && !p.mode?.startsWith('explore') ? `<div class="kDone">${status}<button class="ghostBtn sm" data-act2="tryUndo" data-i="${i}">Undo</button></div>` : ''}
-      ${m.status === 'pending' && p.edits.length && !m.applying ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.status === 'applied' && !p.mode?.startsWith('explore') ? '' : status}</div>`;
+      ${(() => { const need = m.status === 'pending' && !m.applying ? p.edits.filter((e) => e.structure?.type === 'imageAsk').length : 0; if (!need) return ''; const kind = p.edits.find((e) => e.structure?.type === 'imageAsk').structure.kind === 'photo' ? 'photo' : 'illustration'; return `<div class="pickBar"><span>${ico('image', 14)}Choose ${need === 1 ? `the ${kind}` : `${need} ${kind}s`} to finish</span><button class="primary applyBtn" data-act2="pickAll" data-i="${i}">Choose ${need === 1 ? kind : `${kind}s`}</button></div>`; })()}
+      ${m.status === 'pending' && p.edits.length && !m.applying && !p.edits.some((e) => e.structure?.type === 'imageAsk') ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.status === 'applied' && !p.mode?.startsWith('explore') ? '' : status}</div>`;
   }
   // "Looked at 14 elements · Thought for 9s", which opens to show what Tovi read.
   function stepsHTML(m, live) {
@@ -2441,6 +2443,24 @@
       }
       else if (act === 'pickKind') { if (S.pick) { S.pick.kind = v; S.pick.prompt = $('pickQ')?.value || S.pick.prompt; renderPicker(); if (S.pick.prompt && !(v === 'photo' ? S.pick.photos : S.pick.drawings)) runPicker(); } }
       else if (act === 'pickImg') { if (S.pick) chooseImage(S.pick, +a.dataset.i); }
+      else if (act === 'pickAll') {
+        // Choose each picture in turn (each opens on its own element); when they're all chosen, apply.
+        const m = S.chat[+a.dataset.i];
+        if (!m) return;
+        const next = () => {
+          const e2 = m.proposal.edits.find((x) => x.structure?.type === 'imageAsk');
+          if (!e2) { renderAI(); if (m.status === 'pending' && chosen(m).length) decide(m, 'apply'); return; }
+          const el = D?.querySelector(q(e2.loc)), left = m.proposal.edits.filter((x) => x.structure?.type === 'imageAsk').length;
+          el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          openImagePicker({ kind: e2.structure.kind, prompt: e2.structure.prompt, el, step: left > 1 || m._picks ? `${(m._picks || 0) + 1} of ${(m._picks || 0) + left}` : '', onPick: ({ src, alt, credit }) => {
+            e2.structure = { type: 'image', src, alt, credit, kind: e2.structure.kind, prompt: e2.structure.prompt, preview: src };
+            m._picks = (m._picks || 0) + 1;
+            renderAI();
+            setTimeout(next, 250);
+          } });
+        };
+        next();
+      }
       else if (act === 'imgOptions') {
         // A proposed image: open the picker with Tovi's description; the pick fills in this edit.
         const m = S.chat[+a.dataset.i], e2 = m?.proposal.edits[+a.dataset.e];
@@ -2558,10 +2578,10 @@
   }
   /* image picker: real photos (Unsplash) or illustrations Claude draws, chosen from a few options */
   S.pick = null;
-  function openImagePicker({ kind = 'photo', prompt = '', el = S.sel?.el, onPick }) {
+  function openImagePicker({ kind = 'photo', prompt = '', el = S.sel?.el, onPick, step = '' }) {
     const r = el?.getBoundingClientRect?.() || { width: 4, height: 3 };
     const ratio = r.width && r.height ? r.width / r.height : 4 / 3;
-    S.pick = { kind, prompt, ratio, onPick, photos: null, drawings: null, busy: false, error: '' };
+    S.pick = { kind, prompt, ratio, onPick, step, photos: null, drawings: null, busy: false, error: '' };
     $('modal').hidden = false;
     renderPicker();
     if (prompt) runPicker();
@@ -2581,7 +2601,7 @@
         ? `<div class="pkGrid">${res.map((x, i) => `<button class="pkItem" data-act2="pickImg" data-i="${i}" title="${esc(x.alt)}"><img src="${esc(x.thumb)}" alt="${esc(x.alt)}" style="aspect-ratio:${P.ratio}"><span>${esc(x.credit?.name || '')}</span></button>`).join('')}</div><p class="note pkCredit">Photos from <a href="https://unsplash.com/?utm_source=kerf&utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>, free to use.</p>`
         : `<div class="pkGrid draw">${res.map((x, i) => `<button class="pkItem" data-act2="pickImg" data-i="${i}" title="${esc(x.title)}"><img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(x.svg)}" alt="${esc(x.title)}" style="aspect-ratio:${P.ratio}"><span>${esc(x.title)}</span></button>`).join('')}</div>`;
     $('modal').innerHTML = `<section class="dialog pick" role="dialog" aria-modal="true" aria-labelledby="pkT">
-      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="pkT">Choose an image</h2><span class="note">Pick one and it takes this image’s place, at the same size.</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
+      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="pkT">Choose an image${P.step ? ` <span class="note" style="font-weight:400">· ${esc(P.step)}</span>` : ''}</h2><span class="note">${P.prompt ? `For: “${esc(P.prompt)}”. ` : ''}Pick one and it takes this element’s place, at the same size.</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
       <div class="db">
         <div class="seg pkTabs"><button data-act2="pickKind" data-v="photo" class="${P.kind === 'photo' ? 'on' : ''}">${ico('image', 12)} Photos</button><button data-act2="pickKind" data-v="illustration" class="${P.kind === 'illustration' ? 'on' : ''}">${ico('pen', 12)} Illustrations</button></div>
         <form class="insSearch" data-form="pick">${ico('search', 14)}<input id="pickQ" value="${esc(P.prompt)}" placeholder="${P.kind === 'photo' ? 'Search photos' : 'Describe the illustration'}" autocomplete="off" spellcheck="false" aria-label="What should the image show?"><button class="primary sm">${P.kind === 'photo' ? 'Search' : 'Draw'}</button></form>
