@@ -1634,7 +1634,7 @@
   const AGENTS = [{ name: 'Tovi', color: '#E9B547' }, { name: 'Milo', color: '#2DB3A6' }, { name: 'Juno', color: '#E36BA8' }, { name: 'Remi', color: '#5BBF6A' }, { name: 'Nova', color: '#9B7BEA' }];
   const helperFor = (n) => AGENTS[1 + ((Math.max(1, n) - 1) % 4)];
   const agentNamed = (name) => AGENTS.find((a) => a.name === name) || AGENTS[0];
-  const agentOf = (m, e) => (m?.where === 'notes' && e?.note ? helperFor(e.note) : AGENTS[0]);
+  const agentOf = () => AGENTS[0]; // one agent on screen: Tovi
   const avatar = (a, cls = '') => `<i class="agAv ${cls}" style="--ac:${a.color}" title="${a.name}">${a.name[0]}</i>`;
   const calm = matchMedia('(prefers-reduced-motion: reduce)');
   S.agentsOn = (() => { try { return localStorage.getItem('kerf.agents') !== 'off'; } catch { return true; } })();
@@ -1746,7 +1746,6 @@
     setTimeout(() => g.cur.classList.remove('press'), 160);
     g.chip.textContent = editLabel(e) || e.why || 'Updating';
     g.chip.classList.add('on');
-    agentSay(a, e.why);
     await wait(260);
     const nudge = edge === 'right' ? [14, 0] : edge === 'bottom' ? [0, 12] : [0, 0];
     const drag = glide(g, g.x + nudge[0], g.y + nudge[1], 420);
@@ -1767,21 +1766,22 @@
     }
   }
   // While thinking, the agents split the elements they're reading and look them over (only ones in view).
+  // While thinking, Tovi looks over a few of the elements it's reading, once, then rests there: "Thinking…".
   function agentTour(agents, targets) {
     if (!live()) return () => {};
-    const els = [...new Set(targets.map((t) => elOf(t.loc)).filter(Boolean))].filter((el) => { const r = el.getBoundingClientRect(); return r.width && r.bottom > 0 && r.top < W.innerHeight; }).slice(0, 18);
+    const a = AGENTS[0];
+    const els = [...new Set(targets.map((t) => elOf(t.loc)).filter(Boolean))].filter((el) => { const r = el.getBoundingClientRect(); return r.width && r.bottom > 0 && r.top < W.innerHeight; }).slice(0, 3);
     if (!els.length) return () => {};
-    const team = agents.slice(0, Math.max(1, Math.min(agents.length, els.length)));
     let stop = false;
-    team.forEach((a, k) => {
-      const mine = els.filter((x, i) => i % team.length === k);
-      (async () => {
-        await wait(k * 350);
-        agentSay(a, k === 0 ? `Reading ${targets.length} element${targets.length === 1 ? '' : 's'}` : 'Looking around');
-        for (let i = 0; !stop; i = (i + 1) % mine.length) await lookAt(a, mine[i]);
-      })();
-    });
-    return () => { stop = true; release(team.map((a) => a.name)); };
+    (async () => {
+      for (const el of els) { if (stop) return; await lookAt(a, el); }
+      if (stop) return;
+      const g = agentDom(a);
+      track(g, els[0], 'look');
+      g.chip.textContent = 'Thinking…';
+      g.chip.classList.add('on');
+    })();
+    return () => { stop = true; const g = crew.get(a.name); if (g) g.chip.classList.remove('on'); };
   }
   // Apply so you can watch it: style changes are shared out to lanes (one per agent), each lane makes its
   // changes one by one as its agent gets there; structure, code and colour-token changes follow together
@@ -1797,10 +1797,10 @@
     const used = new Set(), done = new Set(), talked = new Set();
     // Lanes: tasks keep their helper; chat changes are shared out by element between up to three agents.
     const lanes = new Map();
-    const team = AGENTS.slice(0, Math.min(3, Math.max(1, new Set(styles.map((e) => e.loc)).size)));
+    const team = [AGENTS[0]];
     const byEl = new Map();
     for (const e of styles) {
-      const a = m.where === 'notes' && e.note ? helperFor(e.note) : (byEl.get(e.loc) || team[byEl.size % team.length]);
+      const a = team[0];
       byEl.set(e.loc, a);
       if (!lanes.has(a.name)) lanes.set(a.name, { a, list: [] });
       lanes.get(a.name).list.push(e);
@@ -1856,7 +1856,7 @@
       const screen = await captureScreen();
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
-      const stop = agentTour(AGENTS.slice(0, 3), targets);
+      const stop = agentTour(AGENTS, targets);
       try { m.proposal = await api('/ai', { request: text, targets, history, screen, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) }); } finally { stop(); }
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
@@ -1959,13 +1959,13 @@
       const open = (m.openN || []).includes(g.n);
       const box = pending && g.eds.length ? `<button class="mk cbox${off ? '' : some ? ' some' : ' on'}" data-act2="noteSkip" data-i="${i}" data-n="${g.n}" role="checkbox" aria-checked="${off ? 'false' : some ? 'mixed' : 'true'}" title="${off ? 'Include this task’s changes' : 'Leave this task’s changes out'}">${off ? '' : some ? '<b></b>' : CHECK}</button>` : ico('task', 15);
       return `<div class="ng tk${off ? ' off' : ''}${open ? ' open' : ''}" data-ng="${g.n}" data-i="${i}">
-        <div class="tkH" data-act2="ngOpen" data-i="${i}" data-n="${g.n}" role="button" tabindex="0" aria-expanded="${open}">${box}${m.helpers && g.n ? avatar(helperFor(g.n)) : ''}<b>${g.n ? `Task ${g.n}` : 'Also'}</b><span class="tkT">${g.text ? esc(g.text) : g.n ? '' : 'changed alongside'}</span>${(g.info || g.n) && st[1] !== 'ok' ? `<span class="nSt ${st[1]}">${st[0]}</span>` : ''}<span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span></div>
+        <div class="tkH" data-act2="ngOpen" data-i="${i}" data-n="${g.n}" role="button" tabindex="0" aria-expanded="${open}">${box}<b>${g.n ? `Task ${g.n}` : 'Also'}</b><span class="tkT">${g.text ? esc(g.text) : g.n ? '' : 'changed alongside'}</span>${(g.info || g.n) && st[1] !== 'ok' ? `<span class="nSt ${st[1]}">${st[0]}</span>` : ''}<span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span></div>
         ${open ? `<div class="tkB">${g.info?.summary ? `<p>${esc(g.info.summary)}</p>` : ''}${g.eds.length ? `<div class="ngE">${g.eds.map(rowFor(m)).join('')}</div>` : ''}</div>` : ''}</div>`;
     }).join('') + (groups.length > 3 ? `<button class="tkMore" data-act2="ngMore" data-i="${i}">${m.allRows ? 'Show fewer' : `${more} more task${more === 1 ? '' : 's'}`}${ico(m.allRows ? 'chev' : 'chevR', 10)}</button>` : '');
   }
   function kerfHTML(m, i) {
-    if (m.busy && m.helpers) return `<div class="prop"><div class="helpers">${m.helpers.map((h) => `<span class="hlp" style="--ac:${agentNamed(h.name).color}">${avatar(agentNamed(h.name))}<b>${h.name}</b><span>Task ${h.n}</span><i class="hlDot"></i></span>`).join('')}</div><div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
-    if (m.busy) return `<div class="prop">${stepsHTML(m, true)}${live() ? `<div class="crewRow"><span class="avs">${AGENTS.slice(0, 3).map((x) => avatar(x)).join('')}</span><span>Tovi and helpers are looking it over</span></div>` : ''}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
+    if (m.busy && m.helpers) return `<div class="prop"><div class="crewRow">${avatar(AGENTS[0])}<span>Tovi is working on ${m.helpers.length === 1 ? 'the task' : `${m.helpers.length} tasks`}</span></div><div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
+    if (m.busy) return `<div class="prop">${stepsHTML(m, true)}${live() ? `<div class="crewRow">${avatar(AGENTS[0])}<span>Tovi is looking it over</span></div>` : ''}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
     if (m.error) return `<div class="prop err">${stepsHTML(m)}<span class="note warn">${esc(m.error)}</span></div>`;
     const p = m.proposal;
     const badge = { partial: 'Partly possible', not_yet: 'Not possible in Tovi yet', needs_developer: 'For developers' }[p.scope];
@@ -2220,7 +2220,7 @@
         <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${ico('task', 15)}<b>Task ${i + 1}</b><span class="tkT">${esc(x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
         ${open ? `<div class="tkB"><p>${esc(x.text)}</p>${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
       </div>`; }).join('')}${S.notes.length > 3 ? `<button class="tkMore" data-act2="tasksAll">${S.tasksAll ? 'Show fewer' : `${S.notes.length - 3} more task${S.notes.length - 3 === 1 ? '' : 's'}`}${ico(S.tasksAll ? 'chev' : 'chevR', 10)}</button>` : ''}</div>
-      <div class="tkFoot">${busy ? `<span class="tkN"><span class="avs">${S.notes.slice(0, 4).map((x, i) => avatar(helperFor(i + 1))).join('')}</span>${S.notes.length === 1 ? `${helperFor(1).name} is on it…` : `${S.notes.slice(0, 4).map((x, i) => helperFor(i + 1).name).join(', ')} are on it…`}</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Apply</button>`}</div>
+      <div class="tkFoot">${busy ? `<span class="tkN">${avatar(AGENTS[0])}Tovi is on it…</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Apply</button>`}</div>
     </div>`;
   }
   function refreshTasks() {
@@ -2283,7 +2283,7 @@
     S.modeOnce = null;
     const run = async (k) => {
       if (!per[k].length) return { error: 'Nothing is under this mark any more (the page may have moved). Draw it again.' };
-      const a = helperFor(k + 1), stop = agentTour([a], per[k]);
+      const stop = () => {};
       const atts = (notes[k].atts || []).slice(0, 4);
       try {
         const p = await api('/ai', { request: `Note ${k + 1}: ${notes[k].text}\nEach element is tagged with the note it sits under.`, targets: per[k], history, screen, context: aiContext(), mode: m.mode, images: atts.map((x) => ({ name: x.name, media_type: x.type, data: x.data, orig: x.orig })) });
@@ -2292,7 +2292,9 @@
     };
     const out = [];
     let next = 0;
+    const stopTour = agentTour(AGENTS, all);
     await Promise.all(Array.from({ length: Math.min(4, notes.length) }, async () => { while (next < notes.length) { const k = next++; out[k] = await run(k); } }));
+    stopTour();
     // Put the answers together, one row per task.
     const edits = [], rows = [];
     out.forEach((o, k) => {
@@ -2310,12 +2312,11 @@
     for (const [loc, ns] of byLoc) {
       if (ns.length < 2) continue;
       const [first, ...later] = ns.sort((a, b) => a - b), el = elOf(loc), what = el ? dName(el) : 'this element';
-      talk.push({ loc, agent: helperFor(later[0]).name, text: `Also changing ${what}` });
-      talk.push({ loc, agent: 'Tovi', text: `${helperFor(first).name} first, then ${later.map((x) => helperFor(x).name).join(', ')}` });
+
     }
     const names = m.helpers.map((h) => h.name);
     m.talk = talk;
-    m.proposal = { scope: rows.every((r) => r.status === 'done') ? 'done' : edits.length ? 'partial' : 'not_yet', message: `${names.length === 1 ? names[0] : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]} worked on ${notes.length === 1 ? 'the task' : `${notes.length} tasks at the same time`}.`, notes: rows, edits, suggest: null, mode: m.mode };
+    m.proposal = { scope: rows.every((r) => r.status === 'done') ? 'done' : edits.length ? 'partial' : 'not_yet', message: `Tovi worked on ${notes.length === 1 ? 'the task' : `${notes.length} tasks`}.`, notes: rows, edits, suggest: null, mode: m.mode };
     S.amber = edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
     if (edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
     if (!edits.length) m.status = 'info';
