@@ -917,3 +917,8 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .switch:focus-visible{outline:2px solid var(--select);outline-offset:2px}
 .setRow a.outline{display:inline-flex;align-items:center}
 .setSeg button{flex:0 0 auto;overflow:visible}
+/* Settings: the body gets the same side padding as the title, and scrolls on its own */
+.dialog.settings{overflow:hidden}
+.dialog.settings .dh{padding:20px 20px 8px}
+.setBody{padding:4px 20px 20px;min-height:0}
+.setRow:last-child{border-bottom:0}
