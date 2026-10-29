@@ -2307,7 +2307,7 @@
           if (m.batch) { const r = await api('/undo', {}).catch(() => null); if (r?.undone) { S.count = r.n; undone = r.count || 1; } }
           else for (let k = 0; k < (m.appliedN || 0); k++) { const r = await api('/undo', {}).catch(() => null); if (!r?.undone) break; S.count = r.n; undone++; }
           m.status = 'undone';
-          const what = m.where === 'notes' ? 'Undid' : 'Undid the look:';
+          const what = m.proposal?.mode === 'explore' ? 'Undid the look:' : 'Undid';
           toast(undone ? `${what} ${undone} change${undone === 1 ? '' : 's'}` : 'Nothing to undo');
           afterEdit(); renderAI(); saveChat();
         })();
