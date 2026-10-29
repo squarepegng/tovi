@@ -173,6 +173,7 @@
     renderLayers();
     chatCtx();
     await loadInfo();
+    if (S.pendingInsert && S.sel?.el === el) { S.pendingInsert = false; $('toast').hidden = true; S.insertPos = defaultPos(); openInsert(); }
   }
   // The chat box says what Tovi will look at: the selection, or the whole screen.
   function chatCtx() {
@@ -628,7 +629,7 @@
         ${tool('interact', 'tap', 'Interact with the app', 'P')}
       </div>
       <span class="div"></span>
-      <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip('Add element', 'I')}</button>
+      <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
       <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('pen', 16)}${tip('Annotate', 'A')}</button>
       <span class="div"></span>
       <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 16)}${tip('Undo', '⌘Z')}</button>
@@ -1151,6 +1152,7 @@
       if (!$('modal').hidden) { $('modal').hidden = true; }
       else if (S.cpick) { S.cpick = null; renderPanel(); }
       else if (S.noteDraft) { S.noteDraft = null; renderMarks(); }
+      else if (S.pendingInsert) { S.pendingInsert = false; $('toast').hidden = true; }
       else if (S.card && !S.card.busy && S.card.where !== 'chat') { S.card = null; S.amber = []; renderAll(); }
       else if (S.askOpen) { S.askOpen = false; S.amber = []; renderAsk(); renderBar(); }
       else if (S.changesOpen) { S.changesOpen = false; renderChanges(); }
@@ -1168,6 +1170,7 @@
     const k = e.key.toLowerCase();
     if (k === 'v' || k === 'e') { if (S.mode === 'preview') setMode('edit'); setTool('select'); }
     else if (k === 'p') { if (S.mode === 'preview') setMode('edit'); setTool('interact'); }
+    else if (k === 'i' && (!picking() || !S.sel)) startInsert();
     else if (k === 'a' && S.mode === 'edit') setTool(S.tool === 'annotate' ? 'select' : 'annotate');
     else if (S.mode === 'edit' && k === 'enter' && S.sel) beginText();
     else return;
@@ -1984,7 +1987,7 @@
     S.tool = t;
     S.noteDraft = null;
     S.hintSeen = true;
-    if (t !== 'select') S.hover = null;
+    if (t !== 'select') { S.hover = null; S.pendingInsert = false; }
     // Interacting or moving around isn't editing: let go of the selection so the outline and handles go away.
     if (t === 'interact' && (S.sel || S.multi.length)) { S.multi = []; select(null); }
     if (t === 'annotate') S.askOpen = false;
@@ -2289,6 +2292,19 @@
   }
   // Boxes that hold other elements take new ones inside; text, images and buttons get them after.
   const defaultPos = () => (S.sel && S.sel.el.children.length && !['p', 'span', 'button', 'a', 'label', 'svg'].includes(S.sel.el.tagName.toLowerCase()) ? 'inside' : 'after');
+  // Add from anywhere: it switches to Select (clicks must pick a spot, not use the app), and if nothing is
+  // selected yet, the next click picks where the new element goes and opens Add right there.
+  function startInsert() {
+    if (S.mode === 'preview') setMode('edit');
+    if (S.tool !== 'select') setTool('select');
+    if (!S.sel) {
+      S.pendingInsert = true;
+      toast('Click where the new element should go', 'Add opens as soon as you pick a spot. Esc to cancel.');
+      return;
+    }
+    S.insertPos = defaultPos();
+    openInsert();
+  }
   async function openInsert() {
     if (!S.sel) { toast('Select where the new element should go, then add it.', '', true); return; }
     S._tpls = await templates();
@@ -2371,7 +2387,7 @@
       if (S.sel.el.tagName.toLowerCase() === 'svg') openIcons('swap');
       else { S.insertPos = 'after'; openSwapComponent(); }
     }
-    else if (act === 'insertMenu') { S.insertPos = defaultPos(); openInsert(); }
+    else if (act === 'insertMenu') startInsert();
     else if (act === 'insPos') { S.insertPos = v; openInsert(); }
     else if (act === 'insTpl') {
       const t = S._tpls[+v];
