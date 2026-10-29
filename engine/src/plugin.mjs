@@ -1,6 +1,8 @@
 // The Vite plugin: tags elements while the app runs in dev, and exposes a
 // small local API the Tovi editor calls to read and change source files.
 import path from 'node:path';
+import { touchRecent } from './recent.mjs';
+import { PROJECTS_DIR } from './project.mjs';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { tagSource } from './ast.mjs';
@@ -56,6 +58,8 @@ export async function createKerf(webRoot) {
       try {
         const route = req.url.split('?')[0];
         if (req.method === 'GET' && ASSETS[route]) {
+          // Opening the editor counts as opening the project (for the start page's recent list).
+          if (route === '/' || route === '/index.html') touchRecent(webRoot, `http://${req.headers.host}/__kerf/`, PROJECTS_DIR);
           res.setHeader('Content-Type', ASSETS[route][1]);
           res.setHeader('Cache-Control', 'no-store');
           return res.end(fs.readFileSync(path.join(EDITOR, ASSETS[route][0]), 'utf8'));

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openProject, PROJECTS_DIR, projects, stopAll } from '../src/project.mjs';
+import { readRecent } from '../src/recent.mjs';
 
 const ENV = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env');
 
@@ -20,18 +21,27 @@ function setEnv(name, value) {
 }
 let job = null;
 
+// Every project you've opened, newest first: the editor records each one as it opens (see src/recent.mjs);
+// older copies of GitHub repos in ~/Kerf/projects are listed too.
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 function recent() {
-  if (!fs.existsSync(PROJECTS_DIR)) return [];
-  return fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => {
-      const dir = path.join(PROJECTS_DIR, e.name);
-      let remote = '';
-      try { remote = fs.readFileSync(path.join(dir, '.git/config'), 'utf8').match(/url = (.+)/)?.[1] || ''; } catch {}
-      const running = projects.get(e.name);
-      return { id: e.name, source: remote.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '') || dir, url: running?.proc?.exitCode === null ? running.url : null, at: fs.statSync(dir).mtimeMs };
-    })
-    .sort((a, b) => b.at - a.at);
+  const seen = new Set(), out = [];
+  for (const r of readRecent()) {
+    if (seen.has(r.root) || !fs.existsSync(r.root)) continue;
+    seen.add(r.root);
+    out.push({ id: r.root, source: r.source, name: r.name, url: r.pid && alive(r.pid) ? r.url : null, at: r.at });
+  }
+  if (fs.existsSync(PROJECTS_DIR)) for (const e of fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })) {
+    if (!e.isDirectory()) continue;
+    const dir = path.join(PROJECTS_DIR, e.name);
+    if (seen.has(dir)) continue;
+    let remote = '';
+    try { remote = fs.readFileSync(path.join(dir, '.git/config'), 'utf8').match(/url = (.+)/)?.[1] || ''; } catch {}
+    const running = projects.get(e.name);
+    const source = remote.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '') || dir;
+    out.push({ id: dir, source, name: path.basename(source), url: running?.proc?.exitCode === null ? running.url : null, at: fs.statSync(dir).mtimeMs });
+  }
+  return out.sort((a, b) => b.at - a.at);
 }
 
 const send = (res, status, body, type = 'application/json') => {
@@ -169,7 +179,7 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
 <nav aria-label="Tovi">
   <div class="brand"><svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="#EDEDF0"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="#EDEDF0" opacity=".45"/></svg>Tovi</div>
   <a href="#projects" data-v="projects"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>Projects</a>
-  <a href="#settings" data-v="settings"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7L3.6 3.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>Settings</a>
+  <a href="#settings" data-v="settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a>
   <a href="#help" data-v="help"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="currentColor"/></svg>Help</a>
   <span class="sp"></span>
   <span class="ver" id="ver"></span>
@@ -255,15 +265,15 @@ async function poll(){
 const ago=t=>{const s=(Date.now()-t)/1000;return s<3600?Math.max(1,Math.round(s/60))+' min ago':s<86400?Math.round(s/3600)+' h ago':Math.round(s/86400)+' d ago'};
 async function loadRecent(){
   const list=await (await fetch('/api/recent')).json();
-  $('recent').innerHTML=list.length?list.map(p=>{const name=String(p.source).split('/').filter(Boolean).pop();return '<button class="proj" data-src="'+esc(p.source)+'"><span class="thumb">'+esc(name.slice(0,2).toUpperCase())+'</span><span><b>'+esc(name)+'</b><span class="src">'+esc(p.source)+'</span></span><span class="meta"><span class="pill'+(p.url?' run':'')+'">'+(p.url?'Running':'Not running')+'</span><span>'+ago(p.at)+'</span></span></button>'}).join(''):'<div class="empty">Projects you open appear here.</div>';
+  $('recent').innerHTML=list.length?list.map(p=>{const name=p.name||String(p.source).split('/').filter(Boolean).pop();return '<button class="proj" data-src="'+esc(p.source)+'"'+(p.url?' data-url="'+esc(p.url)+'"':'')+'><span class="thumb">'+esc(name.slice(0,2).toUpperCase())+'</span><span><b>'+esc(name)+'</b><span class="src">'+esc(p.source)+'</span></span><span class="meta"><span class="pill'+(p.url?' run':'')+'">'+(p.url?'Running':'Not running')+'</span><span>'+ago(p.at)+'</span></span></button>'}).join(''):'<div class="empty">Projects you open appear here.</div>';
 }
 $('f').addEventListener('submit',e=>{e.preventDefault();const v=$('src').value.trim();if(v)open(v)});
-$('recent').addEventListener('click',e=>{const b=e.target.closest('[data-src]');if(b){$('src').value=b.dataset.src;open(b.dataset.src)}});
+$('recent').addEventListener('click',e=>{const b=e.target.closest('[data-src]');if(!b)return;if(b.dataset.url){location.href=b.dataset.url;return}$('src').value=b.dataset.src;open(b.dataset.src)});
 async function loadKey(){const s=await (await fetch('/api/key-status')).json();
   $('keystat').innerHTML=s.set?'<span class="ok">Saved.</span> Tovi’s AI is on. Paste a new key to replace it.':'No key yet. Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.';
   $('ustat').innerHTML=s.unsplash?'<span class="ok">Saved.</span> Photo search is on.':'Not set: photo search is off.';
   $('keyBanner').hidden=!!s.set;}
-async function loadAbout(){try{const a=await (await fetch('/api/about')).json();$('ver').textContent='Version '+a.version;$('aver').textContent=a.version;$('adir').textContent=a.projectsDir+' (Tovi’s copies of the repos you open)';$('pdir').textContent='Kept in '+a.projectsDir;}catch{}}
+async function loadAbout(){try{const a=await (await fetch('/api/about')).json();$('ver').textContent='Version '+a.version;$('aver').textContent=a.version;$('adir').textContent=a.projectsDir+' (Tovi’s copies of the repos you open)';$('pdir').textContent='Newest first';}catch{}}
 $('uf').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/unsplash-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('uin').value})});const j=await r.json();if(!r.ok){$('uerr').textContent=j.error;return}$('uin').value='';$('uerr').textContent='';loadKey()});
 $('kf').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('kin').value})});const j=await r.json();if(!r.ok){$('kerr').textContent=j.error;return}$('kin').value='';$('kerr').textContent='';loadKey()});
 loadKey();loadRecent();loadAbout();poll();

@@ -431,7 +431,9 @@
     branch: '<circle cx="4.5" cy="3.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="4.5" cy="12.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="11.5" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M4.5 5.1v5.8M11.5 7.6c0 2.6-7 1.4-7 3.3" fill="none" stroke="currentColor" stroke-width="1.1"/>',
     check: '<path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
     eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>',
-    gear: '<circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7L3.6 3.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+    gear: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g>',
+    comment: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.5V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2v3l3.5-3H13"/><path d="M19.5 14.5l1.8 1.8-4.3 4.3H15.2v-1.8z"/></g>',
+    addEl: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></g>',
     sidebar: '<rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M6 3v10" stroke="currentColor" stroke-width="1.25"/>',
     trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
     dup: '<rect x="5" y="5" width="8.5" height="8.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M3 10.5V3.8c0-.4.4-.8.8-.8h6.7" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>',
@@ -736,8 +738,8 @@
         ${tool('select', 'cursor', 'Select', 'V')}
       </div>
       <span class="div"></span>
-      <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
-      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('pen', 16)}${tip('Annotate', 'A')}</button>
+      <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('addEl', 16)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
+      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('comment', 16)}${tip('Annotate', 'A')}</button>
       <span class="div"></span>
       <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 16)}${tip('Undo', '⌘Z')}</button>
       <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 16)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>`;
