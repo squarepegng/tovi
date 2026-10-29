@@ -170,7 +170,7 @@ It says that plan in one sentence, then answers with the same edits the panel ma
 - colour tokens
 - as a last resort, a small code change, shown as a before/after diff. If it breaks the page, Tovi undoes it automatically.
 
-Tovi highlights the targets in amber and writes nothing until you click
+Chat requests apply straight away (you watch Tovi make them), with **Undo** in the answer. Annotation tasks wait for
 **Apply**. Every applied change can be undone. Requests about behavior or data
 are answered as developer work, with no edits.
 

@@ -1744,7 +1744,9 @@
     return { results, n };
   }
 
-  async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = false) {
+  // Chat and Ask apply straight away: you see Tovi make the change, with Undo right there.
+  // Only annotation tasks wait for Apply.
+  async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = where !== 'notes') {
     text = String(text || '').trim() || (atts.length ? 'Use the attached image.' : '');
     if (!text || S.card?.busy) return;
     if (!targets.length) { toast('Nothing on screen to work with yet. Wait for the page to load, or select something.', '', true); return; }
@@ -1853,7 +1855,8 @@
     const loose = p.edits.filter((e) => !e.note || e.note > count);
     if (loose.length) groups.push({ n: 0, info: null, eds: loose, text: null });
     const pending = m.status === 'pending';
-    return groups.map((g) => {
+    const more = groups.length > 3 && !m.allRows ? groups.length - 3 : 0;
+    return groups.slice(0, more ? 3 : groups.length).map((g) => {
       const st = NSTAT[g.info?.status] || (g.eds.length ? NSTAT.done : NSTAT.not_possible);
       const idx = g.eds.map((e) => p.edits.indexOf(e)), offN = idx.filter((k) => (m.off || []).includes(k)).length;
       const off = (m.skip || []).includes(g.n) || (idx.length > 0 && offN === idx.length);
@@ -1863,7 +1866,7 @@
       return `<div class="ng tk${off ? ' off' : ''}${open ? ' open' : ''}" data-ng="${g.n}" data-i="${i}">
         <div class="tkH" data-act2="ngOpen" data-i="${i}" data-n="${g.n}" role="button" tabindex="0" aria-expanded="${open}">${box}${m.helpers && g.n ? avatar(helperFor(g.n)) : ''}<b>${g.n ? `Task ${g.n}` : 'Also'}</b><span class="tkT">${g.text ? esc(g.text) : g.n ? '' : 'changed alongside'}</span>${(g.info || g.n) && st[1] !== 'ok' ? `<span class="nSt ${st[1]}">${st[0]}</span>` : ''}<span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span></div>
         ${open ? `<div class="tkB">${g.info?.summary ? `<p>${esc(g.info.summary)}</p>` : ''}${g.eds.length ? `<div class="ngE">${g.eds.map(rowFor(m)).join('')}</div>` : ''}</div>` : ''}</div>`;
-    }).join('');
+    }).join('') + (groups.length > 3 ? `<button class="tkMore" data-act2="ngMore" data-i="${i}">${m.allRows ? 'Show fewer' : `${more} more task${more === 1 ? '' : 's'}`}${ico(m.allRows ? 'chev' : 'chevR', 10)}</button>` : '');
   }
   function kerfHTML(m, i) {
     if (m.busy && m.helpers) return `<div class="prop"><div class="helpers">${m.helpers.map((h) => `<span class="hlp" style="--ac:${agentNamed(h.name).color}">${avatar(agentNamed(h.name))}<b>${h.name}</b><span>Task ${h.n}</span><i class="hlDot"></i></span>`).join('')}</div><div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
@@ -1883,8 +1886,8 @@
       ${m.talk?.length ? `<div class="talk">${m.talk.map((t) => `<div>${avatar(agentNamed(t.agent))}<b>${esc(t.agent)}</b><span>${esc(t.text)}</span></div>`).join('')}</div>` : ''}
       ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
       ${suggest}${keep}
-      ${m.where === 'notes' && m.status === 'applied' && !p.mode?.startsWith('explore') ? `<div class="kDone">${status}<button class="ghostBtn sm" data-act2="tryUndo" data-i="${i}">Undo</button></div>` : ''}
-      ${m.status === 'pending' && p.edits.length && !m.applying ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.where === 'notes' && m.status === 'applied' ? '' : status}</div>`;
+      ${m.status === 'applied' && !p.mode?.startsWith('explore') ? `<div class="kDone">${status}<button class="ghostBtn sm" data-act2="tryUndo" data-i="${i}">Undo</button></div>` : ''}
+      ${m.status === 'pending' && p.edits.length && !m.applying ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.status === 'applied' && !p.mode?.startsWith('explore') ? '' : status}</div>`;
   }
   // "Looked at 14 elements · Thought for 9s", which opens to show what Tovi read.
   function stepsHTML(m, live) {
@@ -2118,10 +2121,10 @@
   function tasksHTML(busy) {
     const n = S.notes.length;
     return `<div class="tasks">
-      <div class="tkList">${S.notes.map((x, i) => { const open = S.openTask.includes(i); return `<div class="tk ntRow${open ? ' open' : ''}" data-note="${i + 1}">
+      <div class="tkList">${S.notes.map((x, i) => { if (i >= 3 && !S.tasksAll) return ''; const open = S.openTask.includes(i); return `<div class="tk ntRow${open ? ' open' : ''}" data-note="${i + 1}">
         <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${ico('task', 15)}<b>Task ${i + 1}</b><span class="tkT">${esc(x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
         ${open ? `<div class="tkB"><p>${esc(x.text)}</p>${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
-      </div>`; }).join('')}</div>
+      </div>`; }).join('')}${S.notes.length > 3 ? `<button class="tkMore" data-act2="tasksAll">${S.tasksAll ? 'Show fewer' : `${S.notes.length - 3} more task${S.notes.length - 3 === 1 ? '' : 's'}`}${ico(S.tasksAll ? 'chev' : 'chevR', 10)}</button>` : ''}</div>
       <div class="tkFoot">${busy ? `<span class="tkN"><span class="avs">${S.notes.slice(0, 4).map((x, i) => avatar(helperFor(i + 1))).join('')}</span>${S.notes.length === 1 ? `${helperFor(1).name} is on it…` : `${S.notes.slice(0, 4).map((x, i) => helperFor(i + 1).name).join(', ')} are on it…`}</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Apply</button>`}</div>
     </div>`;
   }
@@ -2375,6 +2378,8 @@
       else if (act === 'noteDiscard') { S.noteDraft = null; renderMarks(); }
       else if (act === 'noteDel') { S.notes.splice(+a.dataset.i, 1); S.openTask = []; S.hlNote = null; refreshTasks(); }
       else if (act === 'notesClear') { S.notes = []; S.openTask = []; if (S.card?.where === 'notes') S.card = null; S.amber = []; refreshTasks(); }
+      else if (act === 'tasksAll') { S.tasksAll = !S.tasksAll; refreshTasks(); }
+      else if (act === 'ngMore') { const m = S.chat[+a.dataset.i]; if (m) { m.allRows = !m.allRows; renderAI(); } }
       else if (act === 'tkOpen') { const i = +a.dataset.i; S.openTask = S.openTask.includes(i) ? S.openTask.filter((x) => x !== i) : [...S.openTask, i]; refreshTasks(); }
       else if (act === 'ngOpen') { const m = S.chat[+a.dataset.i], n = +a.dataset.n; if (m) { m.openN = (m.openN || []).includes(n) ? m.openN.filter((x) => x !== n) : [...(m.openN || []), n]; renderAI(); } }
       else if (act === 'notesApply') applyNotes();
