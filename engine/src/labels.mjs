@@ -39,8 +39,11 @@ export function designName(tag, text, opts) {
   return `${kind} “${t.length > 24 ? t.slice(0, 23) + '…' : t}”`;
 }
 
-export function changeLabel({ prop, from, to }) {
-  const name = PROP_NAMES[prop] || prop;
+// strokeWidth → "Stroke width", variant → "Variant"
+export const humanize = (n) => String(n).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+
+export function changeLabel({ prop, from, to }, icon) {
+  const name = icon && prop === 'color' ? 'Icon color' : PROP_NAMES[prop] || prop;
   const a = fmt(prop, from), b = fmt(prop, to);
   if (b == null) return `${name} removed`;
   if (a == null || a === b) return `${name} ${b}`;
@@ -50,9 +53,9 @@ export function changeLabel({ prop, from, to }) {
 export function summaryLabels(summary) {
   const out = [];
   if (summary.action) out.push(summary.action);
-  (summary.changes || []).forEach((c) => out.push(changeLabel(c)));
+  (summary.changes || []).forEach((c) => out.push(changeLabel(c, summary.icon)));
   if (summary.text) out.push(`Text “${summary.text.to}”`);
-  (summary.props || []).forEach((p) => out.push(`${p.name} ${p.from ?? 'default'} → ${p.to}`));
+  (summary.props || []).forEach((p) => out.push(`${humanize(p.name)} ${p.from ?? 'default'} → ${p.to}`));
   if (summary.size && out.length) out[out.length - 1] += ` (${summary.size.toLowerCase()})`;
   const where = (summary.where || []).filter((w) => w !== 'this element');
   if (where.length && out.length) out[out.length - 1] += ` · in ${where.join(', ')}`;

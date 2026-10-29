@@ -840,3 +840,9 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .keyList div{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:24px;color:var(--ink2)}
 .keyList .kbd{flex:0 0 auto}
 .secH .nm{display:inline-flex;align-items:center;gap:6px}
+/* size fields, like Figma's: W 468 [Hug ▾] */
+.szf{position:relative;display:flex;align-items:center;gap:0;padding-right:2px}
+.szf input{flex:1;min-width:0}
+.szm{position:relative;display:flex;align-items:center;gap:3px;height:22px;padding:0 6px;border-radius:4px;color:var(--ink3);font-size:11px;cursor:pointer;white-space:nowrap}
+.szm:hover{background:var(--line);color:var(--ink)}
+.szm select{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}

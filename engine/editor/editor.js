@@ -54,6 +54,14 @@
     w: { max: 4000, css: PX('width') },
     h: { max: 4000, css: PX('height') },
   };
+  // The app's scale for a property, as sorted numbers: font sizes, spacing, radius…
+  const SCALE_OF = { fontSize: 'fontSize', lineHeight: 'lineHeight', radius: 'radius', rTL: 'radius', rTR: 'radius', rBR: 'radius', rBL: 'radius', padX: 'spacing', padY: 'spacing', mX: 'spacing', mY: 'spacing', gap: 'spacing', w: 'spacing', h: 'spacing', borderW: 'borderWidth', opacity: 'opacity' };
+  function scaleSteps(p) {
+    const m = S.theme?.byKey?.[SCALE_OF[p]];
+    if (!m) return null;
+    const v = [...new Set(Object.values(m).filter((x) => typeof x === 'number' && isFinite(x) && x < 9999))].sort((a, b) => a - b);
+    return v.length > 2 ? v : null;
+  }
   const clamp = (p, v) => Math.max(PROPS[p].min ?? 0, Math.min(PROPS[p].max ?? 9999, v));
   // An element from a page that has since reloaded has no window: fall back to the current one.
   const cs = (el) => (el.ownerDocument?.defaultView || W || window).getComputedStyle(el);
@@ -241,7 +249,8 @@
     previewed = null;
   }
   async function commit(change) {
-    const loc = activeLoc();
+    // Component properties always belong to this use of the component.
+    const loc = change.props?.length && S.sel?.use ? S.sel.use : activeLoc();
     if (!loc) return;
     const via = change.text != null && !S.multi.length ? info()?.text?.via : null;
     if (via) {
@@ -278,6 +287,14 @@
       clearPreview();
       toast(e.message, '', true);
     }
+  }
+  // Remove a style the way a developer would: delete the element's own class. Only if the style still shows
+  // (it comes from somewhere else, like a CSS class) add an override such as shadow-none or border-0.
+  async function clearStyle(ops, override, stillShows) {
+    await commit({ ops });
+    await new Promise((r) => setTimeout(r, 900));
+    refind();
+    if (S.sel?.el && stillShows(S.sel.el)) await commit({ ops: override });
   }
   function afterEdit() {
     // Give Vite and Tailwind a moment to reload, then show the real result.
@@ -581,6 +598,13 @@
     renderTop();
   }
   new ResizeObserver(() => applyDevice()).observe(document.getElementById('canvas'));
+  // When the app's width changes (window, screen size, panels), refresh the measured sizes in the panel,
+  // unless the designer is typing in it.
+  let panelSizeT;
+  new ResizeObserver(() => {
+    clearTimeout(panelSizeT);
+    panelSizeT = setTimeout(() => { if (S.sel && !$('panel').contains(document.activeElement)) renderPanel(); }, 300);
+  }).observe(frame);
   // Side panels: drag their inner edge to resize, double-click to reset. Widths are remembered in this browser.
   const SIDE = { l: { el: 'layers', def: 300, min: 260, max: 520 }, r: { el: 'panel', def: 284, min: 248, max: 520 } };
   const setSide = (k, w) => { const c = SIDE[k]; w = Math.round(Math.max(c.min, Math.min(c.max, w))); document.getElementById(c.el).style.flexBasis = w + 'px'; return w; };
@@ -769,16 +793,30 @@
     } else if (a.dataset.v === 'solid' && g) commit({ ops: [{ prop: 'bg', value: g.from || 'transparent' }, { prop: 'clipText', value: 'off' }] });
   });
 
-  function propsSection(inf) {
-    if (!inf?.component || !inf.props?.length) return '';
-    const rows = inf.props.map((p) => {
+  // Component properties, like Figma's: they belong to this use of the component, whatever the scope.
+  const ICON_DEFAULTS = { 'lucide-react': { size: 24, strokeWidth: 2 }, '@phosphor-icons/react': { weight: 'regular', size: '1em' } };
+  const humanize = (n) => String(n).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+  function propsSection(inf0) {
+    const inf = S.sel?.useInfo?.component ? S.sel.useInfo : inf0;
+    if (!inf?.component) return '';
+    // Variants the component offers (from its cva), even ones this use doesn't set yet.
+    const c = S.sel?.defInfo?.cva, props = (inf.props || []).slice();
+    if (c?.groups) for (const [g, opts] of Object.entries(c.groups)) {
+      const i = props.findIndex((p) => p.name === g), cur = i > -1 ? props[i] : null;
+      if (cur && !cur.editable) continue;
+      const row = { name: g, kind: 'option', options: opts, value: cur?.value ?? null, def: c.defaults?.[g], editable: true, cva: true };
+      if (i > -1) props[i] = row; else props.unshift(row);
+    }
+    if (!props.length) return '';
+    const dflt = ICON_DEFAULTS[inf.lib] || {};
+    const rows = props.map((p) => {
       let ctl;
       if (!p.editable) ctl = `<label class="inp lock" title="${esc(p.reason)}"><input value="set by code" disabled></label>`;
-      else if (p.kind === 'option') ctl = `<label class="inp"><select data-propsel="${esc(p.name)}">${p.value == null ? '<option value="" selected>Default</option>' : ''}${p.options.map((o) => `<option${o === p.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
+      else if (p.kind === 'option') ctl = `<label class="inp"><select data-propsel="${esc(p.name)}"${p.cva ? ` data-options="${esc(p.options.join('|'))}"` : ''}${p.value == null && (p.def ?? dflt[p.name]) != null ? ` data-def="${esc(p.def ?? dflt[p.name])}"` : ''} aria-label="${esc(humanize(p.name))}">${p.value == null ? `<option value="" selected>${p.def != null ? `${esc(p.def)} (default)` : dflt[p.name] != null ? `${esc(dflt[p.name])} (default)` : 'Default'}</option>` : ''}${p.options.filter((o) => !(p.value == null && o === (p.def ?? dflt[p.name]))).map((o) => `<option${o === p.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
       else if (p.kind === 'boolean') ctl = `<div class="seg"><button data-act="setProp" data-p="${esc(p.name)}" data-v="false" class="${p.value !== true ? 'on' : ''}">Off</button><button data-act="setProp" data-p="${esc(p.name)}" data-v="true" class="${p.value === true ? 'on' : ''}">On</button></div>`;
-      else if (p.kind === 'number') ctl = `<label class="inp"><input type="text" inputmode="decimal" data-propnum="${esc(p.name)}" value="${p.value ?? ''}" placeholder="Default"></label>`;
+      else if (p.kind === 'number') ctl = `<label class="inp"><input type="text" inputmode="decimal" data-propnum="${esc(p.name)}" value="${p.value ?? ''}" placeholder="${dflt[p.name] != null ? `${esc(dflt[p.name])} (default)` : 'Default'}" aria-label="${esc(humanize(p.name))}"></label>`;
       else ctl = `<label class="inp"><input type="text" data-proptext="${esc(p.name)}" value="${esc(p.value)}"></label>`;
-      return `<div class="kv"><span>${esc(p.name)}</span>${ctl}</div>`;
+      return `<div class="kv"><span>${esc(humanize(p.name))}</span>${ctl}</div>`;
     }).join('');
     return sec(`Properties${inf.lib ? ` <span class="note" style="font-weight:400">${esc(inf.lib.replace(/^@/, '').split('/')[0])}</span>` : ''}`, rows);
   }
@@ -920,7 +958,7 @@
       const hasStroke = val('borderW') > 0;
       h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${nf('borderW', 'sw', 'Stroke width')}<span></span></div>` : '', hasStroke ? '' : hb('addStroke', 'plus', 'Add stroke'));
       const sh = shadowOf(), keys = (S.theme?.shadow || []).filter((k) => k !== 'none' && k !== 'inner');
-      h += sec('Effects', sh !== 'none' ? `<div class="cr"><label class="inp"><select data-sel="shadow" aria-label="Shadow">${keys.map((k) => `<option value="${esc(k)}"${k === sh ? ' selected' : ''}>Shadow · ${k === 'DEFAULT' ? 'default' : esc(k)}</option>`).join('')}</select>${ico('chev', 12)}</label><button class="ib" data-act="set" data-p="shadow" data-v="none" title="Remove">${ico('minus')}</button></div>` : '', sh !== 'none' ? '' : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
+      h += sec('Effects', sh !== 'none' ? `<div class="cr"><label class="inp"><select data-sel="shadow" aria-label="Shadow">${keys.map((k) => `<option value="${esc(k)}"${k === sh ? ' selected' : ''}>Shadow · ${k === 'DEFAULT' ? 'default' : esc(k)}</option>`).join('')}</select>${ico('chev', 12)}</label><button class="ib" data-act="rmShadow" title="Remove shadow">${ico('minus')}</button></div>` : '', sh !== 'none' ? '' : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
     }
     const st = p.querySelector('.scroll')?.scrollTop || 0;
     p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
@@ -1242,9 +1280,10 @@
       case 'cpick': S.cpick = S.cpick === v ? null : v; renderPanel(); break;
       case 'token': case 'set': commit({ ops: [{ prop: a.dataset.p, value: v }] }); break;
       case 'addFill': commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }); break;
-      case 'rmFill': S.cpick = null; commit({ ops: gradOf() ? [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] : [{ prop: 'bg', value: 'transparent' }] }); break;
+      case 'rmFill': S.cpick = null; if (gradOf()) commit({ ops: [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] }); else clearStyle([{ prop: 'bg', value: null }], [{ prop: 'bg', value: 'transparent' }], (el) => !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs(el).backgroundColor)); break;
+      case 'rmShadow': clearStyle([{ prop: 'shadow', value: null }], [{ prop: 'shadow', value: 'none' }], (el) => cs(el).boxShadow.split(/,(?![^(]*\))/).some((x) => !/rgba\([^)]*,\s*0\)/.test(x) && /[1-9]\d*(\.\d+)?px/.test(x))); break;
       case 'addStroke': commit({ ops: [{ prop: 'borderW', value: 1 }, { prop: 'borderC', value: tokens().find(([n]) => n === 'border')?.[0] || 'black' }] }); break;
-      case 'rmStroke': S.cpick = null; commit({ ops: [{ prop: 'borderW', value: 0 }] }); break;
+      case 'rmStroke': S.cpick = null; clearStyle([{ prop: 'borderW', value: null }, { prop: 'borderC', value: null }], [{ prop: 'borderW', value: 0 }], (el) => parseFloat(cs(el).borderTopWidth) > 0); break;
       case 'setProp': commit({ props: [{ name: a.dataset.p, value: v }] }); break;
       case 'ask': toggleAI(false); break;
       case 'layersToggle': S.layersOpen = !S.layersOpen; renderLeft(); renderTop(); setTimeout(applyDevice, 0); break;
@@ -1266,7 +1305,7 @@
   });
   document.addEventListener('change', (e) => {
     const t = e.target;
-    if (t.dataset.propsel) return t.value && commit({ props: [{ name: t.dataset.propsel, value: t.value }] });
+    if (t.dataset.propsel) return t.value && commit({ props: [{ name: t.dataset.propsel, value: t.value, ...(t.dataset.options ? { options: t.dataset.options.split('|') } : {}), ...(t.dataset.def ? { def: t.dataset.def } : {}) }] });
     if (t.dataset.propnum) { const n = parseFloat(t.value); return isFinite(n) && commit({ props: [{ name: t.dataset.propnum, value: n }] }); }
     if (t.dataset.proptext) return commit({ props: [{ name: t.dataset.proptext, value: t.value }] });
     if (t.dataset.sel) return commit({ ops: [{ prop: t.dataset.sel, value: /^\d+$/.test(t.value) ? +t.value : t.value }] });
@@ -1282,7 +1321,13 @@
     }
     const n = parseFloat(t.value);
     if (isNaN(n)) return renderPanel();
-    commit({ ops: [{ prop: p, value: clamp(p, Math.round(n * 10) / 10) }] });
+    const v = clamp(p, Math.round(n * 10) / 10);
+    // Icons keep their proportions when resized, like Figma.
+    if ((p === 'w' || p === 'h') && S.sel?.el?.tagName.toLowerCase() === 'svg') {
+      const r = S.sel.el.getBoundingClientRect(), k = p === 'w' ? r.height / (r.width || 1) : r.width / (r.height || 1);
+      return commit({ ops: [{ prop: p, value: v }, { prop: p === 'w' ? 'h' : 'w', value: Math.round(v * k) }] });
+    }
+    commit({ ops: [{ prop: p, value: v }] });
   });
   document.addEventListener('input', (e) => {
     const t = e.target;
@@ -1293,7 +1338,9 @@
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && t.closest && t.closest('.kc')) { e.preventDefault(); t.form.requestSubmit(); return; }
     if (!p || t.dataset.color || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !S.sel) return;
     e.preventDefault();
-    const n = clamp(p, (parseFloat(t.value) || 0) + (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1));
+    // Arrows step through the app's own scale (so values stay on the design system); Shift is a precise 1px nudge.
+    const up = e.key === 'ArrowUp', cur = parseFloat(t.value) || 0, steps = scaleSteps(p);
+    const n = clamp(p, steps && !e.shiftKey ? (up ? steps.find((x) => x > cur + 0.01) : [...steps].reverse().find((x) => x < cur - 0.01)) ?? cur + (up ? 1 : -1) : cur + (up ? 1 : -1) * (steps || !e.shiftKey ? 1 : 10));
     t.value = n;
     preview(S.sel.el, p, n);
     commitSoon(p, n);
@@ -2579,12 +2626,16 @@
     let h = '';
     const shown = (k) => S.reveal?.el === el && S.reveal[k];
     const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = (+val('mX') || 0) !== 0 || (+val('mY') || 0) !== 0;
-    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${nf('mX', 'padH', 'Horizontal margin')}${nf('mY', 'padV', 'Vertical margin')}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'sm', 'data-v="margin"'));
-    const sizeSec = () => sec('Size', `<div class="r2">${modeSel('w')}${modeSel('h')}</div><div class="r2">${fixedField('w')}${fixedField('h')}</div>`);
-    const modeSel = (axis) => `<label class="inp"><span class="u">${axis.toUpperCase()}</span><select data-size="${axis}" aria-label="${axis === 'w' ? 'Width' : 'Height'}">${[['auto', 'Auto'], ['hug', 'Hug'], ['fill', 'Fill'], ['fixed', 'Fixed']].map(([v, n]) => `<option value="${v}"${sizeMode(axis) === v ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
-    const fixedField = (axis) => sizeMode(axis) === 'fixed' ? nf(axis, `<b class="tg">${axis.toUpperCase()}</b>`, axis === 'w' ? 'Width' : 'Height') : `<label class="inp lock"><input disabled value="${Math.round(axis === 'w' ? el.getBoundingClientRect().width : el.getBoundingClientRect().height)}"></label>`;
+    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${nf('mX', 'padH', 'Horizontal margin')}${nf('mY', 'padV', 'Vertical margin')}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
+    // Like Figma: one field per axis, "W 468" with Fixed / Hug / Fill inside it. Typing a number makes it fixed.
+    const MODES = [['fixed', 'Fixed'], ['hug', 'Hug'], ['fill', 'Fill'], ['auto', 'Auto']];
+    const sizeField = (axis) => {
+      const mode = sizeMode(axis), r = el.getBoundingClientRect(), px = Math.round(axis === 'w' ? r.width : r.height), nm = axis === 'w' ? 'Width' : 'Height';
+      return `<div class="inp szf${info()?.sized?.includes(axis) ? ' sized' : ''}" title="${nm}"><span class="ic" data-scrub="${axis}"><b class="tg">${axis.toUpperCase()}</b></span><input type="text" inputmode="decimal" data-prop="${axis}" value="${px}" aria-label="${nm}"><label class="szm" title="${nm}: ${MODES.find(([v]) => v === mode)[1]}"><span>${mode === 'fixed' ? '' : MODES.find(([v]) => v === mode)[1]}</span>${ico('chev', 10)}<select data-size="${axis}" aria-label="${nm} sizing">${MODES.map(([v, n]) => `<option value="${v}"${mode === v ? ' selected' : ''}>${n === 'Auto' ? 'Auto (as coded)' : n === 'Hug' ? 'Hug contents' : n === 'Fill' ? 'Fill container' : 'Fixed'}</option>`).join('')}</select></label></div>`;
+    };
+    const sizeSec = () => sec('Size', `<div class="r2">${sizeField('w')}${sizeField('h')}</div>`);
     if (!isContainer(el)) {
-      if (!isMedia(el)) h += sec('Padding', hasPad || shown('pad') ? `<div class="r2">${nf('padX', 'padH', 'Horizontal padding')}${nf('padY', 'padV', 'Vertical padding')}</div>` : '', hasPad || shown('pad') ? '' : hb('reveal', 'plus', 'Add padding', 'sm', 'data-v="pad"'));
+      if (!isMedia(el)) h += sec('Padding', hasPad || shown('pad') ? `<div class="r2">${nf('padX', 'padH', 'Horizontal padding')}${nf('padY', 'padV', 'Vertical padding')}</div>` : '', hasPad || shown('pad') ? '' : hb('reveal', 'plus', 'Add padding', 'pad'));
       return h + sizeSec() + marginSec();
     }
     // Alignment matrix like Figma's: 3×3, mapped to justify/items by direction.

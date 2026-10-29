@@ -6,7 +6,7 @@ import MagicString from 'magic-string';
 import { parseCode, walk } from './ast.mjs';
 import { applyOps, isOffScale, matcher } from './tailwind.mjs';
 import { findCvas, cvaIn, cvaTargets } from './cva.mjs';
-import { propsInfo, applyProps } from './props.mjs';
+import { propsInfo, applyProps, isIconEl } from './props.mjs';
 import { structureEdit } from './structure.mjs';
 import { summaryLabels } from './labels.mjs';
 import { classSources, activeLit, sourceLabel, describeSources } from './sources.mjs';
@@ -416,6 +416,7 @@ export function editElement(code, line, col, { ops = [], text, props = [], cva, 
     summary.added = r.added;
     summary.removed = r.removed;
     summary.changes = r.changes;
+    if (isIconEl(code, el)) summary.icon = true;
     summary.offScale = r.added.filter(isOffScale);
     }
   }

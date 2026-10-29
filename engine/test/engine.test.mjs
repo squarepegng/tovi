@@ -391,3 +391,12 @@ test('text passed in as a component prop is traced to the prop', async () => {
   assert.deepEqual(propText(code, at('<button')), { comp: 'Button', prop: 'label' });
   assert.equal(propText(code, at('<h3>')), null);
 });
+
+test('a variant the usage does not set yet can be added from its options', async () => {
+  const { editElement } = await import('../src/edit.mjs');
+  const code = `import { Button } from './Button';\nexport const A = () => <Button size="lg">Go</Button>;\n`;
+  const { code: out } = editElement(code, 2, 23, { props: [{ name: 'variant', value: 'outline', options: ['primary', 'outline', 'ghost'] }] }, { colors: {}, spacing: {} });
+  assert.match(out, /<Button size="lg" variant="outline">|<Button variant="outline" size="lg">/);
+  assert.throws(() => editElement(code, 2, 23, { props: [{ name: 'variant', value: 'huge', options: ['primary', 'outline'] }] }, { colors: {}, spacing: {} }));
+  assert.throws(() => editElement(code, 2, 23, { props: [{ name: 'onClick', value: 'x', options: ['x'] }] }, { colors: {}, spacing: {} }));
+});
