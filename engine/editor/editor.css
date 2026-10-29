@@ -846,3 +846,8 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .szm{position:relative;display:flex;align-items:center;gap:3px;height:22px;padding:0 6px;border-radius:4px;color:var(--ink3);font-size:11px;cursor:pointer;white-space:nowrap}
 .szm:hover{background:var(--line);color:var(--ink)}
 .szm select{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+/* look-alikes: "4 look alike · All 4 / This one" */
+.simRow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.simRow .note{white-space:nowrap}
+.simRow .seg{flex:0 1 auto}
+.simRow .seg button{flex:0 0 auto;padding:0 10px;overflow:visible}

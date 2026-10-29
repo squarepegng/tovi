@@ -82,6 +82,9 @@ Either way, the app's repo and config are not modified.
   at the source. The panel says where ("Styles come from CONFIDENCE_STYLES
   “verified” in lib/format.ts") and lets you pick the reach: *Only this one*,
   *All “verified”* or *All 4*. One undo covers every file a change touches.
+- **Keeps look-alikes together.** Copies written out separately that look the same (four feature cards,
+  their titles, a row of nav links) are found automatically: the panel says “4 look alike”, the others are
+  outlined, and style changes go to all of them (or *This one*). Text stays per element. One undo for the lot.
 - **Edits the design system.** Click the frame name (“Desktop”) to select the page; the panel shows the app's
   colour tokens with their light and dark values. Change one and every screen
   follows. Tovi edits the CSS variable (or the Tailwind config) in the format it

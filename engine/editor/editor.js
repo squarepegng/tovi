@@ -201,6 +201,41 @@
     }
     return null;
   }
+  // Look-alikes: copies written separately in the code that look the same (four feature cards), and the
+  // matching parts inside them (each card's title). Style edits can go to all of them, like Figma's
+  // "select matching layers". Copies made by one piece of code are already "Repeated" and left out.
+  S.simScope = 'all';
+  const baseCls = (e) => new Set([...e.classList].filter((c) => !c.includes(':')));
+  function overlap(a, b) {
+    const A = baseCls(a), B = baseCls(b);
+    if (!A.size && !B.size) return 1;
+    let n = 0;
+    for (const c of A) if (B.has(c)) n++;
+    return n / (A.size + B.size - n);
+  }
+  const shape = (e) => e.tagName + '>' + [...e.children].map((c) => c.tagName).join(',');
+  const looksLike = (a, b) => a.tagName === b.tagName && shape(a) === shape(b) && overlap(a, b) >= 0.5;
+  const isTagged = (e) => e.matches?.('[data-kerf],[data-kerf-use]');
+  function similarOf(el) {
+    if (!el?.isConnected || !isTagged(el)) return [];
+    let unit = el;
+    const path = [];
+    for (let depth = 0; depth < 6 && unit.parentElement && unit.parentElement !== D.body; depth++) {
+      const sibs = [...unit.parentElement.children].filter((x) => x !== unit && looksLike(x, unit) && (defOf(x) || useOf(x)) !== (defOf(unit) || useOf(unit)));
+      if (sibs.length) {
+        const out = [];
+        for (const sb of sibs) {
+          let t = sb;
+          for (const i of path) { t = t?.children[i]; if (!t) break; }
+          if (t && t.tagName === el.tagName && isTagged(t) && overlap(t, el) >= 0.5 && (defOf(t) || useOf(t)) !== (defOf(el) || useOf(el))) out.push(t);
+        }
+        return out.slice(0, 40);
+      }
+      path.unshift([...unit.parentElement.children].indexOf(unit));
+      unit = unit.parentElement;
+    }
+    return [];
+  }
   async function loadInfo() {
     const s = S.sel;
     if (!s) return;
@@ -226,6 +261,7 @@
     }
     s.defInfo = d;
     s.useInfo = u;
+    s.similar = similarOf(s.el);
     renderPanel();
   }
   // After an edit the app re-renders and the element may be a new node: find it again.
@@ -264,10 +300,13 @@
       return;
     }
     try {
-      if (S.multi.length) {
-        // Several selected: apply the same change to each one, in a safe order.
-        const edits = [{ loc, ...change, cva: cvaParam(), name: dName(S.sel.el), dom: [...S.sel.el.classList] }, ...S.multi.map((m) => ({ loc: locOf(m), ...change, name: dName(m.el), dom: [...m.el.classList] }))];
-        const r = await api('/ai/apply', { edits: edits.map((e) => ({ loc: e.loc, ops: e.ops || [], props: e.props || [], text: e.text, name: e.name, dom: e.dom, bp: bpParam() })) });
+      // Look-alikes follow style changes (never text or component properties, which are each their own).
+      const alike = !S.multi.length && S.simScope === 'all' && change.ops?.length && change.text == null && !change.props?.length ? (S.sel?.similar || []).filter((x) => x.isConnected) : [];
+      const group = S.multi.length ? S.multi : alike.map((el) => ({ el, def: defOf(el), use: useOf(el) }));
+      if (group.length) {
+        // Several at once: apply the same change to each one, in a safe order, as one undo step.
+        const edits = [{ loc, ...change, cva: cvaParam(), name: dName(S.sel.el), dom: [...S.sel.el.classList] }, ...group.map((m) => ({ loc: locOf(m), ...change, name: dName(m.el), dom: [...m.el.classList] }))];
+        const r = await api('/ai/apply', { batch: Date.now(), edits: edits.map((e) => ({ loc: e.loc, ops: e.ops || [], props: e.props || [], text: e.text, name: e.name, dom: e.dom, bp: bpParam() })) });
         S.count = r.n;
         const ok = r.results.filter((x) => x.ok && x.changed).length;
         toast(`${ok} element${ok === 1 ? '' : 's'} · ${(r.results.find((x) => x.summary)?.summary.labels || []).join(' · ')}`, r.results.some((x) => !x.ok) ? r.results.find((x) => !x.ok).error : '', false, true);
@@ -915,6 +954,7 @@
     const loc = activeLoc();
     let h = `<div class="sec head"><div class="secH"><span class="nm">${ico(layerIcon(el))}${esc(dName(el))}</span><span class="hbs">${hb('copyLoc', 'code', `Code: ${loc.replace(/:(\d+):\d+$/, ':$1')} (click to copy)`)}${hb('parent', 'up', 'Select parent')}</span></div>
       ${scopeHTML(s, name)}
+      ${s.similar?.length && !S.multi.length ? `<div class="simRow"><span class="note">${s.similar.length + 1} look alike</span><div class="seg"><button data-act="simScope" data-v="all" class="${S.simScope === 'all' ? 'on' : ''}" title="Style changes go to all ${s.similar.length + 1}">All ${s.similar.length + 1}</button><button data-act="simScope" data-v="one" class="${S.simScope === 'one' ? 'on' : ''}" title="Change only this one">This one</button></div></div>` : ''}
       ${sourceHTML(inf)}
       ${sizeHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}
@@ -1079,7 +1119,7 @@
       if (dim.textContent !== t) dim.textContent = t;
       $('sel').classList.toggle('comp', !!(useOf(S.sel.el) && /^[A-Z]/.test(S.sel.el.getAttribute('data-kerf-n') || '')));
     }
-    const sib = edit && S.sel && S.sel.repeat > 1 ? [...sameLoc(S.sel.el)].filter((x) => x !== S.sel.el).slice(0, 60) : [];
+    const sib = edit && S.sel ? [...(S.sel.repeat > 1 ? [...sameLoc(S.sel.el)].filter((x) => x !== S.sel.el) : []), ...(S.simScope === 'all' && picking() ? (S.sel.similar || []) : [])].slice(0, 60) : [];
     pool($('sibs'), sib.length, 'sib').forEach((b, i) => place(b, sib[i] || null, null));
     const aEls = D ? (S.amber || []).flatMap((loc) => [...D.querySelectorAll(q(loc))]).slice(0, 60) : [];
     pool($('amb'), aEls.length, 'amber').forEach((b, i) => place(b, aEls[i] || null, null));
@@ -1265,6 +1305,7 @@
     switch (act) {
       case 'mode': setMode(v); break;
       case 'present': setMode('preview'); break;
+      case 'simScope': S.simScope = v; renderPanel(); break;
       case 'keys': shortcuts(); break;
       case 'undo': undo(); break;
       case 'changes': S.changesOpen = !S.changesOpen; renderChanges(); break;

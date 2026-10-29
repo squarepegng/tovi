@@ -163,7 +163,7 @@ export async function createKerf(webRoot) {
                 if (r.shift) shifts.push(r.shift);
                 return { loc: e.loc, ok: true, ...r };
               }
-              return { loc: e.loc, ok: true, ...editor.edit(e.loc, { ops: e.ops, text: e.text || undefined, props: e.props, bp: e.bp, dom: e.dom, target: e.target, source: 'ai', name: e.name }) };
+              return { loc: e.loc, ok: true, ...editor.edit(e.loc, { ops: e.ops, text: e.text || undefined, props: e.props, bp: e.bp, dom: e.dom, target: e.target, source: body.batch ? 'hand' : 'ai', name: e.name, ...(body.batch ? { batch: String(body.batch) } : {}) }) };
             } catch (err) {
               return { loc: e.loc, ok: false, error: err.message };
             }

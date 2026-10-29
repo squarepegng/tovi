@@ -515,15 +515,26 @@ export function createEditor(webRoot, getTheme, library) {
       const rel = path.relative(webRoot, file).split(path.sep).join('/');
       return record(file, rel, before, after, `code:${rel}`, { ...change, code: { file: rel } }, { added: [], removed: [], changes: [], offScale: [], text: null, props: [], action: change.label || `Code change in ${rel}` });
     },
+    // Undo the last edit. Edits made together (one change to several look-alike elements) undo together.
     undo() {
-      const h = history.pop();
-      if (!h) return { undone: false };
-      for (const f of [h, ...(h.more || [])]) {
-        if (fs.readFileSync(f.file, 'utf8') !== f.after) { history.push(h); throw new KerfError(`${path.relative(webRoot, f.file)} changed outside Tovi since this edit, so Tovi won’t overwrite it.`); }
-      }
-      fs.writeFileSync(h.file, h.before);
-      for (const m of h.more || []) fs.writeFileSync(m.file, m.before);
-      return { undone: true, file: h.rel, n: history.length, label: [h.change?.name, ...(h.summary?.labels || [])].filter(Boolean).join(' · ') };
+      const top = history[history.length - 1];
+      if (!top) return { undone: false };
+      const batch = top.change?.batch;
+      let count = 0;
+      do {
+        const h = history.pop();
+        const stale = [h, ...(h.more || [])].find((f) => fs.readFileSync(f.file, 'utf8') !== f.after);
+        if (stale) {
+          history.push(h);
+          if (count) break;
+          throw new KerfError(`${path.relative(webRoot, stale.file)} changed outside Tovi since this edit, so Tovi won’t overwrite it.`);
+        }
+        fs.writeFileSync(h.file, h.before);
+        for (const m of h.more || []) fs.writeFileSync(m.file, m.before);
+        count++;
+      } while (batch && history.length && history[history.length - 1].change?.batch === batch);
+      const label = [top.change?.name, ...(top.summary?.labels || [])].filter(Boolean).join(' · ');
+      return { undone: true, file: top.rel, n: history.length, count, label: count > 1 ? `${label} (${count} elements)` : label };
     },
   };
 }
