@@ -96,7 +96,7 @@ Either way, the app's repo and config are not modified.
 
 ## Design panel
 
-The panel appears when something is selected (and hides while you interact with the app). It shows only what fits the selection:
+With nothing selected, the panel says how to start and shows the page: its screen size, unsaved changes, the design-system colours and handy shortcuts. It hides while you interact with the app. With a selection, it shows only what fits:
 - Text gets typography; icons get an icon color.
 - Frames get auto layout.
 - Padding and margin appear when used; otherwise there's a **+** to add them.

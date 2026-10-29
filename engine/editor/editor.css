@@ -825,8 +825,18 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .kcTop{display:flex;min-width:0;margin:-2px 0 2px}
 .kcTop .kcCtx{max-width:100%;border:1px solid rgba(43,102,217,.6);background:rgba(43,102,217,.12);color:#C9D8F7;border-radius:6px}
 .kcTop .kcCtx svg{color:#9DBBF5}
-/* the Design panel only shows for a selection; its space stays so the app doesn't jump */
-#panel.idle{visibility:hidden}
 .devLabel{pointer-events:auto;cursor:default;border-radius:4px;padding:2px 4px;margin:-2px -4px}
 .devLabel:hover b{color:var(--ink)}
 .devLabel.on b,.devLabel.on span{color:#9DBBF5}
+
+/* Design panel with nothing selected: how to start, then the page */
+.selHint{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;margin:12px;padding:20px 16px;border:1px dashed rgba(255,255,255,.12);border-radius:12px;color:var(--ink3);line-height:18px}
+.selHint b{color:var(--ink);font-weight:600;font-size:13px}
+.shIc{display:grid;place-items:center;width:36px;height:36px;margin-bottom:4px;border-radius:10px;background:rgba(43,102,217,.14);color:#9DBBF5}
+.pgRow{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:26px;color:var(--ink3)}
+.pgRow span:last-child{color:var(--ink2)}
+.pgRow .linkBtn{align-self:auto}
+.keyList{display:flex;flex-direction:column;gap:2px}
+.keyList div{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:24px;color:var(--ink2)}
+.keyList .kbd{flex:0 0 auto}
+.secH .nm{display:inline-flex;align-items:center;gap:6px}

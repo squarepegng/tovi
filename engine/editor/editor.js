@@ -855,16 +855,21 @@
     const was = p.hidden;
     p.hidden = !(S.mode === 'edit' || S.side === 'history') || (S.tool === 'interact' && S.side !== 'history');
     if (p.hidden !== was) setTimeout(applyDevice, 0);
-    // Otherwise Design shows only for something selected (an element, or the page via its frame name);
-    // its space stays, so the app doesn't jump as you select and deselect.
-    const idle = S.side !== 'history' && !S.sel && !S.pageSel;
-    p.classList.toggle('idle', idle);
     $('devLabel')?.classList.toggle('on', !!S.pageSel && !S.sel);
-    if (p.hidden || idle) { if (idle) p.innerHTML = ''; return; }
+    if (p.hidden) return;
     if (S.side === 'history') { p.innerHTML = historyHTML(); return; }
     const s = S.sel;
     if (!s) {
-      p.innerHTML = tabsHTML() + `<div class="scroll"><div class="sec head"><div class="secH"><span class="nm">${ico('desktop')}Page “${esc(pageName(S.path))}”</span></div><span class="note">The whole screen. Its colours come from your design system.</span></div>${paletteHTML()}</div>`;
+      // Nothing selected: say how to start, then what applies to the whole page (like Figma's page panel).
+      const keys = [['Select the parent', '⇧ ↵'], ['Select several', '⇧ Click'], ['Click through to the app', '⌘ Click'], ['Measure spacing', 'Hold ⌥'], ['Add an element', 'I'], ['Mark something for Tovi', 'A'], ['Ask Tovi', '⌘K']];
+      p.innerHTML = tabsHTML() + `<div class="scroll">
+        ${S.pageSel ? '' : `<div class="selHint"><span class="shIc">${ico('cursor', 16)}</span><b>Select something to edit it</b><span>Click any element in your app, or pick it in Layers. Double-click text to retype it.</span></div>`}
+        <div class="sec"><div class="secH"><span class="nm">${ico('desktop')}Page</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
+          <div class="pgRow"><span>Screen</span><span>${DEV_LABEL[S.device]} · ${Math.round(frame.clientWidth || 0)} px</span></div>
+          <div class="pgRow"><span>Changes</span>${S.versions.draft.length ? `<button class="linkBtn" data-act="history">${S.versions.draft.length} not saved yet</button>` : '<span>All saved</span>'}</div></div>
+        ${paletteHTML()}
+        <div class="sec"><div class="secH"><span>Shortcuts</span><button class="linkBtn" data-act="keys">All</button></div><div class="keyList">${keys.map(([a, k]) => `<div><span>${a}</span><span class="kbd">${k}</span></div>`).join('')}</div></div>
+      </div>`;
       return;
     }
     const el = s.el, inf = info();
@@ -1222,6 +1227,7 @@
     switch (act) {
       case 'mode': setMode(v); break;
       case 'present': setMode('preview'); break;
+      case 'keys': shortcuts(); break;
       case 'undo': undo(); break;
       case 'changes': S.changesOpen = !S.changesOpen; renderChanges(); break;
       case 'toastClose': $('toast').hidden = true; break;
