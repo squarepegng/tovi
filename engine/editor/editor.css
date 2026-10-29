@@ -63,7 +63,7 @@ aside[hidden]{display:none!important}
 .tb{display:grid;place-items:center;width:36px;height:36px;background:transparent;border:0;border-radius:8px;color:var(--ink2);position:relative}
 .tb:hover{background:var(--line);color:var(--ink)}
 .tb.on{background:var(--select);color:#fff}
-.modes .tb.on{background:var(--line);color:var(--ink)}
+.modes .tb.on{background:var(--select);color:#fff}
 .tb[disabled]{opacity:.35;cursor:default}
 .tb.sm{width:30px;height:32px}
 .tip{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:var(--ink);color:var(--canvas);font:500 12px/16px Geist,system-ui,sans-serif;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s}
