@@ -82,7 +82,7 @@ Either way, the app's repo and config are not modified.
   at the source. The panel says where ("Styles come from CONFIDENCE_STYLES
   “verified” in lib/format.ts") and lets you pick the reach: *Only this one*,
   *All “verified”* or *All 4*. One undo covers every file a change touches.
-- **Edits the design system.** With nothing selected, the panel shows the app's
+- **Edits the design system.** Click the frame name (“Desktop”) to select the page; the panel shows the app's
   colour tokens with their light and dark values. Change one and every screen
   follows. Tovi edits the CSS variable (or the Tailwind config) in the format it
   was written in.
@@ -96,7 +96,7 @@ Either way, the app's repo and config are not modified.
 
 ## Design panel
 
-The panel shows only what fits the selected element:
+The panel appears when something is selected (and hides while you interact with the app). It shows only what fits the selection:
 - Text gets typography; icons get an icon color.
 - Frames get auto layout.
 - Padding and margin appear when used; otherwise there's a **+** to add them.

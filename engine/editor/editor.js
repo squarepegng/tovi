@@ -162,6 +162,7 @@
     S.iconQ = null;
     closeIconPop?.();
     if (!el) { S.multi = []; S.sel = null; S.cpick = null; renderPanel(); renderLayers(); chatCtx(); return; }
+    S.pageSel = false;
     const list = [...sameLoc(el)];
     S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null };
     if (!S.sel.def) S.scope = 'here';
@@ -851,11 +852,16 @@
   function renderPanel(focusChat) {
     const p = $('panel');
     p.hidden = !(S.mode === 'edit' || S.side === 'history');
-    if (p.hidden) return;
+    // Design shows only for something selected (an element, or the page via its frame name), and not while
+    // interacting. The space stays, so the app never jumps when the panel comes and goes.
+    const idle = S.side !== 'history' && (S.tool === 'interact' || (!S.sel && !S.pageSel));
+    p.classList.toggle('idle', idle);
+    $('devLabel')?.classList.toggle('on', !!S.pageSel && !S.sel);
+    if (p.hidden || idle) { if (idle) p.innerHTML = ''; return; }
     if (S.side === 'history') { p.innerHTML = historyHTML(); return; }
     const s = S.sel;
     if (!s) {
-      p.innerHTML = tabsHTML() + `<div class="scroll"><div class="empty"><b>Nothing selected</b><span>Click anything in your app, or pick it in Layers on the left. Double-click text to retype it. Every change here is written to your code.</span></div>${paletteHTML()}</div>`;
+      p.innerHTML = tabsHTML() + `<div class="scroll"><div class="sec head"><div class="secH"><span class="nm">${ico('desktop')}Page “${esc(pageName(S.path))}”</span></div><span class="note">The whole screen. Its colours come from your design system.</span></div>${paletteHTML()}</div>`;
       return;
     }
     const el = s.el, inf = info();
@@ -1120,6 +1126,7 @@
     renderAll();
   }
   frame.addEventListener('load', bindApp);
+  $('devLabel').addEventListener('click', () => { if (S.mode !== 'edit') return; if (S.tool !== 'select') setTool('select'); S.multi = []; select(null); S.pageSel = true; renderPanel(); });
   addEventListener('resize', () => { if (innerWidth < 900 && S.layersOpen) { S.layersOpen = false; renderLeft(); renderTop(); } });
 
   // Clicking outside a floating card closes it.
@@ -1160,6 +1167,7 @@
       else if (S.side === 'history') { S.side = 'design'; renderAll(); }
       else if (S.mode === 'edit' && S.multi.length) { S.multi = []; renderPanel(); }
       else if (S.mode === 'edit' && S.sel) select(null);
+      else if (S.pageSel) { S.pageSel = false; renderPanel(); }
       else if (S.mode === 'preview') setMode('edit');
       else if (S.tool !== 'select') setTool('select');
       return;
@@ -1988,11 +1996,12 @@
     S.noteDraft = null;
     S.hintSeen = true;
     if (t !== 'select') { S.hover = null; S.pendingInsert = false; }
+    if (t === 'interact') S.pageSel = false;
     // Interacting or moving around isn't editing: let go of the selection so the outline and handles go away.
     if (t === 'interact' && (S.sel || S.multi.length)) { S.multi = []; select(null); }
     if (t === 'annotate') S.askOpen = false;
     syncTool();
-    renderBar(); renderMarks(); renderAsk();
+    renderBar(); renderMarks(); renderAsk(); renderPanel();
   }
   // AI buttons use data-act2 so they never collide with the editor's own actions.
   document.addEventListener('click', (e) => {
