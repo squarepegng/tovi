@@ -1773,7 +1773,7 @@
     const mk = (cls, html = '') => { const d = document.createElement('div'); d.className = cls; d.style.setProperty('--ac', a.color); d.innerHTML = html; $('ov').appendChild(d); return d; };
     const box = mk('agBox', `<span class="agBoxTag">${a.name}</span>`);
     const chip = mk('agChip');
-    const cur = mk('agent', `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.5 2.5l12.5 5.2-5.4 1.7-1.8 5.3z" fill="var(--ac)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="agLbl">${avatar(a)}<span class="agTag">${a.name}</span></span><span class="agSay" hidden></span>`);
+    const cur = mk('agent', `<svg width="26" height="26" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.5 2.5l12.5 5.2-5.4 1.7-1.8 5.3z" fill="var(--ac)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="agLbl">${avatar(a)}<span class="agTag">${a.name}</span></span><span class="agSay" hidden></span>`);
     g = { a, cur, box, chip, x: null, y: null, el: null, mode: null, sayT: null, hideT: null, run: 0 };
     crew.set(a.name, g);
     return g;
