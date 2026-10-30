@@ -183,6 +183,10 @@ test('insert next to a page’s outer box goes inside it instead', () => {
   assert.match(summary.action, /went inside/);
 });
 
+test('gradient stops can carry positions, written only when not the usual 0 / 50 / 100', () => {
+  assert.equal(ops('bg-surface p-4', [{ prop: 'gradient', value: 'r #FCBDDD@10 primary@37 #967184' }]), 'p-4 bg-gradient-to-r from-[#FCBDDD] from-10% via-primary via-[37%] to-[#967184]');
+  assert.equal(ops('bg-gradient-to-r from-primary from-10% to-surface p-4', [{ prop: 'gradient', value: 'r primary@0 surface@100' }]), 'bg-gradient-to-r from-primary to-surface p-4');
+});
 test('gradients replace solid fills, gradient text replaces the text color', () => {
   assert.equal(ops('bg-surface p-4', [{ prop: 'gradient', value: 'r primary surface-2' }]), 'p-4 bg-gradient-to-r from-primary to-surface-2');
   assert.equal(ops('bg-gradient-to-r from-primary to-surface p-4', [{ prop: 'bg', value: 'surface' }]), 'p-4 bg-surface');

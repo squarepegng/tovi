@@ -179,11 +179,17 @@ export function classFor(prop, v, th) {
     case 'shadow': return v === 'none' ? 'shadow-none' : v === 'DEFAULT' ? 'shadow' : `shadow-${v}`;
     case 'gradient': {
       // "r primary positive" or "br primary via-color positive": direction, then from (via) to.
-      const [dir, ...stops] = String(v).trim().split(/\s+/);
+      // A stop can carry a position, "primary@20": written as from-20% (or from-[23%] off the 5% steps).
+      // Positions at the usual places (0, 50, 100) are left out, like a developer would.
+      const [dir, ...raw] = String(v).trim().split(/\s+/);
+      const stops = raw.map((x) => { const [col, pos] = x.split('@'); return { col, pos: pos === undefined || pos === '' ? null : Math.max(0, Math.min(100, Math.round(Number(pos)))) }; });
       const c = (x) => (x.startsWith('#') ? `[${x}]` : x);
-      const out = [`${th.gradientPrefix || 'bg-gradient-to-'}${dir}`, `from-${c(stops[0])}`];
-      if (stops.length > 2) out.push(`via-${c(stops[1])}`);
-      out.push(`to-${c(stops[stops.length - 1])}`);
+      const at = (n) => (n % 5 === 0 ? `${n}%` : `[${n}%]`);
+      const put = (key, st, def) => { out.push(`${key}-${c(st.col)}`); if (st.pos != null && !isNaN(st.pos) && st.pos !== def) out.push(`${key}-${at(st.pos)}`); };
+      const out = [`${th.gradientPrefix || 'bg-gradient-to-'}${dir}`];
+      put('from', stops[0], 0);
+      if (stops.length > 2) put('via', stops[1], 50);
+      put('to', stops[stops.length - 1], 100);
       return out.join(' ');
     }
     case 'clipText': return 'bg-clip-text text-transparent';

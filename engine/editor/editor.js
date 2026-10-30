@@ -161,7 +161,7 @@
   const shadowValue = (o) => `[${o.inset ? 'inset_' : ''}${px(o.x)}_${px(o.y)}_${px(o.blur)}_${px(o.spread)}_#${o.hex}${o.a >= 100 ? '' : ('0' + Math.round(o.a * 2.55).toString(16)).slice(-2).toUpperCase()}]`;
   function shadowBody() {
     const o = shadowNow();
-    return `<div class="cr shRow"><button class="ib shIco${S.cpick === 'shadow' ? ' on' : ''}" data-act="cpick" data-v="shadow" title="Edit shadow" aria-label="Edit shadow"><i></i></button><label class="inp"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label><button class="ib" data-act="rmShadow" title="Remove shadow" aria-label="Remove shadow">${ico('minus')}</button></div>`;
+    return `<div class="cr shRow"><button class="ib shIco${S.cpick === 'shadow' ? ' on' : ''}" data-act="cpick" data-v="shadow" title="Edit shadow" aria-label="Edit shadow"><i></i></button><label class="inp"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label></div>`;
   }
   function shadowFields(sh) {
     const o = shadowNow(), keys = (S.theme?.shadow || []).filter((k) => k !== 'none' && k !== 'inner'), custom = !keys.includes(sh);
@@ -193,14 +193,28 @@
     else n = colorNow(S.cpick);
     S.cp = { p: S.cpick, stop: S.gstop, ...hexToHsv(n.hex), a: n.a };
   }
+  const tabsHTML2 = () => { const tab = S.cpTab || 'custom'; return `<div class="cpTabs fpTabs"><button data-act="cpTab" data-v="custom" class="${tab === 'custom' ? 'on' : ''}">Custom</button><button data-act="cpTab" data-v="vars" class="${tab === 'vars' ? 'on' : ''}">Variables</button></div>`; };
   function pickerHTML(p, tok) {
-    const c = S.cp, hx = hsvToHex(c.h, c.s, c.v), tab = S.cpTab || 'custom';
-    return `<div class="cpTabs"><button data-act="cpTab" data-v="custom" class="${tab === 'custom' ? 'on' : ''}">Custom</button><button data-act="cpTab" data-v="vars" class="${tab === 'vars' ? 'on' : ''}">Variables</button></div>
-      ${tab === 'custom' ? `<div class="cpSV" data-cpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
+    const c = S.cp, hx = hsvToHex(c.h, c.s, c.v);
+    if ((S.cpTab || 'custom') === 'vars') return `<div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('') || '<span class="note">This project has no colour variables yet.</span>'}</div>`;
+    return `<div class="cpSV" data-cpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
       <div class="cpBar cpHue" data-cpdrag="hue"><i class="cpK" style="left:${c.h / 3.6}%;background:hsl(${c.h} 100% 50%)"></i></div>
       <div class="cpBar cpAlpha" data-cpdrag="alpha" style="--c:#${hx}"><i class="cpK" style="left:${c.a}%"></i></div>
-      <div class="cpRow"><span class="cpMode">Hex</span><label class="cpVal"><input data-cphex="${p}" value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"><input data-cpa="${p}" value="${c.a}" inputmode="numeric" aria-label="Opacity"><span>%</span></label></div>`
-      : `<div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('') || '<span class="note">This project has no colour variables yet.</span>'}</div>`}`;
+      <div class="cpRow"><span class="cpMode">Hex</span><label class="cpVal"><input data-cphex="${p}" value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"><input data-cpa="${p}" value="${c.a}" inputmode="numeric" aria-label="Opacity"><span>%</span></label></div>`;
+  }
+  const ROT = ['t', 'tr', 'r', 'br', 'b', 'bl', 'l', 'tl'];
+  // Like Figma: a tall bar with a pin for each stop, then the stops as rows (position, colour, opacity).
+  function gradHTML(g) {
+    const stops = stopsOf(g), dirName = (DIRS.find(([v]) => v === g.dir) || [, '→ Right'])[1];
+    const pin = (st) => `<button class="gPin${S.gstop === st.k ? ' on' : ''}" data-act="gStop" data-v="${st.k}" data-gpin="${st.k}" style="left:${st.pos}%;--p:${st.pos};--c:${esc(tokenSwatch(st.col))}" aria-label="Stop at ${st.pos}%"><i></i></button>`;
+    const row = (st) => { const n = toHexA(tokenSwatch(st.col)); return `<div class="gRow2${S.gstop === st.k ? ' on' : ''}" data-act="gStop" data-v="${st.k}">
+        <label class="inp gPos"><input data-gpos="${st.k}" value="${st.pos}" inputmode="numeric" aria-label="Position"><span class="u">%</span></label>
+        <label class="inp gCol"><i class="sw1" style="background:${esc(tokenSwatch(st.col))}"></i><input data-ghex="${st.k}" value="${n.hex}" maxlength="7" spellcheck="false" aria-label="Stop colour"><input data-galpha="${st.k}" value="${n.a}" inputmode="numeric" aria-label="Stop opacity"><span class="u">%</span></label>
+        <button class="ib" data-act="gDel" data-v="${st.k}" title="Remove stop" aria-label="Remove stop"${stops.length < 3 ? ' disabled' : ''}>${ico('minus')}</button></div>`; };
+    return `<div class="gHead"><span class="gType">Linear</span><span class="gDir">${esc(dirName)}</span><button class="ib" data-act="gFlip" title="Flip the gradient" aria-label="Flip the gradient">${ico('swap')}</button><button class="ib" data-act="gRot" title="Rotate 45°" aria-label="Rotate 45 degrees">${ico('rotate')}</button></div>
+      <div class="gTrack"><div class="gPins" data-gbar>${stops.map(pin).join('')}</div><div class="gBar2" style="background:${esc(gradCss({ ...g, dir: 'r' }))}"></div></div>
+      <div class="gStopsH"><span>Stops</span><button class="ib" data-act="gAdd" title="${stops.length > 2 ? 'Tailwind gradients have up to three stops' : 'Add a stop'}" aria-label="Add a stop"${stops.length > 2 ? ' disabled' : ''}>${ico('plus')}</button></div>
+      ${stops.map(row).join('')}`;
   }
   function renderFpop() {
     let f = $('fpop');
@@ -215,15 +229,11 @@
       body = shadowFields(shadowOf());
     } else {
       cpInit();
-      const fillType = k === 'bg' || k === 'grad';
-      head = fillType ? `<label class="inp fpSel"><select data-fptype aria-label="Fill type"><option value="solid"${k === 'bg' ? ' selected' : ''}>Solid</option><option value="gradient"${k === 'grad' ? ' selected' : ''}>Linear gradient</option></select>${ico('chev', 12)}</label>` : `<span class="fpT">${NAMES[k]}</span>`;
-      if (k === 'grad') {
-        const g = gradOf() || { dir: 'r' }, stops = ['from', g.via ? 'via' : null, 'to'].filter(Boolean), at = { from: 0, via: 50, to: 100 };
-        body = `<div class="gRow"><label class="inp"><select data-gstop="dir" aria-label="Direction">${DIRS.map(([v, n]) => `<option value="${v}"${v === g.dir ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label>
-            <button class="outline sm" data-act="gVia">${g.via ? 'Remove middle' : 'Add middle'}</button></div>
-          <div class="gBar" style="background:${esc(gradCss({ ...g, dir: 'r' }))}">${stops.map((st) => `<button class="gStop${S.gstop === st ? ' on' : ''}" data-act="gStop" data-v="${st}" style="left:${at[st]}%;--c:${esc(tokenSwatch(g[st]))}" aria-label="${st === 'from' ? 'Start' : st === 'via' ? 'Middle' : 'End'} colour"></button>`).join('')}</div>
-          ${pickerHTML('grad', g[S.gstop])}`;
-      } else body = pickerHTML(k, tokenOf(k));
+      head = tabsHTML2();
+      const fill = k === 'bg' || k === 'grad';
+      const types = fill ? `<div class="fpTypes"><button class="fpType${k === 'bg' ? ' on' : ''}" data-act="fpType" data-v="solid" title="Solid" aria-label="Solid"><i class="tSolid"></i></button><button class="fpType${k === 'grad' ? ' on' : ''}" data-act="fpType" data-v="gradient" title="Linear gradient" aria-label="Linear gradient"><i class="tGrad"></i></button></div>` : `<div class="fpName">${NAMES[k]}</div>`;
+      if (k === 'grad') { const g = gradOf() || { dir: 'r' }; body = types + gradHTML(g) + `<div class="gPick">${pickerHTML('grad', g[S.gstop])}</div>`; }
+      else body = types + pickerHTML(k, tokenOf(k));
     }
     f.innerHTML = `<div class="fpH">${head}${close}</div><div class="cpop" data-cpop="${k}">${body}</div>`;
     f.hidden = false;
@@ -244,13 +254,40 @@
     if (c.p !== 'grad') return preview(S.sel.el, c.p, cpOut(c));
     const g = { ...(gradOf() || { dir: 'r' }) };
     g[c.stop || 'from'] = cpOut(c);
+    previewGrad(g);
+    previewed = { el: S.sel.el, keys: ['background-image'] };
+    const pin = document.querySelector(`.gPin[data-v="${c.stop}"]`);
+    if (pin) pin.style.setProperty('--c', cpOut(c));
+  }
+  function previewGrad(g) {
     S.sel.el.style.setProperty('background-image', gradCss(g), 'important');
     previewed = { el: S.sel.el, keys: ['background-image'] };
-    const st = document.querySelector(`.gStop[data-v="${c.stop}"]`);
-    if (st) st.style.setProperty('--c', cpOut(c));
-    const bar = document.querySelector('.gBar');
+    const bar = document.querySelector('.gBar2');
     if (bar) bar.style.background = gradCss({ ...g, dir: 'r' });
   }
+  const commitGrad = (g) => commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] });
+  // Drag a stop's pin along the bar to move it (kept between its neighbours); saved on release.
+  document.addEventListener('pointerdown', (e) => {
+    const pin = e.target.closest?.('[data-gpin]');
+    if (!pin || !S.sel) return;
+    const k = pin.dataset.gpin, bar = pin.closest('[data-gbar]'), g = gradOf();
+    if (!g) return;
+    e.preventDefault();
+    if (S.gstop !== k) { S.gstop = k; S.cp = null; }
+    const stops = stopsOf(g), i = stops.findIndex((st) => st.k === k);
+    const lo = i > 0 ? stops[i - 1].pos : 0, hi = i < stops.length - 1 ? stops[i + 1].pos : 100;
+    let moved = false;
+    const at = (ev) => {
+      const r = bar.getBoundingClientRect(), n = Math.round(Math.max(lo, Math.min(hi, ((ev.clientX - r.left) / r.width) * 100)));
+      if (n === posOf(g, k) && !moved) return;
+      moved = true; g[k + 'Pos'] = n; pin.style.left = n + '%'; pin.style.setProperty('--p', n);
+      const inp = document.querySelector(`[data-gpos="${k}"]`); if (inp) inp.value = n;
+      previewGrad(g);
+    };
+    pin.setPointerCapture(e.pointerId);
+    const up = () => { pin.removeEventListener('pointermove', at); pin.removeEventListener('pointerup', up); pin.removeEventListener('pointercancel', up); if (moved) commitGrad(g); else renderFpop(); };
+    pin.addEventListener('pointermove', at); pin.addEventListener('pointerup', up); pin.addEventListener('pointercancel', up);
+  }, true);
   function shadowOf() {
     const c = (info()?.classes || []).find((x) => !x.includes(':') && (x === 'shadow' || x.startsWith('shadow-')));
     if (!c) return 'none';
@@ -578,6 +615,7 @@
     sidebar: '<rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M6 3v10" stroke="currentColor" stroke-width="1.25"/>',
     trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
     dup: '<rect x="5" y="5" width="8.5" height="8.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M3 10.5V3.8c0-.4.4-.8.8-.8h6.7" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>',
+    rotate: '<path d="M12.5 8a4.5 4.5 0 1 1-1.3-3.2M11.5 2.3v2.8H8.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
     swap: '<path d="M3 5.5h9l-2.5-2.5M13 10.5H4l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
     image: '<rect x="2.5" y="3" width="11" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="6" cy="6.5" r="1.2" fill="currentColor"/><path d="M3 12l3.5-3.5 2.5 2.5 2-2 2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
     code: '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -993,7 +1031,7 @@
   const sec = (title, body, act = '') => `<div class="sec"><div class="secH"><span>${title}</span>${act}</div>${body}</div>`;
   function colorRow(p, title, removeAct) {
     const hex = val(p), tok = tokenOf(p), none = hex === 'transparent';
-    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label>${removeAct ? `<button class="ib" data-act="${removeAct}" title="Remove">${ico('minus')}</button>` : ''}</div>`;
+    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label></div>`;
     return h;
   }
   const isText = (el) => el && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
@@ -1001,20 +1039,26 @@
   /* fill: solid or gradient */
   const DIRS = [['r', '→ Right'], ['l', '← Left'], ['b', '↓ Down'], ['t', '↑ Up'], ['br', '↘ Down right'], ['bl', '↙ Down left'], ['tr', '↗ Up right'], ['tl', '↖ Up left']];
   const CSSDIR = { r: 'to right', l: 'to left', b: 'to bottom', t: 'to top', br: 'to bottom right', bl: 'to bottom left', tr: 'to top right', tl: 'to top left' };
+  // The gradient on the element: direction, up to three stops (from, via, to), each with a position.
+  const POS_RE = /^(from|via|to)-(?:(\d+(?:\.\d+)?)%|\[(\d+(?:\.\d+)?)%\])$/;
   function gradOf() {
     const cls = (info()?.classes || []).filter((c) => !c.includes(':'));
     const dir = cls.map((c) => c.match(/^bg-(?:gradient|linear)-to-(\w+)$/)).find(Boolean);
     if (!dir) return null;
-    const stop = (p) => (cls.find((c) => c.startsWith(p + '-')) || '').slice(p.length + 1).replace(/^\[|\]$/g, '') || null;
-    return { dir: dir[1], from: stop('from'), via: stop('via'), to: stop('to'), clip: cls.includes('bg-clip-text') };
+    const stop = (p) => (cls.find((c) => c.startsWith(p + '-') && !POS_RE.test(c)) || '').slice(p.length + 1).replace(/^\[|\]$/g, '') || null;
+    const pos = (p) => { const m = cls.map((c) => c.match(POS_RE)).find((x) => x && x[1] === p); return m ? Math.round(Number(m[2] ?? m[3])) : null; };
+    return { dir: dir[1], from: stop('from'), via: stop('via'), to: stop('to'), fromPos: pos('from'), viaPos: pos('via'), toPos: pos('to'), clip: cls.includes('bg-clip-text') };
   }
-  const gradValue = (g) => [g.dir, g.from, g.via, g.to].filter(Boolean).join(' ');
+  const STOP_DEF = { from: 0, via: 50, to: 100 };
+  const posOf = (g, k) => g[k + 'Pos'] ?? STOP_DEF[k];
+  const stopsOf = (g) => ['from', g.via ? 'via' : null, 'to'].filter(Boolean).map((k) => ({ k, col: g[k], pos: posOf(g, k) }));
+  const gradValue = (g) => [g.dir, ...stopsOf(g).map((st) => st.pos === STOP_DEF[st.k] ? st.col : `${st.col}@${st.pos}`)].filter(Boolean).join(' ');
   const tokenSwatch = (n) => { const t = tokens().find(([k]) => k === n); return t ? swatch(t[1]) : n?.startsWith('#') ? n : 'transparent'; };
   const stopSel = (key, cur, allowNone) => `<label class="inp"><i class="sw1" style="background:${esc(tokenSwatch(cur))}"></i><select data-gstop="${key}" aria-label="Gradient ${key}">${allowNone ? `<option value=""${cur ? '' : ' selected'}>No middle color</option>` : ''}${tokens().filter(([n]) => n !== 'transparent').map(([n]) => `<option${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
-  const gradCss = (g) => `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${[g.from, g.via, g.to].filter(Boolean).map(tokenSwatch).join(', ')})`;
+  const gradCss = (g) => `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${stopsOf(g).filter((st) => st.col).map((st) => `${tokenSwatch(st.col)} ${st.pos}%`).join(', ')})`;
   function fillBody(g, el) {
     if (!g) return colorRow('bg', 'Fill', 'rmFill');
-    return `<div class="cr"><label class="inp" title="Fill"><button class="cchip" data-act="cpick" data-v="grad" style="background:${esc(gradCss(g))}" aria-label="Edit gradient"></button><span class="gName">Linear gradient</span></label><button class="ib" data-act="rmFill" title="Remove fill" aria-label="Remove fill">${ico('minus')}</button></div>
+    return `<div class="cr"><label class="inp" title="Fill"><button class="cchip" data-act="cpick" data-v="grad" style="background:${esc(gradCss(g))}" aria-label="Edit gradient"></button><span class="gName">Linear gradient</span></label></div>
       ${isText(el) ? `<div class="kv"><span>On text</span><div class="seg"><button data-act="clipText" data-v="off" class="${g.clip ? '' : 'on'}">Off</button><button data-act="clipText" data-v="on" class="${g.clip ? 'on' : ''}">On</button></div></div>` : ''}`;
   }
   document.addEventListener('change', (e) => {
@@ -1214,11 +1258,11 @@
         ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}`);
       const g = gradOf();
       const hasFill = g || (val('bg') && val('bg') !== 'transparent');
-      h += sec('Fill', hasFill ? fillBody(g, el) : '', hasFill ? '' : hb('addFill', 'plus', 'Add fill'));
+      h += sec('Fill', hasFill ? fillBody(g, el) : '', hasFill ? hb('rmFill', 'minus', 'Remove fill') : hb('addFill', 'plus', 'Add fill'));
       const hasStroke = val('borderW') > 0;
-      h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${nf('borderW', 'sw', 'Stroke width')}<span></span></div>` : '', hasStroke ? '' : hb('addStroke', 'plus', 'Add stroke'));
+      h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${nf('borderW', 'sw', 'Stroke width')}<span></span></div>` : '', hasStroke ? hb('rmStroke', 'minus', 'Remove stroke') : hb('addStroke', 'plus', 'Add stroke'));
       const sh = shadowOf();
-      h += sec('Effects', sh !== 'none' ? shadowBody() : '', sh !== 'none' ? '' : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
+      h += sec('Effects', sh !== 'none' ? shadowBody() : '', sh !== 'none' ? hb('rmShadow', 'minus', 'Remove shadow') : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
     }
     const st = p.querySelector('.scroll')?.scrollTop || 0;
     p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
@@ -1616,8 +1660,12 @@
       case 'corners': S.corners = !S.corners; renderPanel(); break;
       case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; S.fpY = a.getBoundingClientRect().top; if (v === 'grad') S.gstop = 'from'; renderPanel(); break;
       case 'fpClose': closeFpop(); break;
-      case 'gStop': S.gstop = v; S.cp = null; renderFpop(); break;
-      case 'gVia': { const g = gradOf(); if (!g) break; if (g.via) { g.via = null; if (S.gstop === 'via') S.gstop = 'from'; } else { g.via = g.from; S.gstop = 'via'; } S.cp = null; commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] }); break; }
+      case 'gStop': if (e.target.closest('input')) { if (S.gstop !== v) { S.gstop = v; S.cp = null; } break; } S.gstop = v; S.cp = null; renderFpop(); break;
+      case 'fpType': { const want = v === 'gradient' ? 'grad' : 'bg'; if (S.cpick !== want) { S.cpick = want; S.cp = null; S.gstop = 'from'; setFillType(v); } break; }
+      case 'gFlip': { const g = gradOf(); if (!g) break; const st = stopsOf(g); const r = st.map((x) => ({ col: x.col, pos: 100 - x.pos })).reverse(); ['from', g.via ? 'via' : null, 'to'].filter(Boolean).forEach((kk, n) => { g[kk] = r[n].col; g[kk + 'Pos'] = r[n].pos; }); S.cp = null; commitGrad(g); break; }
+      case 'gRot': { const g = gradOf(); if (!g) break; g.dir = ROT[(ROT.indexOf(g.dir) + 1) % ROT.length]; commitGrad(g); break; }
+      case 'gAdd': { const g = gradOf(); if (!g || g.via) break; g.via = g.from; g.viaPos = Math.round((posOf(g, 'from') + posOf(g, 'to')) / 2); S.gstop = 'via'; S.cp = null; commitGrad(g); break; }
+      case 'gDel': { const g = gradOf(); if (!g || !g.via) break; if (v === 'from') { g.from = g.via; g.fromPos = g.viaPos; } else if (v === 'to') { g.to = g.via; g.toPos = g.viaPos; } g.via = null; g.viaPos = null; S.gstop = 'from'; S.cp = null; commitGrad(g); break; }
       case 'cpTab': S.cpTab = v; renderFpop(); break;
       case 'token': case 'set': if (a.dataset.p === 'grad') { const g = gradOf() || { dir: 'r' }; g[S.gstop || 'from'] = v; S.cp = null; commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] }); } else { if (a.dataset.act === 'token') S.cp = null; commit({ ops: [{ prop: a.dataset.p, value: v }] }); } break;
       case 'addFill': commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }); break;
@@ -1657,6 +1705,19 @@
       else if (t.dataset.shhex != null) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderPanel(); o.hex = hx.toUpperCase(); }
       else { const n = parseFloat(t.value); if (!isFinite(n)) return renderPanel(); const k = t.dataset.shv; o[k] = k === 'a' ? Math.max(0, Math.min(100, Math.round(n))) : k === 'blur' ? Math.max(0, Math.round(n)) : Math.round(n); }
       return commit({ ops: [{ prop: 'shadow', value: shadowValue(o) }] });
+    }
+    if (t.dataset.gpos || t.dataset.ghex || t.dataset.galpha) {
+      const g = gradOf(); if (!g) return;
+      const k = t.dataset.gpos || t.dataset.ghex || t.dataset.galpha;
+      if (t.dataset.gpos) { const n = parseFloat(t.value); if (!isFinite(n)) return renderFpop(); g[k + 'Pos'] = Math.max(0, Math.min(100, Math.round(n))); }
+      else {
+        const cur = toHexA(tokenSwatch(g[k]));
+        if (t.dataset.ghex) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderFpop(); cur.hex = hx.toUpperCase(); }
+        else { const n = parseFloat(t.value); if (!isFinite(n)) return renderFpop(); cur.a = Math.max(0, Math.min(100, Math.round(n))); }
+        g[k] = '#' + cur.hex + (cur.a >= 100 ? '' : ('0' + Math.round(cur.a * 2.55).toString(16)).slice(-2).toUpperCase());
+      }
+      S.gstop = k; S.cp = null;
+      return commitGrad(g);
     }
     if (t.dataset.cphex || t.dataset.cpa) {
       const p = t.dataset.cphex || t.dataset.cpa, c = S.cp;

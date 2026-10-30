@@ -1015,7 +1015,40 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .shRow .inp{flex:1}
 .shIco i{display:block;width:12px;height:12px;border-radius:3px;background:var(--panel);box-shadow:1px 2px 0 rgba(var(--hi),.35),inset 0 0 0 1.5px var(--ink2)}
 .shIco.on{background:rgba(138,87,188,.18)}
-.cr.shRow{grid-template-columns:auto minmax(0,1fr) auto}
+.cr.shRow{grid-template-columns:auto minmax(0,1fr)}
 
 /* Chat empty state: Tovi's picture, no badge behind it */
 .ceAvatar{display:block;width:64px;height:auto;margin-bottom:4px}
+
+/* Floating editor, Figma layout: tabs in the header, fill type icons, then the editor */
+.fpH .fpTabs{flex:1;margin:0;padding:0;border:0}
+.fpTypes{display:flex;gap:4px;padding-bottom:8px;border-bottom:1px solid rgba(var(--hi),.08)}
+.fpType{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:6px;background:none;color:var(--ink2)}
+.fpType:hover{background:rgba(var(--hi),.06)}
+.fpType.on{box-shadow:inset 0 0 0 1.5px var(--select);background:rgba(138,87,188,.12)}
+.fpType i{display:block;width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1.5px currentColor}
+.fpType .tSolid{background:currentColor;opacity:.85}
+.fpType .tGrad{background:linear-gradient(to right,transparent,currentColor)}
+.fpName{padding-bottom:6px;font-weight:600}
+/* Gradient: header, tall bar with pins, stops list */
+.gHead{display:flex;align-items:center;gap:4px}
+.gHead .gType{height:28px;display:flex;align-items:center;padding:0 10px;border:1px solid rgba(var(--hi),.1);border-radius:6px;font-weight:500}
+.gHead .gDir{flex:1;color:var(--ink3);padding-left:6px}
+.gTrack{position:relative;padding-top:30px;margin:0 2px}
+.gPins{position:absolute;left:0;right:0;top:0;height:30px}
+.gPin{position:absolute;top:0;width:22px;height:22px;padding:2px;border:0;border-radius:5px;background:var(--raised);box-shadow:0 1px 3px rgba(0,0,0,.35);transform:translateX(calc(var(--p) * -1%));cursor:grab;touch-action:none}
+.gPin i{display:block;width:100%;height:100%;border-radius:3px;background:var(--c);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.gPin::after{content:'';position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:var(--raised)}
+.gPin.on{background:var(--select)}
+.gPin.on::after{border-top-color:var(--select)}
+.gPin:active{cursor:grabbing}
+.gBar2{height:36px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(var(--hi),.1);margin-top:2px}
+.gStopsH{display:flex;align-items:center;justify-content:space-between;padding-top:4px;font-weight:600}
+.gRow2{display:grid;grid-template-columns:56px minmax(0,1fr) 24px;gap:4px;align-items:center;margin:0 -10px;padding:3px 10px;cursor:default}
+.gRow2.on{background:rgba(138,87,188,.14)}
+.gRow2 .inp input{min-width:0}
+.gCol input[data-ghex]{flex:1;font-family:'Geist Mono',ui-monospace,monospace}
+.gCol input[data-galpha]{width:26px;text-align:right}
+.gCol{gap:4px}
+.gRow2 .ib{width:24px}
+.gPick{display:flex;flex-direction:column;gap:10px;padding-top:6px;border-top:1px solid rgba(var(--hi),.08)}
