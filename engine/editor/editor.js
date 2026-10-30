@@ -8,12 +8,24 @@
   try { applyTheme(localStorage.getItem('kerf.theme')); } catch {}
   fetch('prefs').then((r) => r.json()).then((p) => applyTheme(p.theme)).catch(() => {});
   /* ---------- api ---------- */
-  const api = (route, body) =>
-    fetch('/__kerf' + route, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined).then(async (r) => {
+  // Talk to Tovi's server. When the connection blips (the server restarting, the app reloading), requests that only
+  // read are retried a few times before giving up; saves never are, so nothing is applied twice.
+  const READS = new Set(['/inspect', '/theme', '/project', '/versions', '/keys', '/models', '/prefs', '/person', '/chat', '/direction', '/tokens', '/changes']);
+  const OFFLINE = 'Tovi lost touch with your app for a moment. Check that the app is still running.';
+  const api = async (route, body) => {
+    const path = route.split('?')[0], read = !body || READS.has(path) || (path === '/pr' && body?.dryRun);
+    for (let attempt = 0; ; attempt++) {
+      let r;
+      try { r = await fetch('/__kerf' + route, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined); }
+      catch (e) {
+        if (read && attempt < 5) { await new Promise((res) => setTimeout(res, [300, 700, 1500, 2500, 4000][attempt])); continue; }
+        const err = new Error(OFFLINE); err.offline = true; throw err;
+      }
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || r.statusText);
       return j;
-    });
+    }
+  };
 
   /* ---------- state ---------- */
   const S = {
@@ -227,6 +239,15 @@
     if (!k || !S.sel?.el) { f.hidden = true; return; }
     const close = `<button class="ib fpX" data-act="fpClose" aria-label="Close" title="Close · Esc">${ico('x')}</button>`;
     let head = '', body = '';
+    if (k === 'font') {
+      f.innerHTML = `<div class="fpH"><span class="fpT">Font</span>${close}</div><div class="cpop fontPop"><label class="inp fontQ">${ico('search', 14)}<input id="fontQ" placeholder="Search fonts" autocomplete="off" spellcheck="false" aria-label="Search fonts" value="${esc(S.fontQ || '')}"></label><div class="fontList" id="fontList">${fontListHTML()}</div></div>`;
+      f.hidden = false;
+      const pr = $('panel').getBoundingClientRect(), h = f.offsetHeight;
+      f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
+      f.style.top = Math.max(56, Math.min(innerHeight - h - 8, (S.fpY ?? 120) - 14)) + 'px';
+      setTimeout(() => $('fontQ')?.focus(), 0);
+      return;
+    }
     if (k === 'shadow') {
       const o = shadowNow();
       head = `<label class="inp fpSel"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label>`;
@@ -246,6 +267,56 @@
     f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
     f.style.top = Math.max(56, Math.min(innerHeight - h - 8, (S.fpY ?? 120) - 14)) + 'px';
   }
+  // Popular Google Fonts, by role. Any other Google Font can be typed in.
+  const GFONTS = [
+    ['Inter', 'sans-serif'], ['Geist', 'sans-serif'], ['Manrope', 'sans-serif'], ['DM Sans', 'sans-serif'], ['Plus Jakarta Sans', 'sans-serif'], ['Outfit', 'sans-serif'], ['Figtree', 'sans-serif'], ['Space Grotesk', 'sans-serif'], ['Sora', 'sans-serif'], ['Work Sans', 'sans-serif'], ['Poppins', 'sans-serif'], ['Montserrat', 'sans-serif'], ['Lato', 'sans-serif'], ['Open Sans', 'sans-serif'], ['Roboto', 'sans-serif'], ['Nunito Sans', 'sans-serif'], ['Rubik', 'sans-serif'], ['Karla', 'sans-serif'], ['Urbanist', 'sans-serif'], ['Lexend', 'sans-serif'], ['Onest', 'sans-serif'], ['Hanken Grotesk', 'sans-serif'], ['Bricolage Grotesque', 'sans-serif'], ['Archivo', 'sans-serif'], ['IBM Plex Sans', 'sans-serif'],
+    ['Playfair Display', 'serif'], ['DM Serif Display', 'serif'], ['Fraunces', 'serif'], ['Lora', 'serif'], ['Cormorant Garamond', 'serif'], ['EB Garamond', 'serif'], ['Libre Baskerville', 'serif'], ['Source Serif 4', 'serif'], ['Crimson Pro', 'serif'], ['Instrument Serif', 'serif'], ['Bodoni Moda', 'serif'], ['Merriweather', 'serif'], ['Newsreader', 'serif'], ['Spectral', 'serif'],
+    ['Syne', 'display'], ['Unbounded', 'display'], ['Bebas Neue', 'display'], ['Abril Fatface', 'display'],
+    ['JetBrains Mono', 'monospace'], ['IBM Plex Mono', 'monospace'], ['Geist Mono', 'monospace'], ['Space Mono', 'monospace'], ['Caveat', 'handwriting'],
+  ];
+  const CAT = { 'sans-serif': 'Sans serif', serif: 'Serif', display: 'Display', monospace: 'Mono', handwriting: 'Handwriting' };
+  // Each font previews in its own face: Google serves just the letters of its name, so this stays tiny.
+  const fontsShown = new Set();
+  function previewFont(family) {
+    if (fontsShown.has(family) || /^ui-|system/i.test(family)) return;
+    fontsShown.add(family);
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = `https://fonts.googleapis.com/css2?family=${family.trim().replace(/\s+/g, '+')}&text=${encodeURIComponent(family)}&display=swap`;
+    document.head.appendChild(l);
+  }
+  function fontListHTML() {
+    const q = (S.fontQ || '').trim().toLowerCase();
+    const mine = Object.entries(S.theme?.fonts || {}).filter(([, f]) => !/^ui-/.test(f) && (!q || f.toLowerCase().includes(q)));
+    const have = new Set(mine.map(([, f]) => f.toLowerCase()));
+    const google = GFONTS.filter(([f]) => !have.has(f.toLowerCase()) && (!q || f.toLowerCase().includes(q)));
+    const cur = (info()?.classes || []).filter((c) => !c.includes(':')).map((c) => c.slice(5)).find((k) => (S.theme?.keys?.fontFamily || []).includes(k));
+    const row = (label, attrs, family, sub, on) => { previewFont(family); return `<button class="fontRow${on ? ' on' : ''}" ${attrs}><span class="fName" style="font-family:'${esc(family)}',system-ui">${esc(label)}</span><span class="fSub">${esc(sub)}</span></button>`; };
+    const typed = q && !mine.length && !google.length && /^[a-z0-9][a-z0-9 ]{1,48}$/i.test(S.fontQ.trim());
+    return `${mine.length ? `<div class="fHead">In this project</div>${mine.map(([k, f]) => row(f, `data-act="fontPick" data-v="${esc(k)}"`, f, k, k === cur)).join('')}` : ''}
+      ${google.length ? `<div class="fHead">Google Fonts</div>${google.map(([f, c]) => row(f, `data-act="fontPick" data-g="${esc(f)}" data-cat="${c}"`, f, CAT[c], false)).join('')}` : ''}
+      ${typed ? `<button class="fontRow use" data-act="fontPick" data-g="${esc(S.fontQ.trim())}" data-cat="sans-serif"><span class="fName">Use “${esc(S.fontQ.trim())}” from Google Fonts</span></button>` : ''}
+      ${!mine.length && !google.length && !typed ? '<span class="note">No fonts match.</span>' : ''}`;
+  }
+  // Pick a font: a project font applies at once; a Google Font is added to the project first (one undoable change).
+  async function pickFont(btn) {
+    const family = btn.dataset.g;
+    let key = btn.dataset.v;
+    if (family) {
+      btn.classList.add('busy');
+      btn.querySelector('.fSub')?.replaceChildren(document.createTextNode('Adding…'));
+      try {
+        const r = await api('/fonts', { family, category: btn.dataset.cat });
+        key = r.key;
+        S.theme = await api('/theme');
+        fontCss = null; // screenshots pick up the new font
+        if (r.added) toast(`Added ${family} to your fonts`);
+      } catch (e) { toast(e.message, '', true); renderFpop(); return; }
+    }
+    S.cpick = null; S.fontQ = '';
+    await commit({ ops: [{ prop: 'fontFamily', value: key }] });
+  }
+  document.addEventListener('input', (e) => { if (e.target.id !== 'fontQ') return; S.fontQ = e.target.value; $('fontList').innerHTML = fontListHTML(); });
   function closeFpop() { if (!S.cpick) return; S.cpick = S.cp = null; renderPanel(); }
   // Save the picker's colour: a property, or the chosen gradient stop.
   function cpCommit(c) {
@@ -422,7 +493,7 @@
     const s = S.sel;
     if (!s) return;
     const dom = [...s.el.classList];
-    const get = (loc) => (loc ? api('/inspect', { loc, dom }).catch((e) => ({ error: e.message })) : null);
+    const get = (loc) => (loc ? api('/inspect', { loc, dom }).catch((e) => ({ error: e.message, offline: e.offline })) : null);
     const [d, u] = await Promise.all([get(s.def), get(s.use)]);
     if (S.sel !== s) return;
     // Text that's a component prop ({title}, {children}): edit the string where the component is used.
@@ -1230,6 +1301,7 @@
       ${s.repeat > 1 ? `<span class="note">Repeated ×${s.repeat} by the same code: edits apply to all of them.</span>` : ''}
       ${actionsHTML()}</div>`;
     if (!inf) h += `<div class="sec"><span class="note">Reading code…</span></div>`;
+    else if (inf.offline) { h += `<div class="sec"><span class="note">Reconnecting to your app…</span></div>`; clearTimeout(S.infoRetry); S.infoRetry = setTimeout(() => { if (S.sel) loadInfo(); }, 2000); }
     else if (inf.error) h += `<div class="sec"><span class="note warn">${esc(inf.error)}</span></div>`;
     else if (!el.isConnected) h += `<div class="sec"><span class="note">This element isn’t on screen right now.</span></div>`;
     else {
@@ -1247,7 +1319,8 @@
         // The project's own fonts (Tailwind's ui-* fallbacks are left out); with no font class, the one in use.
         const fams = Object.entries(S.theme?.fonts || {}).filter(([, f]) => !/^ui-/.test(f));
         const famKey = (info()?.classes || []).filter((c) => !c.includes(':')).map((c) => c.slice(5)).find((k) => c0(k)) || (fams.find(([, f]) => f.toLowerCase() === fam.toLowerCase()) || [''])[0];
-        h += sec('Typography', `${fams.length > 1 ? `<label class="inp"><select data-sel="fontFamily" aria-label="Font">${famKey ? '' : `<option value="" selected>${esc(fam)}</option>`}${fams.map(([k, f]) => `<option value="${esc(k)}"${k === famKey ? ' selected' : ''}>${esc(f)}${k === 'sans' || k === 'serif' || k === 'mono' ? '' : ` · ${esc(k)}`}</option>`).join('')}</select>${ico('chev', 12)}</label>` : `<label class="inp lock"><input type="text" value="${esc(fam)}" disabled aria-label="Font"></label>`}
+        const famName = famKey ? (S.theme?.fonts?.[famKey] || famKey) : fam;
+        h += sec('Typography', `<button class="inp fontBtn${S.cpick === 'font' ? ' on' : ''}" data-act="cpick" data-v="font" title="Font" aria-label="Font: ${esc(famName)}"><span style="font-family:'${esc(famName)}',system-ui">${esc(famName)}</span>${ico('chev', 12)}</button>
           <div class="r2"><label class="inp"><select data-sel="fontWeight" aria-label="Weight">${[[100, 'Thin'], [200, 'Extra light'], [300, 'Light'], [400, 'Regular'], [500, 'Medium'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold'], [900, 'Black']].map(([v, n]) => `<option value="${v}"${v === fw ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label>${nf('fontSize', '<b class="tg">T</b>', 'Font size')}</div>
           <div class="r2">${nf('lineHeight', 'lh', 'Line height')}${nf('letterSpacing', 'ls', 'Letter spacing', '%')}</div>
           <div class="r2"><div class="ibs">${[['left', 'alL'], ['center', 'alC'], ['right', 'alR']].map(([v, i]) => `<button class="ib${val('align') === v ? ' on' : ''}" data-act="set" data-p="align" data-v="${v}" title="Align ${v}">${ico(i)}</button>`).join('')}</div><span></span></div>`);
@@ -1669,6 +1742,7 @@
       case 'corners': S.corners = !S.corners; renderPanel(); break;
       case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; S.fpY = a.getBoundingClientRect().top; if (v === 'grad') S.gstop = 'from'; renderPanel(); break;
       case 'fpClose': closeFpop(); break;
+      case 'fontPick': pickFont(a); break;
       case 'gStop': if (e.target.closest('input')) { if (S.gstop !== v) { S.gstop = v; S.cp = null; } break; } S.gstop = v; S.cp = null; renderFpop(); break;
       case 'fpType': { const want = v === 'gradient' ? 'grad' : 'bg'; if (S.cpick !== want) { S.cpick = want; S.cp = null; S.gstop = 'from'; setFillType(v); } break; }
       case 'gFlip': { const g = gradOf(); if (!g) break; const st = stopsOf(g); const r = st.map((x) => ({ col: x.col, pos: 100 - x.pos })).reverse(); ['from', g.via ? 'via' : null, 'to'].filter(Boolean).forEach((kk, n) => { g[kk] = r[n].col; g[kk + 'Pos'] = r[n].pos; }); S.cp = null; commitGrad(g); break; }

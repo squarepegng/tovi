@@ -431,3 +431,20 @@ test('a picture can replace an icon, keeping its size', async () => {
   assert.match(out, /<img src="\/kerf\/leaf.svg" alt="Leaf drawing" className="h-16 w-16 object-contain" \/>/);
   assert.match(out, /import \{ Truck \} from 'lucide-react'/);
 });
+
+// Google Fonts: joining the project's font link and naming the font in tailwind.config.
+import { htmlWithFont, configWithFont } from '../src/fonts.mjs';
+test('a Google Font joins the existing font link, or gets its own in <head>', () => {
+  const html = '<head>\n    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet" />\n  </head>';
+  assert.match(htmlWithFont(html, 'Lora:wght@400..700'), /family=Inter:wght@400;700&family=Lora:wght@400\.\.700&display=swap/);
+  const bare = '<html>\n  <head>\n    <title>x</title>\n  </head>\n</html>';
+  const out = htmlWithFont(bare, 'Lora:wght@400..700');
+  assert.match(out, /\n    <link href="https:\/\/fonts\.googleapis\.com\/css2\?family=Lora:wght@400\.\.700&display=swap" rel="stylesheet" \/>\n  <\/head>/);
+});
+test('a Google Font is named in tailwind.config, in the file’s own style', () => {
+  const cfg = "export default {\n  theme: {\n    extend: {\n      fontFamily: {\n        sans: ['Inter', 'sans-serif'],\n      },\n    },\n  },\n};\n";
+  assert.equal(configWithFont(cfg, 'tailwind.config.js', 'playfair-display', 'Playfair Display', 'serif'),
+    "export default {\n  theme: {\n    extend: {\n      fontFamily: {\n        sans: ['Inter', 'sans-serif'],\n        'playfair-display': ['\"Playfair Display\"', 'serif'],\n      },\n    },\n  },\n};\n");
+  const noFonts = "export default {\n  theme: {\n    extend: {\n      colors: { a: '#fff' },\n    },\n  },\n};\n";
+  assert.match(configWithFont(noFonts, 'tailwind.config.js', 'lora', 'Lora', 'serif'), /colors: \{ a: '#fff' \},\n      fontFamily: \{\n        lora: \['"Lora"', 'serif'\],\n      \},\n/);
+});

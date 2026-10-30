@@ -79,6 +79,8 @@ export async function loadTheme(webRoot) {
     .find((f) => fs.existsSync(f));
   if (!file) throw new Error(`No tailwind.config file found in ${webRoot}`);
   let mod;
+  // Read it fresh each time: Tovi edits this file (colour tokens, fonts). See liveTailwindConfig in plugin.mjs.
+  delete req.cache[file];
   // Tailwind 3.3+ ships its own loader, which also reads TypeScript configs.
   try { mod = req('tailwindcss/loadConfig')(file); } catch { mod = null; }
   if (!mod) mod = await import(pathToFileURL(file).href);

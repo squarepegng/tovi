@@ -1055,3 +1055,20 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 
 /* A second look at the result, after a look-and-feel request */
 .kSecond{display:flex;align-items:center;gap:6px;margin-bottom:6px;color:var(--ink2);font-weight:600;font-size:11px}
+
+/* Font field and the font picker (project fonts, then Google Fonts, each in its own face) */
+.fontBtn{display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%;border:0;color:var(--ink);text-align:left;cursor:pointer}
+.fontBtn span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.fontBtn.on{box-shadow:inset 0 0 0 1px var(--select)}
+.fontPop{gap:6px;padding:8px}
+.fontQ{display:flex;align-items:center;gap:6px}
+.fontQ input{flex:1;min-width:0}
+.fontList{display:flex;flex-direction:column;max-height:360px;overflow:auto;margin:0 -4px;scrollbar-width:thin}
+.fHead{padding:8px 8px 4px;color:var(--ink3);font-size:11px;font-weight:600}
+.fontRow{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-height:32px;padding:6px 8px;border:0;border-radius:6px;background:none;color:var(--ink);text-align:left;cursor:pointer}
+.fontRow:hover{background:rgba(var(--hi),.06)}
+.fontRow.on{background:rgba(138,87,188,.16)}
+.fontRow.busy{opacity:.6;pointer-events:none}
+.fName{font-size:15px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fSub{flex:0 0 auto;color:var(--ink3);font-size:11px}
+.fontRow.use .fName{font-size:12px;color:var(--select)}

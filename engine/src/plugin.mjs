@@ -1,6 +1,7 @@
 // The Vite plugin: tags elements while the app runs in dev, and exposes a
 // small local API the Tovi editor calls to read and change source files.
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { touchRecent } from './recent.mjs';
 import { PROJECTS_DIR } from './project.mjs';
 import fs from 'node:fs';
@@ -14,6 +15,7 @@ import { readPerson, savePerson } from './person.mjs';
 import { readPrefs, savePrefs } from './prefs.mjs';
 import { createLibrary } from './library.mjs';
 import { listTokens, tokenEdit } from './tokens.mjs';
+import { googleFontFiles } from './fonts.mjs';
 import { searchPhotos, photoUsed, illustrate, envKey, saveEnv } from './images.mjs';
 
 function readBody(req) {
@@ -29,6 +31,21 @@ function readBody(req) {
 
 const EDITOR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../editor');
 const ASSETS = { '/': ['index.html', 'text/html; charset=utf-8'], '/index.html': ['index.html', 'text/html; charset=utf-8'], '/editor.js': ['editor.js', 'text/javascript'], '/editor.css': ['editor.css', 'text/css'] };
+
+// Tailwind loads tailwind.config with a plain require first. On newer Node versions that can load an ES-module
+// config, which can never be reloaded, so edits Tovi makes to it (fonts, colour tokens) would only show after a
+// restart. Sending Tailwind to its fallback loader (jiti) for config files keeps them reloadable: Tailwind clears
+// that cache itself when the file changes.
+(function liveTailwindConfig() {
+  const Module = createRequire(import.meta.url)('node:module');
+  if (Module._kerfLive) return;
+  Module._kerfLive = true;
+  const load = Module._load;
+  Module._load = function (request, parent, ...rest) {
+    if (/[\\/]tailwind\.config\.[cm]?[jt]s$/.test(request) && /[\\/]tailwindcss[\\/]/.test(parent?.filename || '')) throw new Error('Tovi: load tailwind.config with jiti so it can be reloaded');
+    return load.call(this, request, parent, ...rest);
+  };
+})();
 
 // Tovi for one web app: tags JSX so elements map back to source, and serves the editor and its API.
 // Used by the Vite plugin below and by the Next.js runner.
@@ -125,6 +142,16 @@ export async function createKerf(webRoot) {
         const writes = ['/edit', '/undo', '/ai/apply', '/structure'];
         if (writes.includes(route) && session.isPeeking()) return send(409, { error: 'You’re looking at an earlier version. Close it to keep editing.' });
         if (route === '/person') return send(200, { name: savePerson(body?.name) });
+        // Add a Google Font to the project (one undoable change across index.html and tailwind.config).
+        if (route === '/fonts') {
+          const f = await googleFontFiles(webRoot, theme, body?.family, body?.category);
+          if (f.files.size) {
+            const sum = { added: [], removed: [], changes: [], offScale: [], text: null, props: [], labels: [`Added font “${f.family}”`] };
+            editor.applyFiles(f.files, `font:${f.key}`, { font: { family: f.family, key: f.key }, source: 'hand', name: `Font “${f.family}”` }, sum);
+            theme = await loadTheme(webRoot);
+          }
+          return send2(200, { key: f.key, family: f.family, added: f.files.size > 0 });
+        }
         if (route === '/prefs') return send(200, savePrefs(body || {}));
         if (route === '/version') return send2(200, session.snapshot(body || {}));
         if (route === '/rename') return send2(200, session.rename(Number(body.n), body.name));
