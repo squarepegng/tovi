@@ -552,7 +552,6 @@
     const m = $('modal'), p = S.project || {};
     // The provider being set up: a picked "Other … model" waits for its name before it's saved.
     const pv = aiPick?.provider || aiCfg.provider || 'anthropic';
-    const known = !aiPick?.custom && (aiCfg.models || []).some((x) => x.provider === aiCfg.provider && x.id === aiCfg.model);
     const tog = (id, on, label, sub) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span><button class="switch${on ? ' on' : ''}" data-act="setTog" data-v="${id}" role="switch" aria-checked="${on}" aria-label="${label}"><i></i></button></div>`;
     const row = (label, sub, ctl) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span>${ctl}</div>`;
     const startPage = 'http://localhost:4100/#settings';
@@ -571,9 +570,10 @@
           ${row('Panels', 'Put the side panels back to their usual widths.', '<button class="outline sm" data-act="setPanels">Reset</button>')}
         </div>
         <div class="setSec"><h3>AI</h3>
-          <div class="setRow"><span class="setTx"><b>Model</b><span class="note">Which AI answers your requests. Its key goes below.</span></span><select id="setModelSel" class="setSel" aria-label="Model">${Object.keys(aiCfg.defaults || {}).map((p) => `<optgroup label="${esc(aiCfg.defaults[p].label)}">${(aiCfg.models || []).filter((x) => x.provider === p).map((x) => `<option value="${p}:${esc(x.id)}"${known && aiCfg.provider === p && aiCfg.model === x.id ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}<option value="${p}:"${!known && pv === p ? ' selected' : ''}>Other ${esc(aiCfg.defaults[p].label)} model…</option></optgroup>`).join('')}</select></div>
-          ${known ? '' : `<form class="setRow" data-form="aimodel" autocomplete="off"><span class="setTx"><b>Model name</b><span class="note">Copy it from your provider’s docs.</span></span><span class="setName"><input id="setModel" value="${aiPick?.custom ? '' : esc(aiCfg.model || '')}" placeholder="e.g. ${esc(aiCfg.defaults?.[pv]?.model || '')}" maxlength="80" spellcheck="false" aria-label="Model name"><button class="outline sm">Save</button></span></form>`}
+          <div class="setRow"><span class="setTx"><b>Provider</b><span class="note">In use: ${esc(aiCfg.defaults?.[aiCfg.provider]?.label || '')} · ${esc(aiCfg.model || '')}</span></span><select id="setProvSel" class="setSel" aria-label="Provider">${Object.keys(aiCfg.defaults || {}).map((k) => `<option value="${k}"${k === pv ? ' selected' : ''}>${esc(aiCfg.defaults[k].label)}</option>`).join('')}</select></div>
           ${[pv].map((k) => `<form class="setRow" data-form="aikey" data-p="${k}" autocomplete="off"><span class="setTx"><b>${aiCfg.defaults?.[k]?.label || k} key</b><span class="note">${aiCfg[k] ? 'Saved. Paste a new one to replace it.' : 'Not set yet.'}</span></span><span class="setName"><input type="password" placeholder="Paste key" aria-label="${k} key" autocomplete="new-password" spellcheck="false"><button class="outline sm">Save</button></span></form>`).join('')}
+          <div class="setRow"><span class="setTx"><b>Model</b><span class="note" id="setModelNote">Loading models…</span></span><select id="setModelSel" class="setSel" aria-label="Model" disabled></select></div>
+          <form class="setRow" data-form="aimodel" id="setModelForm" autocomplete="off" hidden><span class="setTx"><b>Model name</b><span class="note">Copy it from your provider’s docs.</span></span><span class="setName"><input id="setModel" maxlength="80" spellcheck="false" aria-label="Model name"><button class="outline sm">Use</button></span></form>
           ${row('Unsplash photos', '<span id="setKeyU">Checking…</span>', `<a class="outline sm" href="${startPage}" target="_blank" rel="noopener">Change</a>`)}
           <span class="note">Keys stay on this Mac in a git-ignored file. Tovi never shows them.</span>
         </div>
@@ -585,6 +585,23 @@
     api('/person').then((p) => { const i = $('setPerson'); if (i && !i.value) i.value = p.name; }).catch(() => {});
     const u = $('setKeyU');
     if (u) u.textContent = aiCfg.unsplash ? 'Saved. Photo search is on.' : 'Optional. Add a free key to search photos.';
+    fillModels(pv);
+  }
+  // The chosen provider's models, from the provider itself once its key is saved. Picking one switches Tovi over.
+  async function fillModels(pv) {
+    const sel = $('setModelSel'), note = $('setModelNote');
+    if (!sel) return;
+    const label = aiCfg.defaults?.[pv]?.label || pv, cur = pv === aiCfg.provider;
+    let list = { models: [], live: false };
+    try { list = await api(`/models?provider=${pv}`); } catch {}
+    if ($('setModelSel') !== sel) return;
+    const known = cur && list.models.some((x) => x.id === aiCfg.model);
+    sel.innerHTML = (cur ? '' : '<option value="" disabled selected>Choose a model</option>') + list.models.map((x) => `<option value="${esc(x.id)}">${esc(x.label)}</option>`).join('') + '<option value="__other">Other model…</option>';
+    if (cur) sel.value = known ? aiCfg.model : '__other';
+    if (cur && !known) { $('setModelForm').hidden = false; $('setModel').value = aiCfg.model || ''; }
+    sel.disabled = false;
+    const has = pv === 'anthropic' ? aiCfg.anthropic : aiCfg[pv];
+    note.textContent = (list.live ? `Every model your ${label} key can use.` : has ? `Couldn’t reach ${label}. Showing the usual models.` : `Add your ${label} key above to see every model.`) + (cur ? '' : ` Choosing one switches Tovi to ${label}.`);
   }
   function pagesMenu(at) {
     const seen = [...new Set([S.path, ...S.pages])].slice(0, 12);
@@ -1506,14 +1523,15 @@
     preview(S.sel.el, p, n);
     commitSoon(p, n);
   });
-  // Settings → Model: a listed model is saved at once; "Other … model" asks for its name first.
+  // Settings → AI: the provider picks which key and models to show; choosing a model switches Tovi over.
   document.addEventListener('change', (e) => {
+    if (e.target.id === 'setProvSel') { aiPick = { provider: e.target.value }; showSettings(); return; }
     if (e.target.id !== 'setModelSel') return;
-    const [provider, model] = e.target.value.split(':');
-    if (model) { api('/ai-config', { provider, model }).then(() => { toast('Model saved'); openSettings(); }).catch((err) => toast(err.message, '', true)); return; }
-    aiPick = { provider, custom: true };
-    showSettings();
-    setTimeout(() => $('setModel')?.focus(), 0);
+    const provider = aiPick?.provider || aiCfg.provider, model = e.target.value;
+    if (model !== '__other') { api('/ai-config', { provider, model }).then(() => { toast('Model saved'); openSettings(); }).catch((err) => toast(err.message, '', true)); return; }
+    $('setModelForm').hidden = false;
+    $('setModel').value = '';
+    $('setModel').focus();
   });
   // Naming a version: Escape or clicking away cancels.
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest?.('.vName')) { e.stopPropagation(); S.vNaming = null; renderPanel(); } }, true);

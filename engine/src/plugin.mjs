@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { tagSource } from './ast.mjs';
 import { loadTheme } from './tailwind.mjs';
 import { createEditor, KerfError } from './edit.mjs';
-import { propose, aiConfig, PROVIDERS, MODELS } from './ai.mjs';
+import { propose, aiConfig, PROVIDERS, MODELS, listModels } from './ai.mjs';
 import { createSession } from './session.mjs';
 import { readPerson, savePerson } from './person.mjs';
 import { createLibrary } from './library.mjs';
@@ -70,6 +70,7 @@ export async function createKerf(webRoot) {
           const g = session.repoInfo();
           return send(200, { name: g.repo || pkg.name || path.basename(webRoot), branch: g.git ? g.branch : null, repo: g.repo, gh: g.gh, files: g.files || [] });
         }
+        if (req.method === 'GET' && route === '/models') return send(200, await listModels(new URL(req.url, 'http://x').searchParams.get('provider')));
         if (req.method === 'GET' && route === '/person') return send(200, { name: readPerson(webRoot) });
         if (req.method === 'GET' && route === '/versions') return send(200, session.list());
         if (req.method === 'GET' && route === '/chat') return send(200, session.chat());

@@ -40,6 +40,42 @@ function envValue(name) {
     return null;
   }
 }
+// The models a saved key can use, asked from the provider itself (free), so new models appear on their own.
+// Kept for 10 minutes. Without a key, or if the provider can't be reached, the short list above is used.
+const modelCache = new Map();
+const CHAT_ONLY = /(embed|audio|realtime|tts|transcribe|whisper|dall-e|image|moderation|search|instruct|babbage|davinci|computer-use|live|aqa|learnlm|gemma)/i;
+export async function listModels(provider) {
+  const pr = PROVIDERS[provider];
+  if (!pr) return { models: [], live: false };
+  const fallback = { models: MODELS.filter((m) => m.provider === provider).map(({ id, label }) => ({ id, label })), live: false };
+  const key = envValue(pr.keyName);
+  if (!key) return fallback;
+  const hit = modelCache.get(provider);
+  if (hit && hit.key === key && Date.now() - hit.at < 600000) return hit.value;
+  let models = [];
+  try {
+    if (provider === 'anthropic') {
+      for await (const m of new Anthropic({ apiKey: key }).models.list({ limit: 100 })) models.push({ id: m.id, label: m.display_name || m.id, at: Date.parse(m.created_at) || 0 });
+    } else if (provider === 'openai') {
+      const r = await fetch('https://api.openai.com/v1/models', { headers: { authorization: `Bearer ${key}` } });
+      if (!r.ok) throw new Error(String(r.status));
+      models = ((await r.json()).data || []).filter((m) => /^(gpt-|o\d|chatgpt-)/.test(m.id) && !CHAT_ONLY.test(m.id)).map((m) => ({ id: m.id, label: m.id, at: (m.created || 0) * 1000 }));
+    } else {
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', { headers: { 'x-goog-api-key': key } });
+      if (!r.ok) throw new Error(String(r.status));
+      models = ((await r.json()).models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini/.test(m.name) && !CHAT_ONLY.test(m.name)).map((m) => ({ id: m.name.replace(/^models\//, ''), label: m.displayName || m.name, at: 0 }));
+    }
+  } catch (e) {
+    console.error('Tovi: could not list models for', pr.label, e.message);
+    return fallback;
+  }
+  if (!models.length) return fallback;
+  // Newest first where the provider says when a model came out; otherwise by name, newest-looking first.
+  models.sort((a, b) => (b.at - a.at) || b.id.localeCompare(a.id, undefined, { numeric: true }));
+  const value = { models: models.map(({ id, label }) => ({ id, label })), live: true };
+  modelCache.set(provider, { key, at: Date.now(), value });
+  return value;
+}
 export function aiConfig() {
   const provider = PROVIDERS[envValue('AI_PROVIDER')] ? envValue('AI_PROVIDER') : 'anthropic';
   const model = envValue('AI_MODEL') || PROVIDERS[provider].model;
