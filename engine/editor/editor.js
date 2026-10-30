@@ -658,7 +658,8 @@
   }
   function renderTop() {
     const p = S.project || {};
-    const n = S.versions.draft.length + S.versions.versions.reduce((a, v) => a + v.changes.length, 0);
+    // Changes not yet handed off. The button stays usable after a hand off so a failed push can be sent again.
+    const total = S.versions.draft.length + S.versions.versions.reduce((a, v) => a + v.changes.length, 0), n = Math.max(0, total - (S.versions.sent || 0));
     $('top').innerHTML = `<div class="tside">
         <button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Side panel: Chat and Layers" aria-label="Show or hide the side panel" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>
         <button class="logoBtn" data-act="kerfMenu" title="Tovi menu" aria-label="Tovi menu" aria-haspopup="menu">${ico('kerf', 16)}${ico('chev', 10)}</button>
@@ -670,7 +671,7 @@
         <button class="icon" data-act="present" title="Present: the app full screen" aria-label="Present">${ico('play', 16)}</button>
         <button class="icon" data-act="settings" title="Settings (⌘,)" aria-label="Settings">${ico('gear', 16)}</button>
         <button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
-        <button class="primary" data-act="pr" ${n ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>
+        <button class="primary" data-act="pr" ${total ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>
       </div>`;
   }
 
@@ -1890,22 +1891,27 @@
   async function openPR() {
     await api('/version', {}).then((v) => (S.versions = v)).catch(() => {});
     const p = await api('/project').catch(() => ({}));
-    const all = [...S.versions.versions.flatMap((v) => v.changes), ...S.versions.draft];
+    // A dry run says what will happen (new PR or update, which branch, any problem) before anything is sent.
+    const plan = p.repo ? await api('/pr', { dryRun: true }).catch((e) => ({ error: e.message })) : null;
+    const every = [...S.versions.versions.flatMap((v) => v.changes), ...S.versions.draft];
+    const all = every.slice(S.versions.sent || 0); // only what hasn't been handed off yet
     const files = [...new Set(all.map((c) => c.file))];
-    const title = all.length === 1 ? `Design: ${all[0].name ? all[0].name + ' · ' : ''}${all[0].label}`.slice(0, 72) : `Design updates: ${all.length} changes${S.path === '/' ? '' : ` on ${S.path}`}`;
+    const title = !all.length ? 'Design updates from Tovi' : all.length === 1 ? `Design: ${all[0].name ? all[0].name + ' · ' : ''}${all[0].label}`.slice(0, 72) : `Design updates: ${all.length} changes${S.path === '/' ? '' : ` on ${S.path}`}`;
+    const retry = plan && !plan.error && !all.length && plan.unpushed;
+    const ok = p.repo && plan && !plan.error;
     S.prAll = all;
     const m = $('modal');
     m.hidden = false;
     m.innerHTML = `<section class="dialog" role="dialog" aria-modal="true" aria-labelledby="prT">
-      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="prT">Hand off to developers</h2><span class="note">Tovi sends your changes as one pull request on GitHub. Developers review it before anything goes live.</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
+      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="prT">${plan?.reuse ? 'Update your pull request' : 'Hand off to developers'}</h2><span class="note">${plan?.reuse ? 'These changes go into the pull request you already opened, with a comment saying what’s new.' : 'Tovi sends your changes as one pull request on GitHub. Developers review it before anything goes live.'}</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
       <div class="db">
-        ${!p.repo ? `<span class="note warn">This project isn’t connected to a GitHub repository, so Tovi can’t open a pull request for it.</span>` : ''}
-        <label><span class="secT">Title</span><input class="fld" id="prTitle" value="${esc(title)}"></label>
+        ${!p.repo ? `<span class="note warn">This project isn’t connected to a GitHub repository, so Tovi can’t open a pull request for it.</span>` : plan?.error ? `<span class="note warn">${esc(plan.error)}</span>` : retry ? `<span class="note warn">Your last hand off didn’t reach GitHub. Send it again to finish.</span>` : ''}
+        <label><span class="secT">Title</span><input class="fld" id="prTitle" value="${esc(retry ? 'Design updates from Tovi' : title)}"${plan?.reuse ? ' disabled title="The pull request keeps its title"' : ''}></label>
         <label><span class="secT">Note for your developers <span class="note" style="font-weight:400">(optional)</span></span><textarea class="fld" id="prBody" rows="3" placeholder="Anything they should know, e.g. why you made these changes"></textarea></label>
-        <div style="display:flex;align-items:center;gap:8px;color:var(--ink2)"><span class="chip mono" style="color:var(--ink)">${p.branch?.startsWith('kerf/') ? esc(p.branch) : 'kerf/…'}</span>→<span class="chip mono" style="color:var(--ink)">${esc(p.branch?.startsWith('kerf/') ? 'its pull request' : p.branch || 'main')}</span>${p.repo ? `<span class="note">${esc(p.repo)}</span>` : ''}</div>
-        <div class="files"><div class="fh"><span>What changed · ${all.length}</span><span class="note" title="${esc(files.join('\n'))}">${files.length} code file${files.length === 1 ? '' : 's'}</span></div><div class="frs">${all.map((c) => `<div class="fr"><span class="dot" style="margin:0"></span><span>${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${c.name ? `<b>${esc(c.name)}</b> · ` : ''}${esc(c.label)}</span></div>`).join('')}</div></div>
+        ${ok ? `<div style="display:flex;align-items:center;gap:8px;color:var(--ink2);flex-wrap:wrap"><span class="chip mono" style="color:var(--ink)">${esc(plan?.branch && plan.reuse ? plan.branch : 'kerf/…')}</span>→<span class="chip mono" style="color:var(--ink)">${esc(plan?.base || (plan?.reuse ? 'its pull request' : p.branch || 'main'))}</span><span class="note">${esc(p.repo)}</span></div>` : ''}
+        <div class="files"><div class="fh"><span>What changed · ${all.length}</span><span class="note" title="${esc(files.join('\n'))}">${files.length} code file${files.length === 1 ? '' : 's'}</span></div><div class="frs">${all.map((c) => `<div class="fr"><span class="dot" style="margin:0"></span><span>${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${c.name ? `<b>${esc(c.name)}</b> · ` : ''}${esc(c.label)}</span></div>`).join('') || `<span class="note" style="padding:8px 10px">${retry ? 'Already committed, waiting to be pushed.' : 'Nothing new since your last hand off.'}</span>`}</div></div>
       </div>
-      <div class="df"><button class="outline" data-act="closeModal">Cancel</button><button class="primary solo" data-act="createPR" ${p.repo && files.length ? '' : 'disabled'}>Create pull request</button></div></section>`;
+      <div class="df"><button class="outline" data-act="closeModal">Cancel</button><button class="primary solo" data-act="createPR" ${ok ? '' : 'disabled'}>${plan?.reuse ? 'Update pull request' : 'Create pull request'}</button></div></section>`;
   }
   async function createPR() {
     const btn = document.querySelector('[data-act="createPR"]');
@@ -1913,15 +1919,16 @@
     btn.innerHTML = '<i class="spin"></i>Sending to GitHub…';
     try {
       const all = S.prAll || [], note = $('prBody').value.trim();
-      const body = `${note ? note + '\n\n' : ''}### What changed\n${all.map((c) => `- ${c.source === 'ai' ? '(AI) ' : ''}${c.name ? `**${c.name}**: ` : ''}${c.label}`).join('\n')}\n\n<details><summary>Code changes</summary>\n\n${all.map((c) => `- \`${c.file}\`: ${c.code || c.label}`).join('\n')}\n</details>\n\nMade with Tovi.`;
+      const body = `${note ? note + '\n\n' : ''}### What changed\n${all.map((c) => `- ${c.source === 'ai' ? '(AI) ' : ''}${c.name ? `**${c.name}**: ` : ''}${c.label}`).join('\n') || '- (see commits)'}\n\n<details><summary>Code changes</summary>\n\n${all.map((c) => `- \`${c.file}\`: ${c.code || c.label}`).join('\n')}\n</details>\n\nMade with Tovi.`;
       const r = await api('/pr', { title: $('prTitle').value, body });
       $('modal').innerHTML = `<section class="dialog" role="dialog" aria-modal="true"><div class="db" style="padding:20px;gap:10px">
         <span style="display:grid;place-items:center;width:32px;height:32px;border-radius:8px;background:var(--raised)">${ico('check', 16)}</span>
         <h2 style="margin:0;font-size:18px">${r.updated ? 'Pull request updated' : r.needsGitHubStep ? 'Branch pushed' : 'Pull request ready'}</h2>
-        <span class="note">${r.files.length} file${r.files.length === 1 ? '' : 's'} on <span class="mono">${esc(r.branch)}</span>.${r.needsGitHubStep ? ' Open the link to finish creating the pull request on GitHub.' : ''}</span>
+        <span class="note">${r.files.length ? `${r.files.length} file${r.files.length === 1 ? '' : 's'}` : 'Your changes'} on <span class="mono">${esc(r.branch)}</span>${r.base ? ` → <span class="mono">${esc(r.base)}</span>` : ''}.${r.needsGitHubStep ? ' Open the link to finish creating the pull request on GitHub.' : ''}</span>
         ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>` : ''}</div>
         <div class="df"><button class="primary solo" data-act="closeModal">Done</button></div></section>`;
       S.project = await api('/project').catch(() => S.project);
+      S.versions = await api('/versions').catch(() => S.versions);
       renderTop();
     } catch (e) {
       btn.disabled = false;

@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import { readPerson } from './person.mjs';
 import { KerfError } from './edit.mjs';
+import { parseCode } from './ast.mjs';
 
 export function createSession(webRoot, editor) {
   const versions = []; // { n, at, from, to } — indices into editor.history
@@ -13,6 +14,8 @@ export function createSession(webRoot, editor) {
   let chat = { messages: [], notes: [] };
   // The project's design direction: a preset feel, a description and up to 3 reference images.
   let direction = null;
+  // What has been handed off: how many history entries are in a pull request, and each kerf/ branch's base.
+  let handoff = { sent: 0, bases: {} };
 
   /* ---------- kept on disk, so a restart loses nothing ---------- */
   const DIR = path.join(webRoot, '.kerf');
@@ -20,7 +23,7 @@ export function createSession(webRoot, editor) {
   function save() {
     try {
       fs.mkdirSync(DIR, { recursive: true });
-      fs.writeFileSync(FILE, JSON.stringify({ v: 1, history: editor.history, versions, chat, direction, peek: peek ? { n: peek.n, current: [...peek.current] } : null }));
+      fs.writeFileSync(FILE, JSON.stringify({ v: 1, history: editor.history, versions, chat, direction, handoff, peek: peek ? { n: peek.n, current: [...peek.current] } : null }));
     } catch {}
   }
   function load() {
@@ -32,6 +35,7 @@ export function createSession(webRoot, editor) {
     versions.push(...(d.versions || []).filter((v) => v.to <= editor.history.length));
     chat = d.chat || chat;
     direction = d.direction || null;
+    handoff = { sent: 0, bases: {}, ...(d.handoff || {}) };
     save();
   }
   // Never commit Tovi's own folder.
@@ -77,6 +81,8 @@ export function createSession(webRoot, editor) {
       by: authorName(),
       draft: entries(end(), editor.history.length).map(describe),
       peeking: peek ? peek.n : null,
+      // Changes already in a pull request: the first `sent` entries (in history order).
+      sent: Math.min(handoff.sent, editor.history.length),
     };
   }
   // Undo every edit after version n (n = 0 means back to the start).
@@ -140,38 +146,68 @@ export function createSession(webRoot, editor) {
   const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'design-updates';
   const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 
+  // Plain words for the ways a push can fail. The work is already committed on the branch, so nothing is lost.
+  function pushError(msg, branch) {
+    const kept = ` Your changes are safe on the branch ${branch}; Hand off again to retry.`;
+    if (/Permission denied|could not read Username|Authentication failed|403|denied to|not found|access rights|repository exists|not appear to be a git/i.test(msg)) return new KerfError(`GitHub didn’t accept the push. Sign in to GitHub on this Mac (in Terminal: gh auth login) with an account that can push to this repository.${kept}`);
+    if (/rejected|non-fast-forward|fetch first/i.test(msg)) return new KerfError(`GitHub has newer work on ${branch} than this copy. Ask a developer to merge it, or start a new hand off from the main branch.${kept}`);
+    if (/Could not resolve host|unable to access|timed out|Network/i.test(msg)) return new KerfError(`Tovi couldn’t reach GitHub. Check your internet connection.${kept}`);
+    return new KerfError(`The push to GitHub failed: ${String(msg).replace(/[.\s]+$/, '')}.${kept}`);
+  }
+  const ghJson = (args, cwd) => { const r = spawnSync('gh', args, { cwd, encoding: 'utf8' }); try { return r.status === 0 ? JSON.parse(r.stdout) : null; } catch { return null; } };
+
   // Commit Tovi's edits on a kerf/ branch, push it, and open (or update) the pull request.
+  //  - every changed code file must still parse, so a broken change never reaches developers
+  //  - a branch whose PR was merged or closed isn't reused: a new branch and PR are made
+  //  - the PR targets the branch the designer started from
+  //  - if the push fails, the commit stays on the branch and the next Hand off just pushes again
   function pullRequest({ title, body, dryRun }) {
     if (peek) throw new KerfError('Close the before view first.');
     snapshot();
     const info = repoInfo();
     if (!info.git) throw new KerfError('This project isn’t a Git repository, so there’s nothing to open a pull request on.');
-    if (!info.files.length) throw new KerfError('There are no changes to send yet.');
-    if (!info.remote) throw new KerfError('This project has no GitHub remote to push to.');
+    if (!info.remote) throw new KerfError('This project isn’t connected to GitHub yet, so there’s nowhere to send it.');
+    for (const f of info.files.filter((x) => /\.[cm]?[jt]sx?$/.test(x))) {
+      try { parseCode(fs.readFileSync(path.join(info.root, f), 'utf8'), { strict: true, file: f }); }
+      catch (e) { throw new KerfError(`${f} has a code error (${String(e.message).split('\n')[0]}), so Tovi won’t send it. Undo the last change and try again.`); }
+    }
     title = String(title || 'Design updates from Tovi').trim();
-    const branch = info.branch.startsWith('kerf/') ? info.branch : `kerf/${slug(title)}-${stamp()}`;
-    const plan = { branch, base: info.branch.startsWith('kerf/') ? null : info.branch, files: info.files, title };
-    if (dryRun) return { dryRun: true, ...plan };
+    const onKerf = info.branch.startsWith('kerf/');
+    const pr = onKerf && info.gh ? ghJson(['pr', 'view', info.branch, '--json', 'url,state'], info.root) : null;
+    const reuse = onKerf && (!pr || pr.state === 'OPEN');
+    // Committed but never pushed (a failed push last time)?
+    const up = spawnSync('git', ['rev-list', '--count', '@{u}..HEAD'], { cwd: info.root, encoding: 'utf8' });
+    const unpushed = onKerf && (up.status !== 0 || +up.stdout.trim() > 0);
+    if (!info.files.length && !(reuse && unpushed)) throw new KerfError(pr && pr.state !== 'OPEN' ? 'Everything here is already in a pull request.' : 'There are no changes to send yet.');
+    const branch = reuse ? info.branch : `kerf/${slug(title)}-${stamp()}`;
+    const base = onKerf ? handoff.bases[info.branch] || null : info.branch;
+    const plan = { branch, base, files: info.files, title };
+    if (dryRun) return { dryRun: true, reuse, unpushed, ...plan };
     const id = [];
     try { git(['config', 'user.email'], info.root); } catch {
       // No git identity in this copy: use the GitHub account's noreply address if gh knows it.
       const u = hasGh() ? spawnSync('gh', ['api', 'user', '--jq', '.login + " " + (.id|tostring)'], { encoding: 'utf8' }).stdout.trim().split(' ') : [];
-      id.push('-c', `user.name=${u[0] || 'Tovi'}`, '-c', `user.email=${u[1] ? `${u[1]}+${u[0]}` : 'kerf'}@users.noreply.github.com`);
+      id.push('-c', `user.name=${u[0] || readPerson(webRoot) || 'Tovi'}`, '-c', `user.email=${u[1] ? `${u[1]}+${u[0]}` : 'kerf'}@users.noreply.github.com`);
     }
     if (branch !== info.branch) git(['checkout', '-b', branch], info.root);
-    git(['add', '--', ...info.files], info.root);
-    git([...id, 'commit', '-m', title, '-m', String(body || '')], info.root);
-    git(['push', '-u', 'origin', branch], info.root);
-    let url = null, updated = false, viaGh = false;
-    if (info.gh) {
-      const view = spawnSync('gh', ['pr', 'view', branch, '--json', 'url', '-q', '.url'], { cwd: info.root, encoding: 'utf8' });
-      if (view.status === 0 && view.stdout.trim()) { url = view.stdout.trim(); updated = true; viaGh = true; }
-      else {
-        const made = spawnSync('gh', ['pr', 'create', '--head', branch, '--title', title, '--body', String(body || '')], { cwd: info.root, encoding: 'utf8' });
-        if (made.status === 0) { url = made.stdout.trim().split('\n').pop(); viaGh = true; }
-      }
+    if (base) handoff.bases[branch] = base;
+    if (info.files.length) {
+      git(['add', '--', ...info.files], info.root);
+      git([...id, 'commit', '-m', title, '-m', String(body || '')], info.root);
     }
-    if (!url && info.repo) url = `https://github.com/${info.repo}/compare/${encodeURIComponent(branch)}?expand=1`;
+    handoff.sent = editor.history.length;
+    save();
+    try { git(['push', '-u', 'origin', branch], info.root); } catch (e) { throw pushError(e.message, branch); }
+    let url = null, updated = false, viaGh = false;
+    if (info.gh && reuse && pr?.url) {
+      // An open PR from this branch: the push updated it. Say what's new in a comment.
+      url = pr.url; updated = true; viaGh = true;
+      if (info.files.length) spawnSync('gh', ['pr', 'comment', branch, '--body', `**More design updates**\n\n${String(body || title)}`], { cwd: info.root, encoding: 'utf8' });
+    } else if (info.gh) {
+      const made = spawnSync('gh', ['pr', 'create', '--head', branch, ...(base ? ['--base', base] : []), '--title', title, '--body', String(body || '')], { cwd: info.root, encoding: 'utf8' });
+      if (made.status === 0) { url = made.stdout.trim().split('\n').pop(); viaGh = true; }
+    }
+    if (!url && info.repo) url = `https://github.com/${info.repo}/compare/${base ? `${encodeURIComponent(base)}...` : ''}${encodeURIComponent(branch)}?expand=1`;
     return { ...plan, url, updated, needsGitHubStep: !viaGh };
   }
 
