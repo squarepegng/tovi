@@ -1524,7 +1524,15 @@
     if (W) $('marksG').setAttribute('transform', `translate(${-W.scrollX} ${-W.scrollY})`);
     placeHandles(); placeMulti(); measureLines();
     if (W && W.location.pathname + W.location.search !== S.path) {
-      S.path = W.location.pathname + W.location.search;
+      // Notes are drawn on a page's own layout, so each page keeps its own: stash the old page's, bring back the new one's.
+      const next = W.location.pathname + W.location.search;
+      S.pageNotes ||= {};
+      if (S.path != null) { if (S.notes.length) S.pageNotes[S.path] = S.notes; else delete S.pageNotes[S.path]; }
+      S.notes = S.pageNotes[next] || [];
+      delete S.pageNotes[next];
+      S.openTask = [];
+      if (S.path != null) setTimeout(() => { refreshTasks(); renderBar(); }, 0);
+      S.path = next;
       S.pages = [S.path, ...S.pages.filter((x) => x !== S.path)].slice(0, 20);
       saveVersion();
       if (document.activeElement?.id !== 'pathIn') { const pi = $('pathIn'); if (pi) pi.value = S.path; }
@@ -1718,7 +1726,7 @@
       case 'keys': shortcuts(); break;
       case 'undo': undo(); break;
       case 'changes': S.changesOpen = !S.changesOpen; renderChanges(); break;
-      case 'diagnose': { if (S.diagnosing) break; const r = a.getBoundingClientRect(); openMenu([{ head: 'Diagnose with Tovi' }, { label: 'This page', sub: 'Everything on screen · about 30 seconds', run: () => runDiagnose('page') }, { label: 'This selection', sub: S.sel ? ctxName(S.sel.el) : 'Select something first', disabled: !S.sel, run: () => runDiagnose('selection') }, { label: 'Whole product', sub: 'Coming soon: every page, one report', disabled: true }], { x: r.left - 90, y: r.top - 200 }); break; }
+      case 'diagnose': { if (S.diagnosing) break; const r = a.getBoundingClientRect(); openMenu([{ head: 'Diagnose with Tovi' }, { label: 'This page', sub: 'Everything on screen · about 30 seconds', run: () => runDiagnose('page') }, { label: 'This selection', sub: S.sel ? ctxName(S.sel.el) : 'Select something first', disabled: !S.sel, run: () => runDiagnose('selection') }, { label: 'Whole product', sub: 'Every page it can reach, up to 10 · a few minutes', run: () => runDiagnoseProduct() }], { x: r.left - 90, y: r.top - 200 }); break; }
       case 'toastClose': $('toast').hidden = true; break;
       case 'scope': S.scope = v; S.cpick = S.cp = null; renderPanel(); break;
       case 'srcScope': S.srcScope = v; renderPanel(); break;
@@ -1745,6 +1753,8 @@
       case 'corners': S.corners = !S.corners; renderPanel(); break;
       case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; S.fpY = a.getBoundingClientRect().top; if (v === 'grad') S.gstop = 'from'; renderPanel(); break;
       case 'fpClose': closeFpop(); break;
+      case 'diagStop': S.diagStop = true; if (S.card?.progress) { S.card.progress = 'Stopping after this page…'; renderChat(); } break;
+      case 'goPage': if (v !== S.path) goTo(v); break;
       case 'fontPick': pickFont(a); break;
       case 'gStop': if (e.target.closest('input')) { if (S.gstop !== v) { S.gstop = v; S.cp = null; } break; } S.gstop = v; S.cp = null; renderFpop(); break;
       case 'fpType': { const want = v === 'gradient' ? 'grad' : 'bg'; if (S.cpick !== want) { S.cpick = want; S.cp = null; S.gstop = 'from'; setFillType(v); } break; }
@@ -2074,6 +2084,89 @@
     return uniq(els.flatMap((el) => targetsOf(el, i + 1))).slice(0, 24);
   }
 
+  // Findings become Tovi's notes: a box around the elements each one is about, in page coordinates.
+  function notesFrom(findings) {
+    const out = [];
+    for (const f of findings) {
+      const boxes = f.locs.map(elOf).filter((el) => el?.isConnected).map((el) => el.getBoundingClientRect()).filter((b) => b.width || b.height);
+      if (!boxes.length) continue;
+      const x0 = Math.min(...boxes.map((b) => b.left)), y0 = Math.min(...boxes.map((b) => b.top)), x1 = Math.max(...boxes.map((b) => b.right)), y1 = Math.max(...boxes.map((b) => b.bottom));
+      out.push({ shape: 'box', x: x0 + W.scrollX - 4, y: y0 + W.scrollY - 4, w: x1 - x0 + 8, h: y1 - y0 + 8, text: f.fix, title: f.title, problem: f.problem, sev: f.severity, locs: f.locs, by: 'tovi' });
+    }
+    return out;
+  }
+  const loaded = () => new Promise((res) => { const done = () => { clearTimeout(t); frame.removeEventListener('load', done); setTimeout(res, 1400); }; const t = setTimeout(done, 12000); frame.addEventListener('load', done); });
+  // Whole product: start where the designer is, follow the app's own links (same site, up to 10 pages), and
+  // review each page top to bottom a screen at a time (up to 3 screens, reviewed side by side). Notes land on
+  // their page as each one finishes; the summary links to every page with notes. Stop ends it at any point.
+  async function runDiagnoseProduct() {
+    if (S.diagnosing || S.card?.busy || !D) return;
+    S.diagnosing = true; S.diagStop = false;
+    renderBar();
+    S.chat.push({ role: 'user', text: 'Diagnose the whole product', shown: 'Diagnose the whole product', ctx: 'Whole product', where: 'chat', atts: [] });
+    const m = { role: 'kerf', busy: true, status: 'pending', where: 'chat', targets: [], skip: [], started: Date.now(), looked: [], lookedN: 0, pages: [], progress: 'Finding your pages…' };
+    S.chat.push(m);
+    S.card = m;
+    if (S.mode === 'edit') { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
+    renderAI();
+    const start = S.path, seen = new Set([start]), queue = [start];
+    const sums = [];
+    try {
+      while (queue.length && !S.diagStop) {
+        const p = queue.shift();
+        if (S.path !== p) { const l = loaded(); frame.src = p; await l; }
+        if (!D || S.diagStop) break;
+        // More pages: links to this same app.
+        for (const a of D.querySelectorAll('a[href]')) {
+          let u; try { u = new URL(a.getAttribute('href'), W.location.href); } catch { continue; }
+          const k = u.pathname + u.search;
+          if (u.origin === W.location.origin && !u.pathname.startsWith('/__kerf') && !/\.[a-z0-9]{2,5}$/i.test(u.pathname) && !seen.has(k) && seen.size < 10) { seen.add(k); queue.push(k); }
+        }
+        const no = m.pages.length + 1, name = pageName(p);
+        // The page a screen at a time: capture each, then review them side by side.
+        const parts = Math.max(1, Math.min(3, Math.ceil(D.documentElement.scrollHeight / W.innerHeight)));
+        const shots = [];
+        for (let k = 0; k < parts && !S.diagStop; k++) {
+          m.progress = `Page ${no} of ${seen.size} · ${name} · reading`;
+          renderChat();
+          W.scrollTo(0, k * W.innerHeight);
+          await wait(600);
+          const targets = visibleTargets();
+          if (targets.length) shots.push({ targets, screen: await captureScreen() });
+        }
+        W.scrollTo(0, 0);
+        m.progress = `Page ${no} of ${seen.size} · ${name} · reviewing`;
+        m.lookedN += shots.reduce((a, x) => a + x.targets.length, 0);
+        renderChat();
+        const ctx = aiContext();
+        const res = await Promise.all(shots.map((x) => api('/diagnose', { targets: x.targets, screen: x.screen, context: ctx, scope: 'page' }).catch((e) => ({ error: e.message, findings: [] }))));
+        if (S.path !== p) break; // the designer went somewhere else
+        // Same issue seen in two screens: keep one note.
+        const titles = new Set();
+        const found = res.flatMap((r) => r.findings || []).filter((f) => { const k = f.title.toLowerCase(); if (titles.has(k)) return false; titles.add(k); return true; }).slice(0, 10);
+        S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...notesFrom(found)];
+        const n = S.notes.filter((x) => x.by === 'tovi').length;
+        m.pages.push({ path: p, name, n });
+        if (res[0]?.summary) sums.push(res[0].summary);
+        if (res.every((r) => r.error) && res.length) m.pages[m.pages.length - 1].error = res[0].error;
+        refreshTasks();
+        renderBar();
+      }
+    } catch (e) { m.error = e.message; }
+    // Back to where the designer started.
+    if (S.path !== start && !m.error) { const l = loaded(); frame.src = start; await l; }
+    const total = m.pages.reduce((a, x) => a + x.n, 0), withNotes = m.pages.filter((x) => x.n).length;
+    m.proposal = { message: m.pages.length ? `${S.diagStop ? 'Stopped. ' : ''}I reviewed ${m.pages.length} page${m.pages.length === 1 ? '' : 's'} and left ${total} note${total === 1 ? '' : 's'}${withNotes > 1 ? ` across ${withNotes} pages` : ''}. ${sums[0] || ''} Open a page to see its notes, keep the ones you agree with, then Apply.`.trim() : 'I couldn’t review any pages.', edits: [] };
+    m.status = total ? 'diag' : 'info';
+    m.progress = null;
+    m.busy = false;
+    m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
+    S.diagnosing = false;
+    renderBar();
+    renderAI();
+    saveChat();
+  }
+
   // Diagnose: Tovi reviews the page (or the selection) like a design lead and leaves notes on the spots that need
   // work, each saying what's wrong and what it would change. The person keeps, edits or removes them, then Apply
   // fixes the rest through Tasks, as one undoable batch.
@@ -2094,13 +2187,7 @@
       const [screen, focus] = await Promise.all([captureScreen(), scope === 'selection' ? captureFocus() : null]);
       const r = await api('/diagnose', { targets, screen, focus, context: aiContext(), scope });
       // Fresh notes replace Tovi's earlier ones; the person's own notes stay.
-      S.notes = S.notes.filter((x) => x.by !== 'tovi');
-      for (const f of r.findings) {
-        const boxes = f.locs.map(elOf).filter((el) => el?.isConnected).map((el) => el.getBoundingClientRect()).filter((b) => b.width || b.height);
-        if (!boxes.length) continue;
-        const x0 = Math.min(...boxes.map((b) => b.left)), y0 = Math.min(...boxes.map((b) => b.top)), x1 = Math.max(...boxes.map((b) => b.right)), y1 = Math.max(...boxes.map((b) => b.bottom));
-        S.notes.push({ shape: 'box', x: x0 + W.scrollX - 4, y: y0 + W.scrollY - 4, w: x1 - x0 + 8, h: y1 - y0 + 8, text: f.fix, title: f.title, problem: f.problem, sev: f.severity, locs: f.locs, by: 'tovi' });
-      }
+      S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...notesFrom(r.findings)];
       const n = S.notes.filter((x) => x.by === 'tovi').length;
       m.proposal = { message: `${r.summary}${n ? ` I left ${n} note${n === 1 ? '' : 's'} on the screen. Keep the ones you agree with, change or remove the rest, then Apply.` : ''}`, edits: [] };
       m.status = n ? 'diag' : 'info';
@@ -2626,7 +2713,7 @@
   }
   function chatHTML() {
     const ctx = S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen';
-    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}Second look</div>` : ''}${kerfHTML(m, i)}</div>`)).join('');
+    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}Second look</div>` : ''}${kerfHTML(m, i)}${m.progress ? `<div class="diagProg"><span>${esc(m.progress)}</span><button class="ghostBtn" data-act="diagStop">Stop</button></div>` : ''}${!m.busy && m.pages?.length ? `<div class="diagPages">${m.pages.map((x) => `<button data-act="goPage" data-v="${esc(x.path)}"${x.path === S.path ? ' class="on"' : ''}><span>${esc(x.name)}</span><b>${x.error ? 'Couldn’t review' : x.n ? `${x.n} note${x.n === 1 ? '' : 's'}` : 'Looks good'}</b></button>`).join('')}</div>` : ''}</div>`)).join('');
     return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><img class="ceAvatar" src="${TOVI_PIC}" alt=""><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
       <div class="comp">${tasksShown() ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
   }
@@ -3707,6 +3794,12 @@
 
   /* ---------- start ---------- */
   api('/theme').then((t) => { S.theme = t; renderPanel(); }).catch(() => {});
+  // Opened from the start page with "Check my product" on: review the whole product once the app has loaded.
+  if (new URLSearchParams(location.search).get('diagnose') === '1') {
+    history.replaceState(null, '', location.pathname);
+    const go = () => setTimeout(() => { if (!S.diagnosing) { toast('Tovi is checking your product for design issues…'); runDiagnoseProduct(); } }, 2500);
+    if (frame.contentDocument?.readyState === 'complete' && frame.contentWindow?.location.href !== 'about:blank') go(); else frame.addEventListener('load', go, { once: true });
+  }
   api('/project').then((p) => { S.project = p; renderTop(); }).catch(() => {});
   api('/changes').then((c) => { S.count = c.length; renderBar(); }).catch(() => {});
   api('/chat').then((c) => { S.chat = (c.messages || []).map((m) => (m.role === 'kerf' && m.status === 'pending' ? { ...m, status: 'discarded' } : m)); S.notes = c.notes || []; renderAI(); }).catch(() => {});

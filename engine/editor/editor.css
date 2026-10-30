@@ -1083,3 +1083,10 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .tkFix span{color:var(--ink3);font-size:11px;font-weight:600}
 .tkFix textarea{width:100%;min-height:52px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--canvas);color:var(--ink);font:400 12px/17px Geist,system-ui,sans-serif;resize:vertical}
 .tkFix textarea:focus{outline:none;border-color:var(--select)}
+/* Whole-product diagnose: progress with Stop, then one row per page */
+.diagProg{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:6px 6px 6px 10px;border-radius:8px;background:rgba(217,70,143,.08);color:var(--ink2);font-size:11px}
+.diagPages{display:flex;flex-direction:column;gap:2px;margin-top:8px;padding:4px;border:1px solid rgba(var(--hi),.08);border-radius:10px}
+.diagPages button{display:flex;align-items:center;justify-content:space-between;gap:8px;height:30px;padding:0 8px;border:0;border-radius:6px;background:none;color:var(--ink);text-align:left;cursor:pointer}
+.diagPages button:hover{background:rgba(var(--hi),.06)}
+.diagPages button.on{background:rgba(217,70,143,.1)}
+.diagPages b{font-weight:500;color:#D9468F;font-size:11px}

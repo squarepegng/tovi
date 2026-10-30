@@ -192,6 +192,9 @@ details.logs summary{cursor:pointer;color:var(--ink3);font-size:12px}details.log
 .rows{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .srow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid rgba(var(--hi),.06)}
 .srow:last-child{border-bottom:0}
+.chk{display:flex;align-items:flex-start;gap:10px;color:var(--ink2);cursor:pointer;line-height:20px}
+.chk input{width:16px;height:16px;margin:2px 0 0;flex:0 0 auto;accent-color:var(--select);height:16px}
+.chk .hint{display:block}
 select{flex:0 0 auto;align-self:flex-start;height:36px;min-width:200px;padding:0 32px 0 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23B0B0BA' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--ink);font:inherit;appearance:none;cursor:pointer;outline:none}
 select:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(138,87,188,.2)}
 .srow .tx{display:flex;flex-direction:column;gap:3px;min-width:0}
@@ -226,6 +229,7 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
     <div class="lead">
       <div><h1 id="pT">Open a project</h1><p>Paste a GitHub link or a folder on this computer. Tovi runs your app and opens it with the editor on top. Your code only changes when you edit.</p></div>
       <form class="openf" id="f"><input id="src" placeholder="github.com/team/app  or  ~/code/app" autocomplete="off" spellcheck="false" aria-label="GitHub link or folder"><button id="go">Open</button></form>
+      <label class="chk"><input type="checkbox" id="diagOn" checked><span>Check my product for design issues when it opens <span class="hint">Tovi reviews each page and leaves notes on what to fix.</span></span></label>
       <span class="hint">React apps built with Vite or Next.js 13+, styled with Tailwind CSS v3. Private repos use your GitHub sign-in on this Mac.</span>
       <div class="banner" id="keyBanner" hidden><span>Add your Anthropic key to use Tovi’s AI.</span><a class="btn ghost sm" href="#settings">Add key</a></div>
     </div>
@@ -310,7 +314,7 @@ async function poll(){
     (j.url?'<a class="btn sm" style="align-self:flex-start" href="'+esc(j.url)+'">Open in Tovi</a>':'')+'<details class="logs"'+(j.error||window.__logsOpen?' open':'')+'><summary>Technical details</summary><pre id="log">'+esc(j.log.trim())+'</pre></details></div>';
   const dd=document.querySelector('#job details');if(dd)dd.ontoggle=()=>{window.__logsOpen=dd.open};
   const l=$('log');if(l)l.scrollTop=l.scrollHeight;
-  if(j.url&&started){location.href=j.url;return}
+  if(j.url&&started){const d=$('diagOn')?.checked;location.href=j.url+(d?(j.url.includes('?')?'&':'?')+'diagnose=1':'');return}
   if(done){$('go').disabled=false;loadRecent();return}
   polling=setTimeout(poll,700);
 }
@@ -351,5 +355,7 @@ async function setModel(provider,model){const r=await fetch('/api/ai-provider',{
 $('aiProv').addEventListener('change',e=>{vp=e.target.value;$('cmf').hidden=true;$('cmErr').textContent='';renderAI()});
 $('aiModel').addEventListener('change',e=>{const v=e.target.value;if(v!=='__other')return setModel(vp,v);$('cmf').hidden=false;$('cmIn').value='';$('cmIn').focus()});
 $('cmf').addEventListener('submit',e=>{e.preventDefault();const m=$('cmIn').value.trim();if(m)setModel(vp,m)});
+try{const v=localStorage.getItem('kerf.diagOn');if(v!=null)$('diagOn').checked=v==='1'}catch{}
+$('diagOn').addEventListener('change',e=>{try{localStorage.setItem('kerf.diagOn',e.target.checked?'1':'0')}catch{}});
 loadKey();loadRecent();loadAbout();poll();
 </script></body></html>`;
