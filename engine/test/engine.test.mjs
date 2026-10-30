@@ -207,7 +207,7 @@ test('a transparent fill does not cancel a gradient', () => {
 
 test('layout: margin, size, direction, alignment, wrap', () => {
   assert.equal(ops('m-4 text-sm', [{ prop: 'mY', value: 24 }]), 'mx-4 text-sm my-6');
-  assert.equal(ops('block w-64', [{ prop: 'layout', value: 'row' }, { prop: 'w', value: 'fill' }]), 'flex flex-row w-full');
+  assert.equal(ops('block w-64', [{ prop: 'layout', value: 'row' }, { prop: 'w', value: 'fill' }]), 'flex w-full');
   assert.equal(ops('flex flex-col items-start', [{ prop: 'alignItems', value: 'center' }, { prop: 'justify', value: 'between' }, { prop: 'wrap', value: 'wrap' }]), 'flex flex-col items-center justify-between flex-wrap');
   assert.equal(ops('flex flex-row gap-2', [{ prop: 'layout', value: 'none' }]), 'gap-2');
   assert.equal(ops('h-10', [{ prop: 'h', value: 'hug' }]), 'h-fit');

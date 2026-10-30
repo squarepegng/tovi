@@ -223,7 +223,7 @@ export function structureEdit(code, line, col, op, ctx) {
     const first = kids[idx[0]], last = kids[idx[idx.length - 1]];
     const ind = indentAt(code, first.start);
     const inner = code.slice(first.start, last.end).split('\n').map((l, i) => (i === 0 ? l : l.startsWith(ind) ? '  ' + l : l)).join('\n');
-    const cls = String(op.className || 'flex flex-row items-center gap-2').replace(/"/g, '');
+    const cls = String(op.className || 'flex items-center gap-2').replace(/"/g, '');
     checkSnippet(`<div className="${cls}"></div>`, () => false);
     s.overwrite(first.start, last.end, `<div className="${cls}">\n${ind}  ${inner}\n${ind}</div>`);
     label = `Grouped ${idx.length} element${idx.length === 1 ? '' : 's'} into a frame`;

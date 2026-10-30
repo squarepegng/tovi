@@ -119,7 +119,7 @@ const Proposal = z.object({
       insertPosition: z.enum(['before', 'after', 'inside']).nullable().describe('For insert: relative to this element; inside puts it at the end of its children'),
       insertJsx: z.string().nullable().describe('For insert or replace: the new JSX. Plain tags (div, p, h2, span, img, button, ul/li…) or the project’s components and icons, Tailwind classes using the project’s tokens, fixed text only. No handlers, no expressions.'),
       groupWith: z.array(z.string()).nullable().describe('For group: ids of the neighboring siblings to wrap together with this element, in the same parent'),
-      groupClass: z.string().nullable().describe('For group: Tailwind classes for the new frame, e.g. "flex flex-row items-center gap-3"'),
+      groupClass: z.string().nullable().describe('For group: Tailwind classes for the new frame, e.g. "flex items-center gap-3"'),
       imageSrc: z.string().nullable().describe('For image: one of the uploaded images, "attachment:N" for an image attached to this message, a URL the designer gave, or a new picture as "photo: <what it shows>" or "illustration: <what it shows>"'),
       imageAlt: z.string().nullable().describe('For image: alt text describing the image'),
       why: z.string().describe('A few words, e.g. "warmer, more premium card"'),
@@ -456,7 +456,7 @@ export async function propose({ request, targets, history = [], images = [], tok
       }
       if (e.action === 'group') {
         st.others = (e.groupWith || []).filter((l) => allowed.has(l) && l.split(':')[0] === e.loc.split(':')[0]);
-        st.className = (e.groupClass || 'flex flex-row items-center gap-2').replace(/[^\w\s:/.[\]#-]/g, '');
+        st.className = (e.groupClass || 'flex items-center gap-2').replace(/[^\w\s:/.[\]#-]/g, '');
       }
       const ask = e.action === 'image' && String(e.imageSrc || '').match(/^\s*(photo|illustration)\s*:\s*(.+)$/i);
       if (ask) {

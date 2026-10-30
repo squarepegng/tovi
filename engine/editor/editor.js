@@ -1612,8 +1612,8 @@
       return;
     }
     if (!a) {
-      if (S.cpick && !e.target.closest('#fpop')) closeFpop();
-      if (!e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal')) closeFloating();
+      if (S.cpick && !downInFpop && !e.target.closest('#fpop')) closeFpop();
+      if (!downInFpop && !e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal,#fpop')) closeFloating();
       return;
     }
     const act = a.dataset.act, v = a.dataset.v;
@@ -1667,7 +1667,10 @@
       case 'gAdd': { const g = gradOf(); if (!g || g.via) break; g.via = g.from; g.viaPos = Math.round((posOf(g, 'from') + posOf(g, 'to')) / 2); S.gstop = 'via'; S.cp = null; commitGrad(g); break; }
       case 'gDel': { const g = gradOf(); if (!g || !g.via) break; if (v === 'from') { g.from = g.via; g.fromPos = g.viaPos; } else if (v === 'to') { g.to = g.via; g.toPos = g.viaPos; } g.via = null; g.viaPos = null; S.gstop = 'from'; S.cp = null; commitGrad(g); break; }
       case 'cpTab': S.cpTab = v; renderFpop(); break;
-      case 'token': case 'set': if (a.dataset.p === 'grad') { const g = gradOf() || { dir: 'r' }; g[S.gstop || 'from'] = v; S.cp = null; commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] }); } else { if (a.dataset.act === 'token') S.cp = null; commit({ ops: [{ prop: a.dataset.p, value: v }] }); } break;
+      case 'token': case 'set': if (a.dataset.p === 'grad') { const g = gradOf() || { dir: 'r' }; g[S.gstop || 'from'] = v; S.cp = null; commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] }); } else if (a.dataset.p === 'layout' && v === 'none') {
+          // Auto layout off: gap and alignment do nothing without it, so they go too.
+          commit({ ops: [{ prop: 'layout', value: 'none' }, { prop: 'gap', value: null }, { prop: 'justify', value: null }, { prop: 'alignItems', value: null }] });
+        } else { if (a.dataset.act === 'token') S.cp = null; commit({ ops: [{ prop: a.dataset.p, value: v }] }); } break;
       case 'addFill': commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }); break;
       case 'rmFill': S.cpick = S.cp = null; if (gradOf()) commit({ ops: [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] }); else clearStyle([{ prop: 'bg', value: null }], [{ prop: 'bg', value: 'transparent' }], (el) => !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs(el).backgroundColor)); break;
       case 'rmShadow': clearStyle([{ prop: 'shadow', value: null }], [{ prop: 'shadow', value: 'none' }], (el) => cs(el).boxShadow.split(/,(?![^(]*\))/).some((x) => !/rgba\([^)]*,\s*0\)/.test(x) && /[1-9]\d*(\.\d+)?px/.test(x))); break;
@@ -1737,6 +1740,10 @@
     const n = parseFloat(t.value);
     if (isNaN(n)) return renderPanel();
     const v = clamp(p, Math.round(n * 10) / 10);
+    // Zero padding, margin or gap: remove the class (like a developer would) rather than write px-0,
+    // unless something else (a component's own classes) still sets it.
+    if (v === 0 && ['padX', 'padY', 'mX', 'mY', 'gap'].includes(p)) return clearStyle([{ prop: p, value: null }], [{ prop: p, value: 0 }], (el) => (+read(p, el) || 0) !== 0);
+    if (v === 100 && p === 'opacity') return clearStyle([{ prop: p, value: null }], [{ prop: p, value: 100 }], (el) => +read(p, el) !== 100);
     // Icons keep their proportions when resized, like Figma.
     if ((p === 'w' || p === 'h') && S.sel?.el?.tagName.toLowerCase() === 'svg') {
       const r = S.sel.el.getBoundingClientRect(), k = p === 'w' ? r.height / (r.width || 1) : r.width / (r.height || 1);
@@ -1800,6 +1807,10 @@
     const up = () => { area.removeEventListener('pointermove', at); area.removeEventListener('pointerup', up); area.removeEventListener('pointercancel', up); cpCommit(c); };
     area.addEventListener('pointermove', at); area.addEventListener('pointerup', up); area.addEventListener('pointercancel', up);
   }, true);
+  // Where did this click start? Picking a colour redraws the floating panel under the pointer, so the click that
+  // follows can land on an element that's gone; a click that started inside the panel never closes it.
+  let downInFpop = false;
+  document.addEventListener('pointerdown', (e) => { downInFpop = !!e.target.closest?.('#fpop'); }, true);
   // Naming a version: Escape or clicking away cancels.
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest?.('.vName')) { e.stopPropagation(); S.vNaming = null; renderPanel(); } }, true);
   document.addEventListener('focusout', (e) => { if (e.target.closest?.('.vName') && S.vNaming != null) setTimeout(() => { if (!document.activeElement?.closest('.vName')) { S.vNaming = null; renderPanel(); } }, 120); });

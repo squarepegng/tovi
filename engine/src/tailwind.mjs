@@ -157,7 +157,7 @@ export function classFor(prop, v, th) {
       if (v === 'auto') return `${prop}-auto`;
       return scale(prop, th.spacing, Number(v));
     }
-    case 'layout': return v === 'row' ? 'flex flex-row' : v === 'col' ? 'flex flex-col' : v === 'grid' ? 'grid' : 'block';
+    case 'layout': return v === 'row' ? 'flex' : v === 'col' ? 'flex flex-col' : v === 'grid' ? 'grid' : 'block';
     case 'alignItems': return `items-${v}`;
     case 'justify': return `justify-${v}`;
     case 'wrap': return v === 'wrap' ? 'flex-wrap' : 'flex-nowrap';
