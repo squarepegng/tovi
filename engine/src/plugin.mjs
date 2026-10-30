@@ -16,6 +16,7 @@ import { readPrefs, savePrefs } from './prefs.mjs';
 import { createLibrary } from './library.mjs';
 import { listTokens, tokenEdit } from './tokens.mjs';
 import { googleFontFiles } from './fonts.mjs';
+import { realShots, chromePath } from './shots.mjs';
 import { searchPhotos, photoUsed, illustrate, envKey, saveEnv } from './images.mjs';
 
 function readBody(req) {
@@ -175,6 +176,12 @@ export async function createKerf(webRoot) {
         if (route === '/structure') return send2(200, editor.structure(body.loc, body.op, 'hand', body.name));
         if (route === '/upload') {
           try { return send(200, library.saveUpload(body.name, body.data)); } catch (e) { throw new KerfError(e.message); }
+        }
+        // Real screenshots from a hidden Chrome: the whole page and/or chosen elements (e.g. each section).
+        if (route === '/shots') {
+          if (!chromePath()) return send(200, { available: false });
+          const r = await realShots({ origin: `http://${req.headers.host}`, path: body?.path || '/', width: body?.width, height: body?.height, theme: body?.theme, locs: Array.isArray(body?.locs) ? body.locs : [], full: !!body?.full }).catch((e) => { console.error('Tovi: screenshot failed', e.message); return null; });
+          return send(200, r ? { available: true, ...r } : { available: false });
         }
         // A design review of the screen (or the selection): findings pinned to elements, shown as Tovi's notes.
         if (route === '/diagnose') {

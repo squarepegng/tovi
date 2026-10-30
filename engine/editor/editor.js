@@ -2113,7 +2113,11 @@
     let jobs = [];
     const blocks = pageBlocks();
     if (blocks.length >= 2) {
-      jobs = blocks.map((b) => ({ name: blockName(b), make: async () => ({ targets: uniq(tagged(b).concat(b.matches('[data-kerf],[data-kerf-use]') ? [b] : []).flatMap((el) => targetsOf(el))).slice(0, 70), screen: await captureEl(b), scope: 'section' }) }));
+      const locOfEl = (b) => b.getAttribute('data-kerf-use') || b.getAttribute('data-kerf');
+      m.progress = `${label} · taking screenshots`;
+      renderChat();
+      const real = await realShots({ locs: blocks.map(locOfEl).filter(Boolean) });
+      jobs = blocks.map((b) => ({ name: blockName(b), make: async () => ({ targets: uniq(tagged(b).concat(b.matches('[data-kerf],[data-kerf-use]') ? [b] : []).flatMap((el) => targetsOf(el))).slice(0, 70), screen: jpeg(real?.sections?.[locOfEl(b)]) || await captureEl(b), scope: 'section' }) }));
     } else {
       const parts = Math.max(1, Math.min(8, Math.ceil(D.documentElement.scrollHeight / W.innerHeight)));
       for (let k = 0; k < parts; k++) jobs.push({ name: `screen ${k + 1}`, make: async () => { W.scrollTo(0, k * W.innerHeight); await wait(600); return { targets: visibleTargets(), screen: await captureScreen(), scope: 'page' }; } });
@@ -2321,8 +2325,28 @@
   // The app's web fonts, embedded once per page load so screenshots show the real type (not a fallback font).
   let fontCss = null;
   async function fontsFor(lib) {
-    if (!fontCss) fontCss = Promise.race([lib.getFontEmbedCSS(D.documentElement).catch(() => ''), wait(3000).then(() => '')]);
+    if (!fontCss) fontCss = Promise.race([buildFontCss(lib), wait(8000).then(() => '')]);
     return fontCss;
+  }
+  // The page's own fonts, plus its Google Fonts: the browser won't let a page copy fonts from another site, but
+  // Google serves them openly, so Tovi fetches the stylesheet and the font files (Latin only, to stay small) itself.
+  const asDataUrl = (u) => fetch(u).then((r) => r.blob()).then((b) => new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(b); })).catch(() => null);
+  async function buildFontCss(lib) {
+    const own = await lib.getFontEmbedCSS(D.documentElement).catch(() => '');
+    const links = [...D.querySelectorAll('link[href*="fonts.googleapis.com"]')].filter((l) => /stylesheet/i.test(l.rel)).map((l) => l.href);
+    const parts = await Promise.all(links.map(async (href) => {
+      const css = await fetch(href).then((r) => (r.ok ? r.text() : '')).catch(() => '');
+      if (!css) return '';
+      const blocks = css.split(/(?=\/\* [\w-]+ \*\/)/);
+      const latin = blocks.filter((b) => /^\/\* latin \*\//.test(b));
+      const keep = latin.length ? latin : [css];
+      return (await Promise.all(keep.map(async (b) => {
+        let out = b;
+        for (const [, u] of [...b.matchAll(/url\((https:[^)]+)\)/g)]) { const d = await asDataUrl(u); if (d) out = out.replace(u, d); }
+        return out;
+      }))).join('');
+    }));
+    return own + parts.join('');
   }
   const loadH2i = () => (h2i ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js'; sc.onload = () => res(window.htmlToImage); sc.onerror = rej; document.head.appendChild(sc); }));
   async function captureScreen(full = false) {
@@ -2337,6 +2361,15 @@
       return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
     } catch { h2i = null; return null; }
   }
+  // Real screenshots from Tovi's hidden Chrome (exact pixels, as visitors see the page). null when unavailable,
+  // and callers fall back to the redraw.
+  async function realShots(opts) {
+    if (!W) return null;
+    const r = await api('/shots', { path: S.path, width: W.innerWidth, height: W.innerHeight, theme: aiContext().theme, ...opts }).catch(() => null);
+    return r?.available ? r : null;
+  }
+  const jpeg = (data) => (data ? { media_type: 'image/jpeg', data } : null);
+  async function realFull() { const r = await realShots({ full: true }); return jpeg(r?.full); }
   // A sharp close-up of the selected element (twice the size, at most 1600px wide), for judging detail.
   async function captureFocus() {
     const el = S.sel?.el;
@@ -2546,7 +2579,7 @@
     S.card = m;
     renderAI();
     try {
-      const [screen, focus] = await Promise.all([captureScreen(!!opts.full), !opts.full && (where === 'chat' || where === 'ask') ? captureFocus() : null]);
+      const [screen, focus] = await Promise.all([opts.full ? realFull().then((x) => x || captureScreen(true)) : captureScreen(), !opts.full && (where === 'chat' || where === 'ask') ? captureFocus() : null]);
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
       // Tovi shows up on the canvas only when it applies edits (applyLive), not while it thinks or answers.
@@ -2998,7 +3031,7 @@
     S.card = m;
     renderAI();
     const offScreen = notes.some((n) => W && (n.y + (n.h || 0) < W.scrollY || n.y > W.scrollY + W.innerHeight));
-    const screen = await captureScreen(offScreen);
+    const screen = offScreen ? (await realFull()) || (await captureScreen(true)) : await captureScreen();
     m.mode = S.modeOnce || S.styleMode;
     S.modeOnce = null;
     const run = async (k) => {
