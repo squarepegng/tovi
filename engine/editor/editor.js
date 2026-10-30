@@ -2247,59 +2247,40 @@
   // Apply so you can watch it: style changes are shared out to lanes (one per agent), each lane makes its
   // changes one by one as its agent gets there; structure, code and colour-token changes follow together
   // (their order matters). One batch = one undo. A click or key press finishes at once.
+  // Apply everything in one go (one save, one reload of the app), with Tovi's cursor touring a few of the changed
+  // elements on screen at the same time. The tour never holds up the work: it stops as soon as the save is done
+  // (plus a moment to finish its current move), or at once on a click or key press. One batch = one undo.
   async function applyLive(m, edits) {
     const batch = Date.now();
     m.batch = batch;
     const styles = edits.filter((e) => !e.structure), rest = edits.filter((e) => e.structure);
-    const results = [];
-    let n = S.count, skip = !live() || edits.length > 40;
+    const all = [...styles, ...rest];
+    let skip = !live();
     const onSkip = () => { skip = true; };
     if (!skip) { window.addEventListener('pointerdown', onSkip, true); window.addEventListener('keydown', onSkip, true); W?.addEventListener('pointerdown', onSkip, true); }
-    const used = new Set(), done = new Set(), talked = new Set();
-    // Lanes: tasks keep their helper; chat changes are shared out by element between up to three agents.
-    const lanes = new Map();
-    const team = [AGENTS[0]];
-    const byEl = new Map();
-    for (const e of styles) {
-      const a = team[0];
-      byEl.set(e.loc, a);
-      if (!lanes.has(a.name)) lanes.set(a.name, { a, list: [] });
-      lanes.get(a.name).list.push(e);
-    }
-    const one = async (e) => { const r = await api('/ai/apply', { batch, edits: [e] }); results.push(...r.results); n = Math.max(n, r.n); done.add(e); };
-    try {
-      await Promise.all([...lanes.values()].map(async ({ a, list }, k) => {
-        await wait(k * 250);
-        for (const e of list) {
-          if (skip) return;
-          used.add(a.name);
-          const el = elOf(e.loc);
-          for (const t of (m.talk || []).filter((x) => x.loc === e.loc && !talked.has(x))) {
-            talked.add(t);
-            const who = agentNamed(t.agent);
-            used.add(who.name);
-            if (el) await lookAt(who, el, t.text, e.loc);
-            await wait(700);
-          }
-          await editOn(a, el, e, () => one(e));
-        }
-      }));
-      const left = styles.filter((e) => !done.has(e));
-      if (left.length) { const r = await api('/ai/apply', { batch, edits: left }); results.push(...r.results); n = r.n; }
-      if (rest.length) {
-        const a = agentOf(m, rest[0]);
-        if (!skip) { used.add(a.name); const el = elOf(rest[0].loc); if (el) { await inView(el); await lookAt(a, el, rest[0].why, rest[0].loc); } }
-        const r = await api('/ai/apply', { batch, edits: rest });
-        results.push(...r.results);
-        n = r.n;
+    const a = AGENTS[0], used = new Set();
+    const onScreen = (el) => { if (!el?.isConnected || !W) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < W.innerHeight; };
+    const seen = new Set();
+    const tour = (async () => {
+      for (const e of all) {
+        if (skip || seen.size >= 5) return;
+        const el = elOf(e.loc);
+        if (!onScreen(el) || seen.has(el)) continue;
+        seen.add(el); used.add(a.name);
+        await editOn(a, el, e, async () => {});
       }
+    })().catch(() => {});
+    try {
+      const r = await api('/ai/apply', { batch, edits: all });
+      await Promise.race([tour, wait(1200)]);
+      return { results: r.results, n: r.n };
     } catch (err) {
-      return results.length ? { results, n } : { error: err.message };
+      return { error: err.message };
     } finally {
+      skip = true;
       window.removeEventListener('pointerdown', onSkip, true); window.removeEventListener('keydown', onSkip, true); W?.removeEventListener('pointerdown', onSkip, true);
       release([...used]);
     }
-    return { results, n };
   }
 
   async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = where !== 'notes', opts = {}) {
@@ -2318,7 +2299,7 @@
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
       // Tovi shows up on the canvas only when it applies edits (applyLive), not while it thinks or answers.
-      m.proposal = await api('/ai', { request: opts.review ? opts.review : text, targets, history, screen, focus, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
+      m.proposal = await api('/ai', { request: opts.review ? opts.review : text, light: !!opts.review, targets, history, screen, focus, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
       if (!m.proposal.edits.length) m.status = 'info';

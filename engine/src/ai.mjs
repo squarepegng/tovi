@@ -302,8 +302,20 @@ const PRESETS = {
 
 // OpenAI and Gemini take the same request as Claude and answer with the same proposal, checked by the same schema.
 // Images go in as data URLs (OpenAI) or inline data (Gemini).
-const PROPOSAL_SCHEMA = () => { const { $schema, ...rest } = z.toJSONSchema(Proposal, { io: 'input' }); return rest; };
-async function askOther(provider, model, key, { systemText, history8, lastContent }) {
+// Fields that can be empty aren't required here, so the model can leave them out instead of writing
+// "null" for each of them on every edit: much less to generate, so answers come back faster.
+// parseProposal fills them back in before the schema check.
+const nullableOf = (p) => Array.isArray(p.anyOf) ? p.anyOf.some((x) => x.type === 'null') : Array.isArray(p.type) && p.type.includes('null');
+function relax(node) {
+  if (!node || typeof node !== 'object') return node;
+  if (Array.isArray(node)) { node.forEach(relax); return node; }
+  if (node.properties && Array.isArray(node.required)) node.required = node.required.filter((k) => !nullableOf(node.properties[k]));
+  for (const v of Object.values(node)) relax(v);
+  return node;
+}
+const PROPOSAL_SCHEMA = () => { const { $schema, ...rest } = z.toJSONSchema(Proposal, { io: 'input' }); return relax(rest); };
+const EDIT_NULLS = ['note', 'text', 'target', 'token', 'code', 'moveDir', 'swapTo', 'insertPosition', 'insertJsx', 'groupWith', 'groupClass', 'imageSrc', 'imageAlt'];
+async function askOther(provider, model, key, { systemText, history8, lastContent, light }) {
   const text = (b) => b.type === 'text' ? b.text : null;
   let res, body;
   try {
@@ -337,7 +349,7 @@ async function askOther(provider, model, key, { systemText, history8, lastConten
           ...history8.map((h) => ({ role: h.role === 'assistant' ? 'model' : 'user', parts: [{ text: h.content }] })),
           { role: 'user', parts },
         ],
-        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: PROPOSAL_SCHEMA(), maxOutputTokens: 16000 },
+        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: PROPOSAL_SCHEMA(), maxOutputTokens: 16000, ...(light ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
       }),
     });
     body = await res.json();
@@ -358,12 +370,21 @@ async function askOther(provider, model, key, { systemText, history8, lastConten
 function parseProposal(raw) {
   let obj;
   try { obj = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The answer couldn’t be read. Try again.'); }
+  if (obj && typeof obj === 'object') {
+    for (const k of ['suggest', 'notes']) if (obj[k] === undefined) obj[k] = null;
+    for (const e of Array.isArray(obj.edits) ? obj.edits : []) {
+      for (const k of EDIT_NULLS) if (e[k] === undefined) e[k] = null;
+      if (!Array.isArray(e.ops)) e.ops = [];
+      if (!Array.isArray(e.props)) e.props = [];
+      if (typeof e.why !== 'string') e.why = '';
+    }
+  }
   const r = Proposal.safeParse(obj);
   if (!r.success) throw new KerfError('The answer couldn’t be read. Try again.');
   return r.data;
 }
 
-export async function propose({ request, targets, history = [], images = [], tokens = [], webRoot = null, screen = null, focus = null, context = null, mode = 'system', direction = null }, theme, library) {
+export async function propose({ request, targets, history = [], images = [], tokens = [], webRoot = null, screen = null, focus = null, light = false, context = null, mode = 'system', direction = null }, theme, library) {
   const { provider, model, key } = aiConfig();
   if (!key) throw new KerfError(`Add your ${PROVIDERS[provider].label} key in Tovi’s Settings to use AI.`);
   if (!request || !String(request).trim()) throw new KerfError('Say or type what should change.');
@@ -398,7 +419,8 @@ export async function propose({ request, targets, history = [], images = [], tok
   // For a selection (not the whole screen), show the source of its file(s) so the AI understands the structure and
   // can write precise code edits: up to two files, trimmed if very long.
   let source = '';
-  if (webRoot && targets.length <= 15) {
+  // A light request (the second look) judges from the screenshots, so it skips the source.
+  if (webRoot && targets.length <= 15 && !light) {
     const files = [...new Set(targets.map((t) => t.file).filter(Boolean))].slice(0, 2);
     for (const f of files) {
       let code;
@@ -416,7 +438,7 @@ export async function propose({ request, targets, history = [], images = [], tok
     { type: 'text', text: lastText },
   ];
   const systemText = `${SYSTEM}\n\nThis project's design system:\n${themeSummary(theme)}\n${tokens.length ? `Colour tokens you can change with action token (light / dark values): ${tokens.map((t) => `${t.name} ${t.values.map((v) => `${v.theme} ${v.hex}`).join(' / ')}`).join('; ')}\n` : ''}${libSummary(library)}`;
-  const history8 = history.slice(-8).map((h) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.text).slice(0, 2000) }));
+  const history8 = history.slice(light ? -2 : -8).map((h) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.text).slice(0, 2000) }));
   let p, usedModel, usage;
   if (provider === 'anthropic') {
     const client = new Anthropic({ apiKey: key });
@@ -429,7 +451,7 @@ export async function propose({ request, targets, history = [], images = [], tok
         fallbacks: 'default',
         // Think before answering: design judgement and code reading both benefit, and it stays quick for simple asks.
         thinking: { type: 'adaptive' },
-        output_config: { effort: 'medium', format: betaZodOutputFormat(Proposal) },
+        output_config: { effort: light ? 'low' : 'medium', format: betaZodOutputFormat(Proposal) },
         // The instructions and design system are the same on every request: cache them so later requests start faster.
         system: [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }],
         messages: [
@@ -449,7 +471,7 @@ export async function propose({ request, targets, history = [], images = [], tok
     usedModel = res.model;
     usage = { input: res.usage.input_tokens, output: res.usage.output_tokens, cacheRead: res.usage.cache_read_input_tokens, cacheWrite: res.usage.cache_creation_input_tokens };
   } else {
-    ({ p, usedModel, usage } = await askOther(provider, model, key, { systemText, history8, lastContent }));
+    ({ p, usedModel, usage } = await askOther(provider, model, key, { systemText, history8, lastContent, light }));
   }
 
   const edits = [];
