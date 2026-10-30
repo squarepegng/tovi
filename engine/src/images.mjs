@@ -13,6 +13,13 @@ const MODEL = 'claude-opus-5-5';
 export function envKey(name) {
   try { return fs.readFileSync(ENV, 'utf8').match(new RegExp(`^${name}=(\\S+)`, 'm'))?.[1] || null; } catch { return null; }
 }
+// Save one value in engine/.env (git-ignored, owner-only). Keys are only written here, never echoed back.
+export function saveEnv(name, value) {
+  const lines = (fs.existsSync(ENV) ? fs.readFileSync(ENV, 'utf8') : '').split('\n').filter((l) => l && !l.startsWith(name + '='));
+  lines.push(`${name}=${value}`);
+  fs.writeFileSync(ENV, lines.join('\n') + '\n');
+  fs.chmodSync(ENV, 0o600);
+}
 
 /* ---------- photos (Unsplash) ---------- */
 export async function searchPhotos(q, orientation) {

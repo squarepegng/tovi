@@ -8,12 +8,12 @@ import { fileURLToPath } from 'node:url';
 import { tagSource } from './ast.mjs';
 import { loadTheme } from './tailwind.mjs';
 import { createEditor, KerfError } from './edit.mjs';
-import { propose } from './ai.mjs';
+import { propose, aiConfig, PROVIDERS } from './ai.mjs';
 import { createSession } from './session.mjs';
 import { readPerson, savePerson } from './person.mjs';
 import { createLibrary } from './library.mjs';
 import { listTokens, tokenEdit } from './tokens.mjs';
-import { searchPhotos, photoUsed, illustrate, envKey } from './images.mjs';
+import { searchPhotos, photoUsed, illustrate, envKey, saveEnv } from './images.mjs';
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -74,7 +74,11 @@ export async function createKerf(webRoot) {
         if (req.method === 'GET' && route === '/versions') return send(200, session.list());
         if (req.method === 'GET' && route === '/chat') return send(200, session.chat());
         // Which AI keys are saved (never the keys themselves), for the Settings window.
-        if (req.method === 'GET' && route === '/keys') return send(200, { anthropic: !!envKey('ANTHROPIC_API_KEY'), unsplash: !!envKey('UNSPLASH_ACCESS_KEY') });
+        // Which AI keys are saved (never the keys themselves), the chosen AI and its model.
+        if (req.method === 'GET' && route === '/keys') {
+          const c = aiConfig();
+          return send(200, { anthropic: !!envKey('ANTHROPIC_API_KEY'), openai: !!envKey('OPENAI_API_KEY'), gemini: !!envKey('GEMINI_API_KEY'), unsplash: !!envKey('UNSPLASH_ACCESS_KEY'), provider: c.provider, model: c.model, defaults: Object.fromEntries(Object.entries(PROVIDERS).map(([k, v]) => [k, { label: v.label, model: v.model }])) });
+        }
         if (req.method === 'GET' && route === '/direction') { const d = session.direction(); return send(200, d ? { ...d, refs: d.refs.map(({ data, ...r }) => r) } : null); }
         if (req.method === 'GET' && route === '/images/photos') {
           const u = new URL(req.url, 'http://x').searchParams;
@@ -92,6 +96,23 @@ export async function createKerf(webRoot) {
         if (req.method === 'GET' && route === '/changes') return send(200, editor.history.map(({ rel, loc, change, summary, at }) => ({ file: rel, loc, change, summary, at })));
         if (req.method !== 'POST') return send(404, { error: 'Not found' });
         const body = await readBody(req);
+        if (route === '/keys' && req.method === 'POST') {
+          const { provider, key } = body || {};
+          const pr = PROVIDERS[provider];
+          const k = String(key || '').trim();
+          if (!pr) return send(400, { error: 'Pick Claude, OpenAI or Gemini.' });
+          if (!/^\S{20,}$/.test(k) || (provider === 'anthropic' && !k.startsWith('sk-ant-')) || (provider === 'openai' && !k.startsWith('sk-')) || (provider === 'gemini' && !k.startsWith('AIza'))) return send(400, { error: `That does not look like a ${pr.label} key.` });
+          saveEnv(pr.keyName, k);
+          return send(200, { ok: true });
+        }
+        if (route === '/ai-config' && req.method === 'POST') {
+          const provider = body?.provider, model = String(body?.model || '').trim();
+          if (!PROVIDERS[provider]) return send(400, { error: 'Pick Claude, OpenAI or Gemini.' });
+          if (model && !/^[\w.:/-]{2,80}$/.test(model)) return send(400, { error: 'That model name does not look right.' });
+          saveEnv('AI_PROVIDER', provider);
+          saveEnv('AI_MODEL', model || PROVIDERS[provider].model);
+          return send(200, { ok: true });
+        }
         if (route === '/chat') { session.setChat(body); return send(200, { ok: true }); }
         if (route === '/direction') { const d = session.setDirection(body); return send(200, d ? { ...d, refs: d.refs.map(({ data, ...r }) => r) } : null); }
         // Every change is saved to .kerf/ so a restart keeps undo, versions and chat.

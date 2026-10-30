@@ -13,20 +13,29 @@ import { checkProp } from './props.mjs';
 import { checkSnippet } from './structure.mjs';
 
 const ENV = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env');
-const MODEL = 'claude-opus-5-5';
 
 export const PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity', 'shadow', 'fit', 'gradient', 'clipText', 'mX', 'mY', 'w', 'h', 'layout', 'alignItems', 'justify', 'wrap'];
 const NUMERIC = new Set(['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity']);
 const COLOR = new Set(['bg', 'color', 'borderC']);
 
-// The key is read on each request, so saving a new one on the start page takes effect at once.
-function apiKey() {
+// Which AI answers: Claude (default), OpenAI or Gemini. Read on each request, so Settings takes effect at once.
+export const PROVIDERS = {
+  anthropic: { label: 'Claude', keyName: 'ANTHROPIC_API_KEY', model: 'claude-opus-5-5' },
+  openai: { label: 'OpenAI', keyName: 'OPENAI_API_KEY', model: 'gpt-6-astra' },
+  gemini: { label: 'Gemini', keyName: 'GEMINI_API_KEY', model: 'gemini-3.6-flash' },
+};
+function envValue(name) {
   try {
-    const m = fs.readFileSync(ENV, 'utf8').match(/^ANTHROPIC_API_KEY=(\S+)/m);
+    const m = fs.readFileSync(ENV, 'utf8').match(new RegExp(`^${name}=(\\S+)`, 'm'));
     return m ? m[1] : null;
   } catch {
     return null;
   }
+}
+export function aiConfig() {
+  const provider = PROVIDERS[envValue('AI_PROVIDER')] ? envValue('AI_PROVIDER') : 'anthropic';
+  const model = envValue('AI_MODEL') || PROVIDERS[provider].model;
+  return { provider, model, key: envValue(PROVIDERS[provider].keyName) };
 }
 
 const Proposal = z.object({
@@ -222,9 +231,72 @@ const PRESETS = {
   minimal: 'Minimal: near-monochrome, few elements, lots of space, thin lines, quiet type.',
 };
 
+// OpenAI and Gemini take the same request as Claude and answer with the same proposal, checked by the same schema.
+// Images go in as data URLs (OpenAI) or inline data (Gemini).
+const PROPOSAL_SCHEMA = () => { const { $schema, ...rest } = z.toJSONSchema(Proposal, { io: 'input' }); return rest; };
+async function askOther(provider, model, key, { systemText, history8, lastContent }) {
+  const text = (b) => b.type === 'text' ? b.text : null;
+  let res, body;
+  try {
+    if (provider === 'openai') {
+      const parts = lastContent.map((b) => b.type === 'image' ? { type: 'image_url', image_url: { url: `data:${b.source.media_type};base64,${b.source.data}` } } : { type: 'text', text: text(b) });
+      res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          max_completion_tokens: 16000,
+          messages: [{ role: 'system', content: systemText }, ...history8, { role: 'user', content: parts }],
+          response_format: { type: 'json_schema', json_schema: { name: 'proposal', schema: PROPOSAL_SCHEMA() } },
+        }),
+      });
+      body = await res.json();
+      if (!res.ok) throw { status: res.status, message: body?.error?.message };
+      const msg = body.choices?.[0]?.message;
+      if (msg?.refusal) throw new KerfError(`${PROVIDERS.openai.label} declined this request. Try rewording it as a visual change.`);
+      const raw = msg?.content;
+      return { p: parseProposal(raw), usedModel: body.model || model, usage: { input: body.usage?.prompt_tokens, output: body.usage?.completion_tokens } };
+    }
+    // Gemini
+    const parts = lastContent.map((b) => b.type === 'image' ? { inline_data: { mime_type: b.source.media_type, data: b.source.data } } : { text: text(b) });
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemText }] },
+        contents: [
+          ...history8.map((h) => ({ role: h.role === 'assistant' ? 'model' : 'user', parts: [{ text: h.content }] })),
+          { role: 'user', parts },
+        ],
+        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: PROPOSAL_SCHEMA(), maxOutputTokens: 16000 },
+      }),
+    });
+    body = await res.json();
+    if (!res.ok) throw { status: res.status, message: body?.error?.message };
+    const cand = body.candidates?.[0];
+    if (cand?.finishReason === 'SAFETY') throw new KerfError('Gemini declined this request. Try rewording it as a visual change.');
+    const raw = (cand?.content?.parts || []).map((x) => x.text || '').join('');
+    return { p: parseProposal(raw), usedModel: body.modelVersion || model, usage: { input: body.usageMetadata?.promptTokenCount, output: body.usageMetadata?.candidatesTokenCount } };
+  } catch (e) {
+    if (e instanceof KerfError) throw e;
+    const name = PROVIDERS[provider].label;
+    if (e.status === 401 || e.status === 403) throw new KerfError(`${name} didn’t accept the saved key. Save a new one in Settings.`);
+    if (e.status === 429) throw new KerfError(`${name} is busy right now. Try again in a moment.`);
+    if (e.status) { console.error('Tovi AI error:', e.status, e.message); throw new KerfError(`${name} couldn’t answer (${e.status}). Try again.`); }
+    throw new KerfError(`${name} couldn’t be reached. Check your connection and try again.`);
+  }
+}
+function parseProposal(raw) {
+  let obj;
+  try { obj = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The answer couldn’t be read. Try again.'); }
+  const r = Proposal.safeParse(obj);
+  if (!r.success) throw new KerfError('The answer couldn’t be read. Try again.');
+  return r.data;
+}
+
 export async function propose({ request, targets, history = [], images = [], tokens = [], webRoot = null, screen = null, context = null, mode = 'system', direction = null }, theme, library) {
-  const key = apiKey();
-  if (!key) throw new KerfError('Add your Anthropic key on Tovi’s start page (localhost:4100) to use AI.');
+  const { provider, model, key } = aiConfig();
+  if (!key) throw new KerfError(`Add your ${PROVIDERS[provider].label} key in Tovi’s Settings to use AI.`);
   if (!request || !String(request).trim()) throw new KerfError('Say or type what should change.');
   if (!targets?.length) throw new KerfError('Nothing on screen to work with. Select something or draw a note first.');
 
@@ -259,31 +331,40 @@ export async function propose({ request, targets, history = [], images = [], tok
     ...imgs.flatMap((im, n) => [{ type: 'text', text: `Attachment ${n + 1}: ${String(im.name || 'image').slice(0, 80)}` }, { type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } }]),
     { type: 'text', text: lastText },
   ];
-  const client = new Anthropic({ apiKey: key });
-  let res;
-  try {
-    res = await client.beta.messages.parse({
-      model: MODEL,
-      max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'medium', format: betaZodOutputFormat(Proposal) },
-      // The instructions and design system are the same on every request: cache them so later requests start faster.
-      system: [{ type: 'text', text: `${SYSTEM}\n\nThis project's design system:\n${themeSummary(theme)}\n${tokens.length ? `Colour tokens you can change with action token (light / dark values): ${tokens.map((t) => `${t.name} ${t.values.map((v) => `${v.theme} ${v.hex}`).join(' / ')}`).join('; ')}\n` : ''}${libSummary(library)}`, cache_control: { type: 'ephemeral' } }],
-      messages: [
-        ...history.slice(-8).map((h) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.text).slice(0, 2000) })),
-        { role: 'user', content: lastContent },
-      ],
-    });
-  } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) throw new KerfError('Anthropic didn’t accept the saved key. Save a new one on Tovi’s start page.');
-    if (e instanceof Anthropic.RateLimitError) throw new KerfError('Claude is busy right now. Try again in a moment.');
-    if (e instanceof Anthropic.APIError) { console.error('Tovi AI error:', e.status, e.message); throw new KerfError(`Claude couldn’t answer (${e.status}). Try again.`); }
-    throw e;
+  const systemText = `${SYSTEM}\n\nThis project's design system:\n${themeSummary(theme)}\n${tokens.length ? `Colour tokens you can change with action token (light / dark values): ${tokens.map((t) => `${t.name} ${t.values.map((v) => `${v.theme} ${v.hex}`).join(' / ')}`).join('; ')}\n` : ''}${libSummary(library)}`;
+  const history8 = history.slice(-8).map((h) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.text).slice(0, 2000) }));
+  let p, usedModel, usage;
+  if (provider === 'anthropic') {
+    const client = new Anthropic({ apiKey: key });
+    let res;
+    try {
+      res = await client.beta.messages.parse({
+        model,
+        max_tokens: 16000,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        output_config: { effort: 'medium', format: betaZodOutputFormat(Proposal) },
+        // The instructions and design system are the same on every request: cache them so later requests start faster.
+        system: [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }],
+        messages: [
+          ...history8,
+          { role: 'user', content: lastContent },
+        ],
+      });
+    } catch (e) {
+      if (e instanceof Anthropic.AuthenticationError) throw new KerfError('Anthropic didn’t accept the saved key. Save a new one in Settings.');
+      if (e instanceof Anthropic.RateLimitError) throw new KerfError('Claude is busy right now. Try again in a moment.');
+      if (e instanceof Anthropic.APIError) { console.error('Tovi AI error:', e.status, e.message); throw new KerfError(`Claude couldn’t answer (${e.status}). Try again.`); }
+      throw e;
+    }
+    if (res.stop_reason === 'refusal') throw new KerfError('Claude declined this request. Try rewording it as a visual change.');
+    p = res.parsed_output;
+    if (!p) throw new KerfError('Claude’s answer couldn’t be read. Try again.');
+    usedModel = res.model;
+    usage = { input: res.usage.input_tokens, output: res.usage.output_tokens, cacheRead: res.usage.cache_read_input_tokens, cacheWrite: res.usage.cache_creation_input_tokens };
+  } else {
+    ({ p, usedModel, usage } = await askOther(provider, model, key, { systemText, history8, lastContent }));
   }
-  if (res.stop_reason === 'refusal') throw new KerfError('Claude declined this request. Try rewording it as a visual change.');
-  const p = res.parsed_output;
-  if (!p) throw new KerfError('Claude’s answer couldn’t be read. Try again.');
 
   const edits = [];
   const known = (nm) => !!library.findIcon(nm) || library.componentList().has(nm);
@@ -363,5 +444,5 @@ export async function propose({ request, targets, history = [], images = [], tok
   const notes = Array.isArray(p.notes) ? p.notes.filter((n) => Number.isInteger(n.note) && n.note > 0).map((n) => ({ note: n.note, status: n.status, summary: n.summary })) : null;
   if (m === 'explore') edits.forEach((e) => { if (!e.structure) e.offSystem = true; });
   if (m !== 'improve') { for (let k = edits.length - 1; k >= 0; k--) if (m === 'explore' && edits[k].structure?.type === 'token') edits.splice(k, 1); }
-  return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, edits, model: res.model, usage: { input: res.usage.input_tokens, output: res.usage.output_tokens, cacheRead: res.usage.cache_read_input_tokens || 0, cacheWrite: res.usage.cache_creation_input_tokens || 0 } };
+  return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, edits, model: usedModel, usage: { input: usage.input || 0, output: usage.output || 0, cacheRead: usage.cacheRead || 0, cacheWrite: usage.cacheWrite || 0 } };
 }
