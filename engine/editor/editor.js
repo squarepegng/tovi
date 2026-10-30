@@ -1514,9 +1514,8 @@
     if (!host) { host = document.createElement('div'); host.id = 'work'; $('ov').appendChild(host); }
     const now = Date.now();
     S.working = S.working.filter((w) => w.state !== 'done' || now - w.t < 4000);
-    // While editing, only the change itself shows (edit, then done); areas Tovi is merely thinking about stay
-    // unmarked. Diagnose's sections (scan) are the one place a reviewed area is shown.
-    const items = S.agentsOn && D ? S.working.filter((w) => w.state !== 'look').map((w) => ({ w, el: elOf(w.loc) })).filter((x) => x.el?.isConnected) : [];
+    // Every area Tovi works on gets a pink outline and tag. Only Diagnose's sections (scan) add a fill and a sweep.
+    const items = S.agentsOn && D ? S.working.map((w) => ({ w, el: elOf(w.loc) })).filter((x) => x.el?.isConnected) : [];
     while (host.children.length < items.length) { const d = document.createElement('div'); d.className = 'box work'; d.innerHTML = `<span class="tag"><img class="wAv" src="${TOVI_PIC}" alt=""><span class="tagT"></span></span><i class="wCheck"></i>`; host.appendChild(d); }
     [...host.children].forEach((b, i) => {
       const x = items[i];
