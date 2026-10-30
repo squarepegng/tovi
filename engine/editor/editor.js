@@ -1984,7 +1984,7 @@
   /* ---------- Tovi and its helpers, visible on the canvas ---------- */
   // Tovi (amber) answers the chat. Tasks go to helpers that work in parallel, each with a name and colour.
   // Blue stays the designer's selection and red stays for errors.
-  const AGENTS = [{ name: 'Tovi', color: '#E9B547' }, { name: 'Milo', color: '#2DB3A6' }, { name: 'Juno', color: '#E36BA8' }, { name: 'Remi', color: '#5BBF6A' }, { name: 'Nova', color: '#9B7BEA' }];
+  const AGENTS = [{ name: 'Tovi', color: '#FCBDDD' }, { name: 'Milo', color: '#2DB3A6' }, { name: 'Juno', color: '#E36BA8' }, { name: 'Remi', color: '#5BBF6A' }, { name: 'Nova', color: '#9B7BEA' }];
   const helperFor = (n) => AGENTS[1 + ((Math.max(1, n) - 1) % 4)];
   const agentNamed = (name) => AGENTS.find((a) => a.name === name) || AGENTS[0];
   const agentOf = () => AGENTS[0]; // one agent on screen: Tovi
@@ -2397,7 +2397,7 @@
   function chatHTML() {
     const ctx = S.sel ? esc(dName(S.sel.el)) : 'Whole screen';
     const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${kerfHTML(m, i)}</div>`)).join('');
-    return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><span class="ceMark">${ico('spark', 20)}</span><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
+    return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><img class="ceAvatar" src="${TOVI_PIC}" alt=""><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
       <div class="comp">${tasksShown() ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
   }
   function sendChat() {

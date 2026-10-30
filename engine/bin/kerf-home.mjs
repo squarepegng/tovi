@@ -135,9 +135,9 @@ const PAGE = `<!doctype html>
 <title>Tovi</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono&display=swap">
 <style>
-:root{--canvas:#1B1B1E;--panel:#232327;--raised:#2D2D32;--line:#3A3A40;--ink:#EDEDF0;--ink2:#B0B0BA;--ink3:#8B8B95;--select:#2B66D9;--intent:#E9B547;--danger:#F06A5F;--ok:#6FD39A;--hi:255,255,255;--menu:#1E1E21;color-scheme:dark}
-@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#2B66D9;--intent:#B7800F;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}}
-:root[data-theme="light"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#2B66D9;--intent:#B7800F;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}
+:root{--canvas:#1B1B1E;--panel:#232327;--raised:#2D2D32;--line:#3A3A40;--ink:#EDEDF0;--ink2:#B0B0BA;--ink3:#8B8B95;--select:#8A57BC;--intent:#FCBDDD;--danger:#F06A5F;--ok:#6FD39A;--hi:255,255,255;--menu:#1E1E21;color-scheme:dark}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#8A57BC;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}}
+:root[data-theme="light"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#8A57BC;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0;min-height:100%;background:var(--canvas);color:var(--ink);font:400 13px/18px Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -161,14 +161,14 @@ p{margin:6px 0 0;color:var(--ink2);max-width:560px}
 .lead{display:flex;flex-direction:column;align-items:stretch;gap:16px}
 form.openf{display:flex;gap:8px;width:100%;max-width:640px}
 input{flex:1;min-width:0;height:42px;padding:0 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;outline:none}
-input:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(43,102,217,.2)}
+input:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(138,87,188,.2)}
 button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:42px;padding:0 18px;border:0;border-radius:10px;background:var(--select);color:#fff;font:500 13px Geist,system-ui,sans-serif;cursor:pointer;text-decoration:none;white-space:nowrap}
 button:disabled{opacity:.5;cursor:default}
 .ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
 .ghost:hover{background:var(--panel)}
 .sm{height:32px;padding:0 12px;border-radius:8px;font-size:12px}
 .hint{color:var(--ink3);font-size:12px}
-.banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-radius:12px;background:rgba(43,102,217,.1);border:1px solid rgba(43,102,217,.35);width:100%;max-width:640px;text-align:left}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-radius:12px;background:rgba(138,87,188,.1);border:1px solid rgba(138,87,188,.35);width:100%;max-width:640px;text-align:left}
 .banner span{color:var(--ink)}
 .card{display:flex;flex-direction:column;gap:12px;padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .status{display:flex;align-items:center;gap:10px;font-weight:500}
@@ -193,7 +193,7 @@ details.logs summary{cursor:pointer;color:var(--ink3);font-size:12px}details.log
 .srow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid rgba(var(--hi),.06)}
 .srow:last-child{border-bottom:0}
 select{flex:0 0 auto;align-self:flex-start;height:36px;min-width:200px;padding:0 32px 0 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23B0B0BA' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--ink);font:inherit;appearance:none;cursor:pointer;outline:none}
-select:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(43,102,217,.2)}
+select:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(138,87,188,.2)}
 .srow .tx{display:flex;flex-direction:column;gap:3px;min-width:0}
 .srow .tx b{font-weight:500}
 .srow form{display:flex;gap:8px;margin-top:10px;width:100%}
@@ -214,7 +214,7 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
 </style></head>
 <body><div class="app">
 <nav aria-label="Tovi">
-  <div class="brand"><svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--ink)"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--ink)" opacity=".45"/></svg>Tovi</div>
+  <div class="brand"><svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" style="fill:#8A57BC"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" style="fill:#FCBDDD"/></svg>Tovi</div>
   <a href="#projects" data-v="projects"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>Projects</a>
   <a href="#settings" data-v="settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a>
   <a href="#help" data-v="help"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="currentColor"/></svg>Help</a>
