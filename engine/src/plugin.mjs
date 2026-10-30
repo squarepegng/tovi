@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { tagSource } from './ast.mjs';
 import { loadTheme } from './tailwind.mjs';
 import { createEditor, KerfError } from './edit.mjs';
-import { propose, aiConfig, PROVIDERS, MODELS, listModels } from './ai.mjs';
+import { propose, diagnose, aiConfig, PROVIDERS, MODELS, listModels } from './ai.mjs';
 import { createSession } from './session.mjs';
 import { readPerson, savePerson } from './person.mjs';
 import { readPrefs, savePrefs } from './prefs.mjs';
@@ -175,6 +175,11 @@ export async function createKerf(webRoot) {
         if (route === '/structure') return send2(200, editor.structure(body.loc, body.op, 'hand', body.name));
         if (route === '/upload') {
           try { return send(200, library.saveUpload(body.name, body.data)); } catch (e) { throw new KerfError(e.message); }
+        }
+        // A design review of the screen (or the selection): findings pinned to elements, shown as Tovi's notes.
+        if (route === '/diagnose') {
+          const targets = (body.targets || []).slice(0, 80).map((t) => { try { const d = editor.describe(t.loc, t.dom); return { ...t, tag: d.tag, file: d.file, classes: d.classes, classKind: d.classKind, sources: d.sources, textEditable: d.text.editable }; } catch { return null; } }).filter(Boolean);
+          return send(200, await diagnose({ targets, screen: body.screen, focus: body.focus, context: body.context, scope: body.scope }, theme));
         }
         if (route === '/ai') {
           // Add what only the source knows: real tag, classes, whether text is editable.

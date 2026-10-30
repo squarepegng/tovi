@@ -1072,3 +1072,14 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .fName{font-size:15px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fSub{flex:0 0 auto;color:var(--ink3);font-size:11px}
 .fontRow.use .fName{font-size:12px;color:var(--select)}
+
+/* Diagnose: Tovi's notes in the Tasks list, and the bottom-bar button */
+.tb.busy{color:#D9468F}
+.tb.busy svg{animation:diagPulse 1.2s ease-in-out infinite}
+@keyframes diagPulse{50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){.tb.busy svg{animation:none}}
+.badgeDot.tovi{background:#D9468F}
+.tkFix{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.tkFix span{color:var(--ink3);font-size:11px;font-weight:600}
+.tkFix textarea{width:100%;min-height:52px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--canvas);color:var(--ink);font:400 12px/17px Geist,system-ui,sans-serif;resize:vertical}
+.tkFix textarea:focus{outline:none;border-color:var(--select)}

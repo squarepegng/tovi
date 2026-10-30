@@ -315,7 +315,7 @@ function relax(node) {
 }
 const PROPOSAL_SCHEMA = () => { const { $schema, ...rest } = z.toJSONSchema(Proposal, { io: 'input' }); return relax(rest); };
 const EDIT_NULLS = ['note', 'text', 'target', 'token', 'code', 'moveDir', 'swapTo', 'insertPosition', 'insertJsx', 'groupWith', 'groupClass', 'imageSrc', 'imageAlt'];
-async function askOther(provider, model, key, { systemText, history8, lastContent, light }) {
+async function askOther(provider, model, key, { systemText, history8, lastContent, light, schema = PROPOSAL_SCHEMA(), parse = parseProposal }) {
   const text = (b) => b.type === 'text' ? b.text : null;
   let res, body;
   try {
@@ -328,7 +328,7 @@ async function askOther(provider, model, key, { systemText, history8, lastConten
           model,
           max_completion_tokens: 16000,
           messages: [{ role: 'system', content: systemText }, ...history8, { role: 'user', content: parts }],
-          response_format: { type: 'json_schema', json_schema: { name: 'proposal', schema: PROPOSAL_SCHEMA() } },
+          response_format: { type: 'json_schema', json_schema: { name: 'proposal', schema } },
         }),
       });
       body = await res.json();
@@ -336,7 +336,7 @@ async function askOther(provider, model, key, { systemText, history8, lastConten
       const msg = body.choices?.[0]?.message;
       if (msg?.refusal) throw new KerfError(`${PROVIDERS.openai.label} declined this request. Try rewording it as a visual change.`);
       const raw = msg?.content;
-      return { p: parseProposal(raw), usedModel: body.model || model, usage: { input: body.usage?.prompt_tokens, output: body.usage?.completion_tokens } };
+      return { p: parse(raw), usedModel: body.model || model, usage: { input: body.usage?.prompt_tokens, output: body.usage?.completion_tokens } };
     }
     // Gemini
     const parts = lastContent.map((b) => b.type === 'image' ? { inline_data: { mime_type: b.source.media_type, data: b.source.data } } : { text: text(b) });
@@ -349,7 +349,7 @@ async function askOther(provider, model, key, { systemText, history8, lastConten
           ...history8.map((h) => ({ role: h.role === 'assistant' ? 'model' : 'user', parts: [{ text: h.content }] })),
           { role: 'user', parts },
         ],
-        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: PROPOSAL_SCHEMA(), maxOutputTokens: 16000, ...(light ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
+        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, maxOutputTokens: 16000, ...(light ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
       }),
     });
     body = await res.json();
@@ -357,7 +357,7 @@ async function askOther(provider, model, key, { systemText, history8, lastConten
     const cand = body.candidates?.[0];
     if (cand?.finishReason === 'SAFETY') throw new KerfError('Gemini declined this request. Try rewording it as a visual change.');
     const raw = (cand?.content?.parts || []).map((x) => x.text || '').join('');
-    return { p: parseProposal(raw), usedModel: body.modelVersion || model, usage: { input: body.usageMetadata?.promptTokenCount, output: body.usageMetadata?.candidatesTokenCount } };
+    return { p: parse(raw), usedModel: body.modelVersion || model, usage: { input: body.usageMetadata?.promptTokenCount, output: body.usageMetadata?.candidatesTokenCount } };
   } catch (e) {
     if (e instanceof KerfError) throw e;
     const name = PROVIDERS[provider].label;
@@ -553,4 +553,71 @@ export async function propose({ request, targets, history = [], images = [], tok
   if (m === 'explore') edits.forEach((e) => { if (!e.structure) e.offSystem = true; });
   if (m !== 'improve') { for (let k = edits.length - 1; k >= 0; k--) if (m === 'explore' && edits[k].structure?.type === 'token') edits.splice(k, 1); }
   return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, edits, model: usedModel, usage: { input: usage.input || 0, output: usage.output || 0, cacheRead: usage.cacheRead || 0, cacheWrite: usage.cacheWrite || 0 } };
+}
+
+
+/* ---------- Diagnose: a design review of a screen, as notes pinned to the elements ---------- */
+const Diagnosis = z.object({
+  summary: z.string().describe('One plain sentence on the overall state of what was reviewed'),
+  findings: z.array(z.object({
+    title: z.string().describe('2 to 5 words naming the issue, e.g. "Mixed greys in body text"'),
+    problem: z.string().describe('One plain sentence a designer understands: what is wrong here and why it matters'),
+    fix: z.string().describe('The change for Tovi to make, as a clear instruction in plain designer words (no class names or code), e.g. "Use your muted colour for these three descriptions."'),
+    severity: z.enum(['high', 'medium', 'low']),
+    locs: z.array(z.string()).describe('The exact ids of the elements this is about, from the list'),
+  })),
+});
+const DIAGNOSE = `You are a senior product designer doing a design review of one screen of a team's real React + Tailwind product, inside Tovi (a Figma-style editor that changes the real code).
+Look at the screenshot, the close-up if given, and the element list (each element's classes and measured values), and find what most hurts the quality of this screen:
+- Hierarchy: no clear focal point, competing emphasis, headings not distinct enough from body.
+- Spacing and rhythm: values off the project's scale, uneven gaps between similar things, groups not separated more than their parts.
+- Alignment: edges and baselines that should line up but don't; alignment faked with fixed margins.
+- Consistency: siblings with the same role styled differently (sizes, weights, colours, radii, shadows); several near-identical greys.
+- Contrast and legibility: text below WCAG AA (4.5:1 body, 3:1 large text and icons), text over images, very long or very short line lengths, cramped line height.
+- System: raw colours or sizes (gray-500, #hex, [17px]) where the project has a token or scale step.
+- Controls: buttons and links too small to tap (under about 40px), primary action not clearly primary.
+- Clutter: nested frames, borders plus shadows plus fills on the same box, decoration that adds noise.
+Rules:
+- Report at most 8 findings, most important first. Fewer is better than weak ones: only real problems you can see in the screenshot or the classes. Never invent; if the screen is in good shape, say so with few or no findings.
+- One finding per issue: when the same problem repeats (three cards, five greys), make it one finding listing every element id it covers.
+- locs must be ids from the element list, pointing at the exact elements to change.
+- fix is an instruction Tovi can carry out with style, layout and structure edits on those elements, using the project's tokens and scales. No behaviour, data or copy rewrites.
+- Write for a designer: plain words everywhere, including fix (the designer reads and may edit it). No class names, code or CSS values in backticks: say "your muted colour", "the display font", "one step tighter line height", not text-muted or leading-tight.`;
+export async function diagnose({ targets, screen = null, focus = null, context = null, scope = 'page' }, theme) {
+  const { provider, model, key } = aiConfig();
+  if (!key) throw new KerfError(`Add your ${PROVIDERS[provider].label} key in Tovi’s Settings to use AI.`);
+  if (!targets?.length) throw new KerfError('Nothing on screen to review yet.');
+  const img = (x) => (x && typeof x.data === 'string' && x.data.length < 7e6 && /^image\/(jpeg|png)$/.test(x.media_type) ? x : null);
+  const shot = img(screen), close = img(focus);
+  const ctx = context && typeof context === 'object' ? context : {};
+  const text = `${ctx.page ? `Page: ${String(ctx.page).slice(0, 80)} (${String(ctx.path || '').slice(0, 120)})\n` : ''}${ctx.device ? `Screen size: ${ctx.device}${ctx.width ? `, ${ctx.width}px wide` : ''}\n` : ''}Review ${scope === 'selection' ? 'the selected part of the screen' : 'this screen as visible'}.\n\nElements:\n${targets.map(describeTarget).join('\n')}`;
+  const lastContent = [
+    ...(shot ? [{ type: 'text', text: 'Screenshot of the screen:' }, { type: 'image', source: { type: 'base64', media_type: shot.media_type, data: shot.data } }] : []),
+    ...(close ? [{ type: 'text', text: 'Close-up of the selection at twice the size:' }, { type: 'image', source: { type: 'base64', media_type: close.media_type, data: close.data } }] : []),
+    { type: 'text', text },
+  ];
+  const systemText = `${DIAGNOSE}\n\nThis project's design system:\n${themeSummary(theme)}`;
+  let d;
+  if (provider === 'anthropic') {
+    const client = new Anthropic({ apiKey: key });
+    let res;
+    try {
+      res = await client.beta.messages.parse({ model, max_tokens: 8000, thinking: { type: 'adaptive' }, output_config: { effort: 'medium', format: betaZodOutputFormat(Diagnosis) }, system: systemText, messages: [{ role: 'user', content: lastContent }] });
+    } catch (e) {
+      if (e instanceof Anthropic.AuthenticationError) throw new KerfError('Anthropic didn’t accept the saved key. Save a new one in Settings.');
+      if (e instanceof Anthropic.APIError) { console.error('Tovi AI error:', e.status, e.message); throw new KerfError(`Claude couldn’t answer (${e.status}). Try again.`); }
+      throw e;
+    }
+    d = res.parsed_output;
+    if (!d) throw new KerfError('The review couldn’t be read. Try again.');
+  } else {
+    const parse = (raw) => { let o; try { o = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The review couldn’t be read. Try again.'); } const r = Diagnosis.safeParse(o); if (!r.success) throw new KerfError('The review couldn’t be read. Try again.'); return r.data; };
+    const { $schema, ...schema } = z.toJSONSchema(Diagnosis, { io: 'input' });
+    ({ p: d } = await askOther(provider, model, key, { systemText, history8: [], lastContent, schema, parse }));
+  }
+  // Keep only findings that point at elements we were given; most important first.
+  const ids = new Set(targets.map((t) => t.loc));
+  const rank = { high: 0, medium: 1, low: 2 };
+  const findings = (d.findings || []).map((f) => ({ ...f, locs: [...new Set((f.locs || []).filter((l) => ids.has(l)))] })).filter((f) => f.locs.length && f.fix).sort((a, b) => rank[a.severity] - rank[b.severity]).slice(0, 8);
+  return { summary: d.summary, findings };
 }

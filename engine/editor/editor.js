@@ -685,6 +685,7 @@
     eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>',
     dots: '<circle cx="3.5" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="12.5" cy="8" r="1.2" fill="currentColor"/>',
     gear: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g>',
+    diag: '<path d="M2 5V3.5A1.5 1.5 0 0 1 3.5 2H5M11 2h1.5A1.5 1.5 0 0 1 14 3.5V5M14 11v1.5a1.5 1.5 0 0 1-1.5 1.5H11M5 14H3.5A1.5 1.5 0 0 1 2 12.5V11" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.4 9.4L11 11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     comment: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></g>',
     addEl: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></g>',
     sidebar: '<rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M6 3v10" stroke="currentColor" stroke-width="1.25"/>',
@@ -1023,6 +1024,7 @@
       <span class="div"></span>
       <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 20)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
       <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('comment', 20)}${tip('Annotate', 'A')}</button>
+      <button class="tb${S.diagnosing ? ' busy' : ''}" data-act="diagnose" aria-label="Diagnose">${ico('diag', 20)}${S.notes.some((x) => x.by === 'tovi') ? '<i class="badgeDot tovi" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip(S.diagnosing ? 'Tovi is reviewing…' : 'Diagnose: find what to fix')}</button>
       <span class="div"></span>
       <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 20)}${tip('Undo', '⌘Z')}</button>
       <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 20)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>`;
@@ -1716,6 +1718,7 @@
       case 'keys': shortcuts(); break;
       case 'undo': undo(); break;
       case 'changes': S.changesOpen = !S.changesOpen; renderChanges(); break;
+      case 'diagnose': { if (S.diagnosing) break; const r = a.getBoundingClientRect(); openMenu([{ head: 'Diagnose with Tovi' }, { label: 'This page', sub: 'Everything on screen · about 30 seconds', run: () => runDiagnose('page') }, { label: 'This selection', sub: S.sel ? ctxName(S.sel.el) : 'Select something first', disabled: !S.sel, run: () => runDiagnose('selection') }, { label: 'Whole product', sub: 'Coming soon: every page, one report', disabled: true }], { x: r.left - 90, y: r.top - 200 }); break; }
       case 'toastClose': $('toast').hidden = true; break;
       case 'scope': S.scope = v; S.cpick = S.cp = null; renderPanel(); break;
       case 'srcScope': S.srcScope = v; renderPanel(); break;
@@ -2057,6 +2060,8 @@
     return uniq(out);
   }
   function noteTargets(n, i) {
+    // Tovi's notes name their elements; the person's notes find them under the mark.
+    if (n.locs?.length) { const own = n.locs.map(elOf).filter(Boolean); if (own.length) return uniq(own.flatMap((el) => targetsOf(el, i + 1))).slice(0, 24); }
     const pts = n.shape === 'pin' ? [[n.x, n.y]] : n.shape === 'arrow' ? [[n.x2, n.y2]] : [[n.x + n.w / 2, n.y + n.h / 2]];
     const els = [];
     for (const [px, py] of pts) D.elementsFromPoint(px - W.scrollX, py - W.scrollY).map(pick).filter(Boolean).slice(0, 3).forEach((e) => els.push(e));
@@ -2067,6 +2072,46 @@
       });
     }
     return uniq(els.flatMap((el) => targetsOf(el, i + 1))).slice(0, 24);
+  }
+
+  // Diagnose: Tovi reviews the page (or the selection) like a design lead and leaves notes on the spots that need
+  // work, each saying what's wrong and what it would change. The person keeps, edits or removes them, then Apply
+  // fixes the rest through Tasks, as one undoable batch.
+  async function runDiagnose(scope) {
+    if (S.diagnosing || S.card?.busy || !D) return;
+    const targets = scope === 'selection' && S.sel ? selectionTargets() : visibleTargets();
+    if (!targets.length) { toast('Nothing on screen to review yet.', '', true); return; }
+    S.diagnosing = true;
+    renderBar();
+    const label = scope === 'selection' ? `Diagnose ${ctxName(S.sel.el)}` : 'Diagnose this page';
+    S.chat.push({ role: 'user', text: label, shown: label, ctx: scope === 'selection' ? ctxName(S.sel.el) : 'Whole screen', where: 'chat', atts: [] });
+    const m = { role: 'kerf', busy: true, status: 'pending', where: 'chat', targets, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).slice(0, 40), lookedN: targets.length };
+    S.chat.push(m);
+    S.card = m;
+    if (S.mode === 'edit') { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
+    renderAI();
+    try {
+      const [screen, focus] = await Promise.all([captureScreen(), scope === 'selection' ? captureFocus() : null]);
+      const r = await api('/diagnose', { targets, screen, focus, context: aiContext(), scope });
+      // Fresh notes replace Tovi's earlier ones; the person's own notes stay.
+      S.notes = S.notes.filter((x) => x.by !== 'tovi');
+      for (const f of r.findings) {
+        const boxes = f.locs.map(elOf).filter((el) => el?.isConnected).map((el) => el.getBoundingClientRect()).filter((b) => b.width || b.height);
+        if (!boxes.length) continue;
+        const x0 = Math.min(...boxes.map((b) => b.left)), y0 = Math.min(...boxes.map((b) => b.top)), x1 = Math.max(...boxes.map((b) => b.right)), y1 = Math.max(...boxes.map((b) => b.bottom));
+        S.notes.push({ shape: 'box', x: x0 + W.scrollX - 4, y: y0 + W.scrollY - 4, w: x1 - x0 + 8, h: y1 - y0 + 8, text: f.fix, title: f.title, problem: f.problem, sev: f.severity, locs: f.locs, by: 'tovi' });
+      }
+      const n = S.notes.filter((x) => x.by === 'tovi').length;
+      m.proposal = { message: `${r.summary}${n ? ` I left ${n} note${n === 1 ? '' : 's'} on the screen. Keep the ones you agree with, change or remove the rest, then Apply.` : ''}`, edits: [] };
+      m.status = n ? 'diag' : 'info';
+    } catch (e) { m.error = e.message; }
+    m.busy = false;
+    m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
+    S.diagnosing = false;
+    S.openTask = [];
+    renderBar();
+    renderAI();
+    saveChat();
   }
 
   // One conversation shared by the Ask bar, notes and chat.
@@ -2420,7 +2465,7 @@
     renderAI();
     saveChat();
   }
-  const STATUS = { applied: 'Applied', undone: 'Undone', discarded: 'Discarded', failed: 'Couldn’t apply', info: 'No changes to your app' };
+  const STATUS = { applied: 'Applied', undone: 'Undone', discarded: 'Discarded', failed: 'Couldn’t apply', info: 'No changes to your app', diag: 'Notes added to your screen' };
   // Status is shown by Tovi, not written into the reply: drop a leading "Nothing changed yet." if the model adds one.
   const cleanMsg = (t) => { const x = String(t || '').replace(/^\s*(nothing (has )?changed( yet)?|no changes( were)?( made)?( yet)?|i (haven[’']t|have not) changed anything( yet)?)\s*[.:;,—–-]*\s*/i, ''); return x ? x[0].toUpperCase() + x.slice(1) : String(t || ''); };
   const chosen = (m) => m.proposal.edits.filter((e, k) => !(m.off || []).includes(k) && !(m.skip || []).includes(e.note ?? 0) && e.structure?.type !== 'imageAsk');
@@ -2712,7 +2757,8 @@
 
   /* annotations */
   function shapeSVG(n, i, draft, hl) {
-    const st = `stroke="#2B66D9" stroke-width="${2 / (S.z || 1)}" stroke-dasharray="${6 / (S.z || 1)} ${4 / (S.z || 1)}" fill="rgba(43,102,217,.06)"`;
+    const pink = n.by === 'tovi', col = pink ? '#D9468F' : '#2B66D9';
+    const st = `stroke="${col}" stroke-width="${2 / (S.z || 1)}" stroke-dasharray="${6 / (S.z || 1)} ${4 / (S.z || 1)}" fill="${pink ? 'rgba(217,70,143,.07)' : 'rgba(43,102,217,.06)'}"`;
     let s = '';
     // A written note shows only its number; its area comes back while its task is hovered.
     const o = n;
@@ -2721,7 +2767,7 @@
     else if (n.shape === 'circle') s = `<ellipse cx="${n.x + n.w / 2}" cy="${n.y + n.h / 2}" rx="${n.w / 2}" ry="${n.h / 2}" ${st}/>`;
     else if (n.shape === 'arrow') { const a = Math.atan2(n.y2 - n.y, n.x2 - n.x), L = 12; s = `<path d="M${n.x} ${n.y}L${n.x2} ${n.y2}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a - 0.5)} ${n.y2 - L * Math.sin(a - 0.5)}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a + 0.5)} ${n.y2 - L * Math.sin(a + 0.5)}" stroke="#2B66D9" stroke-width="2.5" fill="none" stroke-linecap="round"/>`; }
     const [bx, by] = o.shape === 'pin' || o.shape === 'arrow' ? [o.x, o.y] : [o.x + o.w, o.y];
-    if (i != null) s += `<g transform="translate(${bx} ${by}) scale(${1 / (S.z || 1)})" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${hl ? '<circle r="16" fill="rgba(43,102,217,.28)"/>' : ''}<circle r="11" fill="#2B66D9" stroke="#fff" stroke-width="2"/><text y="4" fill="#fff" font-size="11" font-weight="600" font-family="Geist,system-ui,sans-serif" text-anchor="middle">${i + 1}</text></g>`;
+    if (i != null) s += `<g transform="translate(${bx} ${by}) scale(${1 / (S.z || 1)})" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${hl ? `<circle r="16" fill="${pink ? 'rgba(217,70,143,.28)' : 'rgba(43,102,217,.28)'}"/>` : ''}<circle r="11" fill="${col}" stroke="#fff" stroke-width="2"/><text y="4" fill="#fff" font-size="11" font-weight="600" font-family="Geist,system-ui,sans-serif" text-anchor="middle">${i + 1}</text></g>`;
     else if (n.shape === 'pin') s += `<circle cx="${n.x}" cy="${n.y}" r="6" fill="#2B66D9"/>`;
     return s;
   }
@@ -2745,12 +2791,14 @@
     const n = S.notes.length;
     return `<div class="tasks">
       <div class="tkList">${S.notes.map((x, i) => { if (i >= 3 && !S.tasksAll) return ''; const open = S.openTask.includes(i); return `<div class="tk ntRow${open ? ' open' : ''}" data-note="${i + 1}">
-        <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${ico('task', 15)}<b>Task ${i + 1}</b><span class="tkT">${esc(x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
-        ${open ? `<div class="tkB"><p>${esc(x.text)}</p>${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
+        <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${x.by === 'tovi' ? avatar(AGENTS[0]) : ico('task', 15)}<b>${x.by === 'tovi' ? `${i + 1} · ${esc(x.title || 'Tovi')}` : `Task ${i + 1}`}</b><span class="tkT">${esc(x.by === 'tovi' ? x.problem || x.text : x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
+        ${open ? `<div class="tkB">${x.by === 'tovi' ? `<p>${esc(x.problem || '')}</p><label class="tkFix"><span>Tovi will</span><textarea data-tkedit="${i}" rows="3" aria-label="What Tovi will change">${esc(x.text)}</textarea></label>` : `<p>${esc(x.text)}</p>`}${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
       </div>`; }).join('')}${S.notes.length > 3 ? `<button class="tkMore" data-act2="tasksAll">${S.tasksAll ? 'Show fewer' : `${S.notes.length - 3} more task${S.notes.length - 3 === 1 ? '' : 's'}`}${ico(S.tasksAll ? 'chev' : 'chevR', 10)}</button>` : ''}</div>
       <div class="tkFoot">${busy ? `<span class="tkN">${avatar(AGENTS[0])}Tovi is on it…</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Apply</button>`}</div>
     </div>`;
   }
+  // Editing what Tovi will do for one of its notes.
+  document.addEventListener('input', (e) => { const i = e.target.dataset?.tkedit; if (i == null || !S.notes[+i]) return; S.notes[+i].text = e.target.value; });
   function refreshTasks() {
     renderMarks();
     renderChat();
