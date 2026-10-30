@@ -1093,11 +1093,12 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 
 /* Tovi's selections: what it's working on, like a selection in Tovi's pink */
 #work{position:absolute;inset:0;pointer-events:none}
-.box.work{outline:calc(1.5px*var(--iz,1)) solid #D9468F;outline-offset:calc(1px*var(--iz,1));border-radius:3px;background:rgba(217,70,143,.035);overflow:visible;transition:opacity .5s}
+.box.work{outline:calc(1.5px*var(--iz,1)) solid #D9468F;outline-offset:calc(1px*var(--iz,1));border-radius:3px;overflow:visible;transition:opacity .5s}
+.box.work[data-state="scan"]{background:rgba(217,70,143,.035)}
 .box.work::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none}
 .box.work[data-state="scan"]::after{background:linear-gradient(100deg,transparent 35%,rgba(217,70,143,.16) 50%,transparent 65%);background-size:260% 100%;animation:workSweep 1.8s linear infinite}
 .box.work[data-state="edit"]{outline-width:calc(2px*var(--iz,1));animation:workPulse .9s ease-out infinite}
-.box.work[data-state="done"]{outline-color:#3E9B6B;background:rgba(62,155,107,.05)}
+.box.work[data-state="done"]{outline-color:#3E9B6B}
 .box.work.fading{opacity:0}
 .box.work .tag{display:flex;align-items:center;gap:4px;background:#D9468F;color:#fff;max-width:260px;overflow:hidden;text-overflow:ellipsis}
 .box.work[data-state="done"] .tag{background:#3E9B6B}
