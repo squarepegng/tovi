@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openProject, PROJECTS_DIR, projects, stopAll } from '../src/project.mjs';
 import { readRecent } from '../src/recent.mjs';
+import { readPrefs, savePrefs } from '../src/prefs.mjs';
 import { MODELS, PROVIDERS, listModels } from '../src/ai.mjs';
 
 const ENV = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env');
@@ -74,7 +75,9 @@ http.createServer(async (req, res) => {
     const key = String(raw || '').trim();
     const AI = { openai: ['OPENAI_API_KEY', 'OpenAI', 'sk-'], gemini: ['GEMINI_API_KEY', 'Gemini', 'AIza'] }[provider];
     if (!AI) return send(res, 400, { error: 'Unknown AI.' });
-    if (!/^\S{20,}$/.test(key) || !key.startsWith(AI[2])) return send(res, 400, { error: `That does not look like a ${AI[1]} key. It starts with ${AI[2]}.` });
+    // Only a loose check: providers change their key formats. A wrong key shows up on the first request.
+    if (/[^\x21-\x7E]/.test(key)) return send(res, 400, { error: 'That key has letters that only look right (from another alphabet). Copy it again straight from your provider’s key page.' });
+    if (!/^\S{20,}$/.test(key)) return send(res, 400, { error: `That does not look like a ${AI[1]} key: it should be one long piece of text with no spaces.` });
     setEnv(AI[0], key);
     return send(res, 200, { ok: true });
   }
@@ -98,6 +101,12 @@ http.createServer(async (req, res) => {
     return send(res, 200, { ok: true });
   }
   if (req.method === 'GET' && req.url.startsWith('/api/models?')) return send(res, 200, await listModels(new URL(req.url, 'http://x').searchParams.get('provider')));
+  if (req.method === 'GET' && req.url === '/api/prefs') return send(res, 200, readPrefs());
+  if (req.method === 'POST' && req.url === '/api/prefs') {
+    let body = '';
+    for await (const c of req) body += c;
+    return send(res, 200, savePrefs(JSON.parse(body || '{}')));
+  }
   if (req.method === 'GET' && req.url === '/api/recent') return send(res, 200, recent());
   if (req.method === 'GET' && req.url === '/api/about') return send(res, 200, { version: VERSION, projectsDir: PROJECTS_DIR.replace(process.env.HOME || '', '~') });
   if (req.method === 'POST' && req.url === '/api/open') {
@@ -126,13 +135,15 @@ const PAGE = `<!doctype html>
 <title>Tovi</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono&display=swap">
 <style>
-:root{--canvas:#1B1B1E;--panel:#232327;--raised:#2D2D32;--line:#3A3A40;--ink:#EDEDF0;--ink2:#B0B0BA;--ink3:#8B8B95;--select:#2B66D9;--intent:#E9B547;--danger:#F06A5F;--ok:#6FD39A;color-scheme:dark}
+:root{--canvas:#1B1B1E;--panel:#232327;--raised:#2D2D32;--line:#3A3A40;--ink:#EDEDF0;--ink2:#B0B0BA;--ink3:#8B8B95;--select:#2B66D9;--intent:#E9B547;--danger:#F06A5F;--ok:#6FD39A;--hi:255,255,255;--menu:#1E1E21;color-scheme:dark}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#2B66D9;--intent:#B7800F;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}}
+:root[data-theme="light"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#2B66D9;--intent:#B7800F;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0;min-height:100%;background:var(--canvas);color:var(--ink);font:400 13px/18px Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit}
 .app{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100vh}
-nav{display:flex;flex-direction:column;gap:2px;padding:20px 12px;border-right:1px solid rgba(255,255,255,.06);background:#1E1E21;position:sticky;top:0;height:100vh}
+nav{display:flex;flex-direction:column;gap:2px;padding:20px 12px;border-right:1px solid rgba(var(--hi),.06);background:var(--menu);position:sticky;top:0;height:100vh}
 .brand{display:flex;align-items:center;gap:10px;padding:0 8px 20px;font-weight:600;font-size:15px}
 nav a{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:var(--ink2);text-decoration:none;font-weight:500}
 nav a:hover{background:var(--panel);color:var(--ink)}
@@ -169,8 +180,8 @@ details.logs summary{cursor:pointer;color:var(--ink3);font-size:12px}details.log
 .secH{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .proj{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;white-space:normal;gap:14px;padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;cursor:pointer;text-align:left;height:auto;color:var(--ink);font:inherit;transition:border-color .12s,background .12s}
-.proj:hover{border-color:#55555d;background:#26262b}
-.proj .thumb{display:grid;place-items:center;height:88px;border-radius:10px;background:linear-gradient(135deg,#2a2a2f,#232327);color:var(--ink3);font:600 22px/1 Geist,system-ui,sans-serif;letter-spacing:-.02em}
+.proj:hover{border-color:rgba(var(--hi),.2);background:var(--raised)}
+.proj .thumb{display:grid;place-items:center;height:88px;border-radius:10px;background:linear-gradient(135deg,var(--raised),var(--panel));color:var(--ink3);font:600 22px/1 Geist,system-ui,sans-serif;letter-spacing:-.02em}
 .proj b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .proj .src{display:block;color:var(--ink3);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .proj .meta{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--ink3);font-size:12px}
@@ -179,7 +190,7 @@ details.logs summary{cursor:pointer;color:var(--ink3);font-size:12px}details.log
 .pill.run::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--ok)}
 .empty{padding:28px;border:1px dashed var(--line);border-radius:14px;color:var(--ink3);text-align:center}
 .rows{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px}
-.srow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.06)}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid rgba(var(--hi),.06)}
 .srow:last-child{border-bottom:0}
 select{flex:0 0 auto;align-self:flex-start;height:36px;min-width:200px;padding:0 32px 0 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23B0B0BA' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--ink);font:inherit;appearance:none;cursor:pointer;outline:none}
 select:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(43,102,217,.2)}
@@ -195,7 +206,7 @@ select:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(43,102,217,.2)
 .step b{display:block;margin-bottom:4px}
 .step span{color:var(--ink2)}
 table.keys{border-collapse:collapse;width:100%}
-table.keys td{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);color:var(--ink2)}
+table.keys td{padding:9px 0;border-bottom:1px solid rgba(var(--hi),.06);color:var(--ink2)}
 table.keys td:last-child{text-align:right}
 kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;background:var(--raised);color:var(--ink);font:500 11px/16px Geist,system-ui,sans-serif;text-align:center}
 @media (max-width:760px){.app{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px}.brand{padding:0 8px 0 4px}nav .sp,nav .ver{display:none}main{padding:28px 16px 48px}}
@@ -203,7 +214,7 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
 </style></head>
 <body><div class="app">
 <nav aria-label="Tovi">
-  <div class="brand"><svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="#EDEDF0"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="#EDEDF0" opacity=".45"/></svg>Tovi</div>
+  <div class="brand"><svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--ink)"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--ink)" opacity=".45"/></svg>Tovi</div>
   <a href="#projects" data-v="projects"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>Projects</a>
   <a href="#settings" data-v="settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a>
   <a href="#help" data-v="help"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="currentColor"/></svg>Help</a>
@@ -230,7 +241,7 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
           <select id="aiProv" aria-label="Provider"><option value="anthropic">Claude</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option></select></div>
         <div class="srow" data-key="anthropic"><div class="tx"><b>Anthropic key</b><span class="hint" id="keystat">Checking…</span>
           <form id="kf"><input id="kin" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" aria-label="Anthropic API key"><button class="sm" id="ksave">Save</button></form><span class="err" id="kerr"></span></div></div>
-        ${[['openai', 'OpenAI key', 'sk-...', 'https://platform.openai.com/api-keys', 'platform.openai.com'], ['gemini', 'Gemini key', 'AIza...', 'https://aistudio.google.com/apikey', 'aistudio.google.com']].map(([p, n, ph, url, host]) => `<div class="srow" data-key="${p}" hidden><div class="tx"><b>${n}</b><span class="hint" id="st-${p}" data-url="${url}" data-host="${host}">Checking…</span>
+        ${[['openai', 'OpenAI key', 'Paste key', 'https://platform.openai.com/api-keys', 'platform.openai.com'], ['gemini', 'Gemini key', 'Paste key', 'https://aistudio.google.com/apikey', 'aistudio.google.com']].map(([p, n, ph, url, host]) => `<div class="srow" data-key="${p}" hidden><div class="tx"><b>${n}</b><span class="hint" id="st-${p}" data-url="${url}" data-host="${host}">Checking…</span>
           <form class="aif" data-p="${p}"><input type="password" placeholder="${ph}" autocomplete="off" spellcheck="false" aria-label="${n}"><button class="sm">Save</button></form><span class="err"></span></div></div>`).join('')}
         <div class="srow"><div class="tx"><b>Model</b><span class="hint" id="aiFrom">Checking…</span>
           <form id="cmf" hidden><input id="cmIn" placeholder="Model name from your provider’s docs" autocomplete="off" spellcheck="false" aria-label="Model name"><button class="sm">Use</button></form><span class="err" id="cmErr"></span></div>
@@ -239,6 +250,9 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
           <form id="uf"><input id="uin" type="password" placeholder="Unsplash Access Key" autocomplete="off" spellcheck="false" aria-label="Unsplash Access Key"><button class="sm">Save</button></form><span class="err" id="uerr"></span></div></div>
       </div>
     </div>
+    <div><div class="secH"><h2>Appearance</h2></div>
+      <div class="rows"><div class="srow"><div class="tx"><b>Theme</b><span class="hint">System follows your Mac. The editor uses the same setting.</span></div>
+        <select id="themeSel" aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></div>
     <div><div class="secH"><h2>About</h2></div>
       <div class="rows">
         <div class="srow"><div class="tx"><b>Projects folder</b><span class="hint" id="adir"></span></div></div>
@@ -271,6 +285,11 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
   </section>
 </main></div>
 <script>
+// Theme ("System" follows the Mac). A local copy is applied first so the page doesn't flash.
+function applyTheme(t){t=t==='light'||t==='dark'?t:'system';if(t==='system')delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=t;try{localStorage.setItem('kerf.theme',t)}catch{}const s=document.getElementById('themeSel');if(s)s.value=t}
+try{applyTheme(localStorage.getItem('kerf.theme'))}catch{}
+fetch('/api/prefs').then(r=>r.json()).then(p=>applyTheme(p.theme)).catch(()=>{});
+document.addEventListener('change',e=>{if(e.target.id!=='themeSel')return;applyTheme(e.target.value);fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:e.target.value})})});
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
 function route(){const v=(location.hash||'#projects').slice(1);const ok=['projects','settings','help'].includes(v)?v:'projects';document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+ok));document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===ok));}

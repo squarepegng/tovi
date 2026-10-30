@@ -11,6 +11,7 @@ import { createEditor, KerfError } from './edit.mjs';
 import { propose, aiConfig, PROVIDERS, MODELS, listModels } from './ai.mjs';
 import { createSession } from './session.mjs';
 import { readPerson, savePerson } from './person.mjs';
+import { readPrefs, savePrefs } from './prefs.mjs';
 import { createLibrary } from './library.mjs';
 import { listTokens, tokenEdit } from './tokens.mjs';
 import { searchPhotos, photoUsed, illustrate, envKey, saveEnv } from './images.mjs';
@@ -71,6 +72,7 @@ export async function createKerf(webRoot) {
           return send(200, { name: g.repo || pkg.name || path.basename(webRoot), branch: g.git ? g.branch : null, repo: g.repo, gh: g.gh, files: g.files || [] });
         }
         if (req.method === 'GET' && route === '/models') return send(200, await listModels(new URL(req.url, 'http://x').searchParams.get('provider')));
+        if (req.method === 'GET' && route === '/prefs') return send(200, readPrefs());
         if (req.method === 'GET' && route === '/person') return send(200, { name: readPerson(webRoot) });
         if (req.method === 'GET' && route === '/versions') return send(200, session.list());
         if (req.method === 'GET' && route === '/chat') return send(200, session.chat());
@@ -102,7 +104,8 @@ export async function createKerf(webRoot) {
           const pr = PROVIDERS[provider];
           const k = String(key || '').trim();
           if (!pr) return send(400, { error: 'Pick Claude, OpenAI or Gemini.' });
-          if (!/^\S{20,}$/.test(k) || (provider === 'anthropic' && !k.startsWith('sk-ant-')) || (provider === 'openai' && !k.startsWith('sk-')) || (provider === 'gemini' && !k.startsWith('AIza'))) return send(400, { error: `That does not look like a ${pr.label} key.` });
+          if (/[^\x21-\x7E]/.test(k)) return send(400, { error: 'That key has letters that only look right (from another alphabet). Copy it again straight from your provider’s key page.' });
+          if (!/^\S{20,}$/.test(k)) return send(400, { error: `That does not look like a ${pr.label} key: it should be one long piece of text with no spaces.` });
           saveEnv(pr.keyName, k);
           return send(200, { ok: true });
         }
@@ -122,6 +125,7 @@ export async function createKerf(webRoot) {
         const writes = ['/edit', '/undo', '/ai/apply', '/structure'];
         if (writes.includes(route) && session.isPeeking()) return send(409, { error: 'You’re looking at an earlier version. Close it to keep editing.' });
         if (route === '/person') return send(200, { name: savePerson(body?.name) });
+        if (route === '/prefs') return send(200, savePrefs(body || {}));
         if (route === '/version') return send2(200, session.snapshot(body || {}));
         if (route === '/rename') return send2(200, session.rename(Number(body.n), body.name));
         if (route === '/restore') return send2(200, session.restore(Number(body.n)));
