@@ -1493,8 +1493,8 @@
   }
   const labelOf = (el) => dName(el);
   // What Tovi is working on, shown like a selection in Tovi's pink: an outline per element (a card, a heading, a
-  // section) with a tag naming it and what Tovi is doing ("Pricing · Reviewing"). States: look (thinking about
-  // it, a slow light sweep), edit (changing it now, a pulse), done (a check, then it fades).
+  // section) with a tag naming it and what Tovi is doing ("Pricing · Reviewing"). States: scan (Diagnose reviewing
+  // it, a slow light sweep), look (thinking about it, outline only), edit (changing it now, a pulse), done (a check).
   S.working = [];
   const locOfEl = (el) => el?.getAttribute?.('data-kerf-use') || el?.getAttribute?.('data-kerf') || null;
   function workOn(locs, label, state = 'look') {
@@ -1505,7 +1505,7 @@
     }
     S.working = S.working.slice(-16);
   }
-  const workClear = () => { S.working = S.working.filter((w) => w.state !== 'look'); };
+  const workClear = () => { S.working = S.working.filter((w) => w.state !== 'look' && w.state !== 'scan'); };
   function workDone(locs) { const now = Date.now(); for (const w of S.working) if (!locs || locs.includes(w.loc)) { w.state = 'done'; w.t = now; } }
   // Elements in scope for a request: the selection (and anything selected with it), or the visible sections.
   const scopeLocs = () => (S.sel ? uniq([S.sel.el, ...(S.multi || []).map((x) => x.el || x)].map(locOfEl)) : pageBlocks().filter(onScreen).map(locOfEl)).filter(Boolean).slice(0, 12);
@@ -2147,10 +2147,10 @@
     const blocks = pageBlocks();
     if (blocks.length >= 2) {
       m.progress = `${label} · taking screenshots`;
-      workOn(blocks.map(locOfEl), 'Reading');
+      workOn(blocks.map(locOfEl), 'Reading', 'scan');
       renderChat();
       const real = await realShots({ locs: blocks.map(locOfEl).filter(Boolean) });
-      S.working = S.working.filter((w) => w.state !== 'look');
+      S.working = S.working.filter((w) => w.state !== 'scan');
       jobs = blocks.map((b) => ({ name: blockName(b), loc: locOfEl(b), make: async () => ({ targets: uniq(tagged(b).concat(b.matches('[data-kerf],[data-kerf-use]') ? [b] : []).flatMap((el) => targetsOf(el))).slice(0, 70), screen: jpeg(real?.sections?.[locOfEl(b)]) || await captureEl(b), scope: 'section' }) }));
     } else {
       const parts = Math.max(1, Math.min(8, Math.ceil(D.documentElement.scrollHeight / W.innerHeight)));
@@ -2168,7 +2168,7 @@
         const k = next++, x = prepared[k];
         m.progress = `${label}${jobs.length > 1 ? ` · ${jobs[k].name} (${k + 1} of ${jobs.length})` : ''}`;
         const bl = jobs[k].loc;
-        if (bl) workOn([bl], 'Reviewing');
+        if (bl) workOn([bl], 'Reviewing', 'scan');
         renderChat();
         results[k] = x.targets.length ? await api('/diagnose', { targets: x.targets, screen: x.screen, context: ctx, scope: x.scope }).catch((e) => ({ error: e.message, findings: [] })) : { findings: [] };
         if (bl) S.working = S.working.filter((w) => w.loc !== bl);
@@ -2262,7 +2262,7 @@
     try {
       let r;
       if (scope === 'selection') {
-        workOn(scopeLocs(), 'Reviewing');
+        workOn(scopeLocs(), 'Reviewing', 'scan');
         const [screen, focus] = await Promise.all([captureScreen(), captureFocus()]);
         r = await api('/diagnose', { targets, screen, focus, context: aiContext(), scope });
         r.notes = notesFrom(r.findings);
