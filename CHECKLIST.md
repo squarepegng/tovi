@@ -36,6 +36,7 @@ When you've decided, tell me which items to keep and which to remove. I'll build
 | 2.7 | Before/after screenshots in PRs | Every pull request includes images of the screen before and after the change, so reviewers see it without running the app. | Not started (part of 1.3) | [ ] Keep [ ] Later [ ] Remove |
 | 2.8 | Share a link to a screen | A PM or developer opens an edited screen in a browser and leaves comments, with no install. Needs cloud mode. | Not started (later phase) | [ ] Keep [ ] Later [ ] Remove |
 | 2.9 | Onboarding for the first edit | A short guided first change, so new users learn by doing. | Not started | [ ] Keep [ ] Later [ ] Remove |
+| 2.10 | **Start from a website link** | Paste your live site's URL and start fixing it in seconds, no repo or setup. Edits apply on the live page; the hand off is a change report (before/after screenshots, a plain list of changes, the CSS for each) that developers apply, or a real pull request once a GitHub repo is connected (edits carry over). Only for sites you own or work on; no rebuilding sites into new code. Great for onboarding and for designers without repo access. | Not started. **Decided (Oct 2026):** park until after the private beta, then build before the public launch as the way new people get in. | [x] Later (after beta) |
 
 ## 3. Merge and simplify (decide each one)
 
