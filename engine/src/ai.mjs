@@ -151,7 +151,15 @@ Design craft (use your eye, like a senior designer reviewing this screen):
 - Typography: headings about 1.1-1.3 line height with slightly tighter tracking when large, body about 1.5; comfortable line length (45-75 characters). Use the project's font families for their roles (a display font for headings when the project has one).
 - Primary controls at least 40-44px tall.
 - Restraint: the fewest changes that clearly improve the result; don't restyle what already works.
-For vague requests ("make it better", "polish this", "more premium"), first find the two or three things that would most improve it by these principles (looking at the screenshot), fix those, and name them in the message.
+For vague requests ("make it better", "polish this", "more premium"), look at the whole selection in the screenshots and make a complete, coordinated pass: every part that falls short gets fixed in the same answer (type, spacing, alignment, colour, surfaces, controls), not just one or two things. Name the main moves in the message.
+
+Designer moves (concrete recipes; use the project's tokens and scales):
+- Premium / refined: headings larger and lighter with slightly tighter tracking (a display font if the project has one); more whitespace around and between blocks (section padding toward 96-128px, 24-32px between a heading and what follows); one quiet surface instead of several nested frames or borders; restrained colour (one accent); larger, calmer buttons (about 48px tall, generous side padding); the secondary action as a quiet text link or subtle outline; consistent radii.
+- Polish: fix alignment with layout, not numbers: siblings that should line up (card footers, buttons, prices) line up because each card is a vertical stack with the last item pushed down (layout col, then mT auto on the bottom item, and equal heights from the parent grid), never with a fixed margin tuned to today's text; same role = same style across siblings (all prices the same size and weight, all badges alike); even spacing rhythm; icons tinted with the brand colour; remove stray borders, shadows and colours that add noise.
+- Cleaner / simpler: remove duplicate frames, borders and shadows; fewer colours and weights; more space; align to one grid.
+- Stronger hierarchy: one clear focal point; enlarge or darken the key element and quiet the rest (smaller, lighter, muted); group related items tightly.
+- Highlight one option (a featured plan or item): a filled or tinted surface or a stronger border in the brand colour, not just a shadow, with its button filled while the others stay outlined.
+Avoid: nesting a framed box inside another framed box; mixing several radii or greys; spacing values off the scale; fixed margins or heights used to fake alignment; changing what already works.
 
 Reading code: when the source file of the selection is included, read it first to understand the structure (what wraps what, what repeats from a list, what comes from props or a shared component) before deciding. For action code, copy the find snippet exactly from that source.
 
@@ -170,7 +178,7 @@ How to work:
 - Layout works like Figma auto layout: layout row/col/none (direction), alignItems start/center/end/stretch, justify start/center/end/between, wrap wrap/nowrap, gap, padX/padY, margins mX (left and right), mT (top), mB (bottom) (px or auto), and width/height w/h as hug, fill or a px size.
 - To put a new picture in an image (a photo, a drawing, "an illustration of…", "a picture of…"), use action image with imageSrc "photo: <4 to 12 words of what it shows>" for real photographs, or "illustration: <…>" for drawn or flat art. Tovi shows the designer options to pick from. Never say you can't create images.
 - action token changes a design-system colour everywhere it's used: token.name from the token list, token.value #RRGGBB, token.theme light, dark or both.
-- action code is the last resort for visual changes no other action can make (classes computed in an unusual way, inline styles): code.file is the file shown for that element or its style sources, code.find an exact snippet of code you were shown that occurs once, code.replace the new text. Keep it minimal and visual only: never change logic, data, handlers or imports.
+- action code is the last resort for visual changes no other action can make (classes computed in an unusual way, inline styles): code.file is the file shown for that element or its style sources, code.find an exact snippet of code you were shown that occurs once, code.replace the new text. Keep it minimal and visual only: never change logic, data, handlers or imports. Keep the original formatting exactly: the same line breaks and indentation, one element per line as before; never squash several lines into one. Prefer several small code edits over one large one.
 - Always do what you can. If part of a request needs something not in your toolset yet (free positioning, animation, hover states, new pages), make the edits that get closest, set scope to partial, and say in one short sentence what you could not do yet. Never refuse a visual request outright when some of it is possible.
 - needs_developer is only for requests that change behavior, data, logic, payments or accounts. Visual changes are never developer work, even when Tovi cannot make them yet; use not_yet for those.
 - This can be a conversation: earlier turns are included. Read follow-ups ("smaller", "undo that", "try again but warmer") against what you proposed before and whether it was applied.
@@ -355,7 +363,7 @@ function parseProposal(raw) {
   return r.data;
 }
 
-export async function propose({ request, targets, history = [], images = [], tokens = [], webRoot = null, screen = null, context = null, mode = 'system', direction = null }, theme, library) {
+export async function propose({ request, targets, history = [], images = [], tokens = [], webRoot = null, screen = null, focus = null, context = null, mode = 'system', direction = null }, theme, library) {
   const { provider, model, key } = aiConfig();
   if (!key) throw new KerfError(`Add your ${PROVIDERS[provider].label} key in Tovi’s Settings to use AI.`);
   if (!request || !String(request).trim()) throw new KerfError('Say or type what should change.');
@@ -382,6 +390,8 @@ export async function propose({ request, targets, history = [], images = [], tok
     ctx.selected ? `Selected: ${String(ctx.selected).slice(0, 80)}. "This", "it" and "here" mean the selection unless the request says otherwise.` : 'Nothing is selected: the request is about the visible screen.',
   ].filter(Boolean).join('\n');
   const shot = screen && typeof screen.data === 'string' && screen.data.length < 7e6 && /^image\/(jpeg|png)$/.test(screen.media_type) ? screen : null;
+  // A sharp close-up of the selection, so spacing, type and alignment can be judged in detail.
+  const close = focus && typeof focus.data === 'string' && focus.data.length < 7e6 && /^image\/(jpeg|png)$/.test(focus.media_type) ? focus : null;
   const m = MODES[mode] ? mode : 'system';
   const dir = direction && (direction.preset || direction.text) ? `Design direction for this project: ${[PRESETS[direction.preset], direction.text].filter(Boolean).join(' ')}${m === 'system' ? ' (keep within the design system).' : ''}` : '';
   const refs = m !== 'system' && direction?.refs?.length ? direction.refs.slice(0, 3) : [];
@@ -400,6 +410,7 @@ export async function propose({ request, targets, history = [], images = [], tok
   const lastText = `${MODES[m]}\n${dir ? dir + '\n' : ''}${refs.length ? `The ${refs.length} reference image${refs.length > 1 ? 's' : ''} labelled "Reference" show the look the designer wants.\n` : ''}${where}\n${shot ? 'The first image is a screenshot of exactly what the designer sees. Use it to judge contrast, alignment, spacing and hierarchy. Element boxes below are x,y,w,h in CSS pixels of that same visible area.\n' : ''}\nElements on screen:\n${targets.map(describeTarget).join('\n')}\n${source ? `\nSource of the selection's file(s), exactly as saved:${source}` : ''}\n${imgs.length ? `The designer attached ${imgs.length} image${imgs.length > 1 ? 's' : ''} (above). Treat them as a reference to match, a screenshot pointing at a problem, or an image to put in the design, whichever the request means. To place one, use imageSrc "attachment:N" (or src="attachment:N" in insertJsx).\n\n` : ''}Request:\n${request}`;
   const lastContent = [
     ...(shot ? [{ type: 'text', text: 'Screenshot of the screen:' }, { type: 'image', source: { type: 'base64', media_type: shot.media_type, data: shot.data } }] : []),
+    ...(close ? [{ type: 'text', text: 'Close-up of the selection at twice the size (judge spacing, type and alignment here):' }, { type: 'image', source: { type: 'base64', media_type: close.media_type, data: close.data } }] : []),
     ...refs.flatMap((r, n) => [{ type: 'text', text: `Reference ${n + 1} for the design direction:` }, { type: 'image', source: { type: 'base64', media_type: r.media_type, data: r.data } }]),
     ...imgs.flatMap((im, n) => [{ type: 'text', text: `Attachment ${n + 1}: ${String(im.name || 'image').slice(0, 80)}` }, { type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } }]),
     { type: 'text', text: lastText },

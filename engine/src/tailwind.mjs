@@ -284,6 +284,16 @@ export function applyOps(list, ops, th) {
     const pickFrom = prop === 'layout' ? mine.find((c) => /^flex-(row|col)/.test(c)) || mine[0] : mine[0];
     changes.push({ prop, from: pickFrom ? valueOfClass(prop, pickFrom, th) : null, to: value ?? null });
   }
+  // px-8 py-8 → p-8 (and mx/my → m), like a developer would write it, when this edit wrote one of them.
+  for (const [a, b, c] of [['px-', 'py-', 'p-'], ['mx-', 'my-', 'm-']]) {
+    const x = out.find((k) => k.startsWith(a)), y = out.find((k) => k.startsWith(b));
+    if (x && y && x.slice(a.length) === y.slice(b.length) && (added.includes(x) || added.includes(y))) {
+      const at = Math.min(out.indexOf(x), out.indexOf(y)), merged = c + x.slice(a.length);
+      out = out.filter((k) => k !== x && k !== y);
+      out.splice(at, 0, merged);
+      added.splice(0, added.length, ...added.filter((k) => k !== x && k !== y), merged);
+    }
+  }
   return { classes: out, removed, added, changes };
 }
 

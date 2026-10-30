@@ -161,7 +161,7 @@ export async function createKerf(webRoot) {
           }).filter(Boolean);
           let tokens = [];
           try { tokens = listTokens(webRoot, theme); } catch {}
-          return send(200, await propose({ request: body.request, targets, history: body.history, images: body.images, tokens, webRoot, screen: body.screen, context: body.context, mode: body.mode, direction: session.direction() }, theme, library));
+          return send(200, await propose({ request: body.request, targets, history: body.history, images: body.images, tokens, webRoot, screen: body.screen, focus: body.focus, context: body.context, mode: body.mode, direction: session.direction() }, theme, library));
         }
         if (route === '/ai/apply') {
           // Everything one apply writes (styles, structure, code, tokens) belongs to its batch: one undo.

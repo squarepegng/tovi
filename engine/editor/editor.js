@@ -2068,16 +2068,38 @@
   }
   // A screenshot of exactly what's on screen (viewport), small and quick; skipped if it takes too long.
   let h2i = null;
+  // The app's web fonts, embedded once per page load so screenshots show the real type (not a fallback font).
+  let fontCss = null;
+  async function fontsFor(lib) {
+    if (!fontCss) fontCss = Promise.race([lib.getFontEmbedCSS(D.documentElement).catch(() => ''), wait(3000).then(() => '')]);
+    return fontCss;
+  }
+  const loadH2i = () => (h2i ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js'; sc.onload = () => res(window.htmlToImage); sc.onerror = rej; document.head.appendChild(sc); }));
   async function captureScreen() {
     if (!D || !W) return null;
     try {
-      h2i ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js'; sc.onload = () => res(window.htmlToImage); sc.onerror = rej; document.head.appendChild(sc); });
-      const lib = await h2i;
+      const lib = await loadH2i();
+      const css = await fontsFor(lib);
       const w = W.innerWidth, h = W.innerHeight, k = Math.min(1, 1280 / w);
-      const shot = lib.toJpeg(D.documentElement, { width: w, height: h, canvasWidth: Math.round(w * k), canvasHeight: Math.round(h * k), pixelRatio: 1, quality: 0.72, skipFonts: true, cacheBust: false, style: { transform: `translate(${-W.scrollX}px, ${-W.scrollY}px)`, transformOrigin: '0 0' } });
-      const url = await Promise.race([shot, new Promise((r) => setTimeout(() => r(null), 2500))]);
+      const shot = lib.toJpeg(D.documentElement, { width: w, height: h, canvasWidth: Math.round(w * k), canvasHeight: Math.round(h * k), pixelRatio: 1, quality: 0.72, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
+      const url = await Promise.race([shot, new Promise((r) => setTimeout(() => r(null), 4000))]);
       return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
     } catch { h2i = null; return null; }
+  }
+  // A sharp close-up of the selected element (twice the size, at most 1600px wide), for judging detail.
+  async function captureFocus() {
+    const el = S.sel?.el;
+    if (!el?.isConnected || !D) return null;
+    try {
+      const lib = await loadH2i();
+      const css = await fontsFor(lib);
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return null;
+      const k = Math.min(2, 1600 / r.width, 2400 / r.height);
+      const shot = lib.toJpeg(el, { pixelRatio: k, quality: 0.8, backgroundColor: cs(D.body).backgroundColor, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
+      const url = await Promise.race([shot, new Promise((res) => setTimeout(() => res(null), 4000))]);
+      return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
+    } catch { return null; }
   }
   /* ---------- Tovi and its helpers, visible on the canvas ---------- */
   // Tovi (amber) answers the chat. Tasks go to helpers that work in parallel, each with a name and colour.
@@ -2280,23 +2302,23 @@
     return { results, n };
   }
 
-  async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = where !== 'notes') {
+  async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = where !== 'notes', opts = {}) {
     text = String(text || '').trim() || (atts.length ? 'Use the attached image.' : '');
-    if (!text || S.card?.busy) return;
+    if (!text || (S.card?.busy && !opts.review)) return;
     if (!targets.length) { toast('Nothing on screen to work with yet. Wait for the page to load, or select something.', '', true); return; }
     const history = historyFor();
     const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? ctxName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
-    S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
-    const m = { role: 'kerf', busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
+    if (!opts.review) S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
+    const m = { role: 'kerf', second: !!opts.review, busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
     S.chat.push(m);
     S.card = m;
     renderAI();
     try {
-      const screen = await captureScreen();
+      const [screen, focus] = await Promise.all([captureScreen(), where === 'chat' || where === 'ask' ? captureFocus() : null]);
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
       // Tovi shows up on the canvas only when it applies edits (applyLive), not while it thinks or answers.
-      m.proposal = await api('/ai', { request: text, targets, history, screen, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
+      m.proposal = await api('/ai', { request: opts.review ? opts.review : text, targets, history, screen, focus, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
       if (!m.proposal.edits.length) m.status = 'info';
@@ -2307,7 +2329,17 @@
     // Tasks: Apply means apply. Every change is undoable, and the answer has its own Undo.
     if (autoApply && m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
     saveChat();
+    // Look-and-feel requests get a second look, like a designer stepping back: Tovi screenshots the result,
+    // critiques the whole composition and fixes what's still off.
+    if (!opts.review && m.status === 'applied' && where === 'chat' && isLookAndFeel(text)) {
+      await wait(1800);
+      refind();
+      const done = chosen(m).map((e) => `${e.name || e.tag}: ${editLabel(e)}`).join('; ');
+      const ask = `Second look. The designer asked: "${text}". You already applied: ${done}. The screenshots now show the result. Step back and judge the whole selection the way a demanding design lead at a top product company would in a design review, using the designer moves for this kind of request. Common misses to check: buttons or controls left at their old size or weight when the request is about feel ("premium", "modern"); items that should line up but don't, or alignment faked with fixed margins; spacing between groups not clearly larger than spacing inside a group; secondary text not quiet enough, or the focal point not strong enough; siblings with the same role styled differently (sizes, weights, radii, colours); nested or fussy frames; anything your first pass made worse. Fix every miss you find with edits. Return no edits only if it would pass that review as it is, and then say in one short sentence why it works.`;
+      await runAI(text, S.sel ? selectionTargets() : visibleTargets(), where, null, true, [], true, { review: ask });
+    }
   }
+  const isLookAndFeel = (t) => /premium|polish|better|clean|modern|nice|improv|refin|elegant|beautif|pop|feel|look|tidy|balance|hierarch|design|luxur|minimal|professional|fresh|sleek|ugly|messy|cluttered/i.test(t) && !/\d\s*(px|%|pt)?\b/.test(t);
   async function decide(m, v) {
     if (!m || m.status !== 'pending') return;
     if (m.previewing) { m.previewing = false; previewTokens(m, false); }
@@ -2494,7 +2526,7 @@
   }
   function chatHTML() {
     const ctx = S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen';
-    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${kerfHTML(m, i)}</div>`)).join('');
+    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}Second look</div>` : ''}${kerfHTML(m, i)}</div>`)).join('');
     return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><img class="ceAvatar" src="${TOVI_PIC}" alt=""><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
       <div class="comp">${tasksShown() ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
   }

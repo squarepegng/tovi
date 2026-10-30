@@ -1052,3 +1052,6 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .gCol{gap:4px}
 .gRow2 .ib{width:24px}
 .gPick{display:flex;flex-direction:column;gap:10px;padding-top:6px;border-top:1px solid rgba(var(--hi),.08)}
+
+/* A second look at the result, after a look-and-feel request */
+.kSecond{display:flex;align-items:center;gap:6px;margin-bottom:6px;color:var(--ink2);font-weight:600;font-size:11px}

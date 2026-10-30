@@ -187,6 +187,11 @@ test('editing for all screen sizes keeps the class in its place', () => {
   const r = applyResponsive('mt-4 text-sm font-bold text-content'.split(' '), [{ prop: 'fontSize', value: 18 }], th, { mode: 'all' });
   assert.equal(r.classes.join(' '), 'mt-4 text-lg font-bold text-content');
 });
+test('equal horizontal and vertical padding become one class', () => {
+  assert.equal(ops('card', [{ prop: 'padX', value: 24 }, { prop: 'padY', value: 24 }]), 'card p-6');
+  assert.equal(ops('card px-6 py-2', [{ prop: 'padY', value: 24 }]), 'card p-6');
+  assert.equal(ops('card px-6 py-4', [{ prop: 'padY', value: 16 }]), 'card px-6 py-4');
+});
 test('font family uses the project’s own font keys', () => {
   assert.equal(ops('text-xl font-bold', [{ prop: 'fontFamily', value: 'display' }]), 'text-xl font-bold font-display');
   assert.equal(ops('font-display text-xl', [{ prop: 'fontFamily', value: 'sans' }]), 'font-sans text-xl');
