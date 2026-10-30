@@ -317,9 +317,17 @@
     if (S.pendingInsert && S.sel?.el === el) { S.pendingInsert = false; $('toast').hidden = true; S.insertPos = defaultPos(); openInsert(); }
   }
   // The chat box says what Tovi will look at: the selection, or the whole screen.
+  // What a request is about, in words: the element's name plus its first bit of text when the name alone is vague
+  // (Frame “Natural materials”), so the chat says what you were pointing at.
+  function ctxName(el) {
+    const n = dName(el);
+    if (/[“"]/.test(n)) return n;
+    const t = (el.innerText || '').split('\n').map((x) => x.trim()).find(Boolean);
+    return t ? `${n} “${t.length > 28 ? t.slice(0, 27) + '…' : t}”` : n;
+  }
   function chatCtx() {
     const c = document.querySelector('#lbody .kcCtx');
-    if (c) c.innerHTML = `${ico(S.sel ? 'frame' : 'desktop', 12)}${S.sel ? esc(dName(S.sel.el)) : 'Whole screen'}`;
+    if (c) c.innerHTML = `${ico(S.sel ? 'frame' : 'desktop', 12)}${S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen'}`;
   }
   // Where this instance of a component is used. Components that don't pass their props through to the HTML
   // leave no tag on the page, but React (in development) still knows each element's component and its props.
@@ -2187,7 +2195,7 @@
     if (!text || S.card?.busy) return;
     if (!targets.length) { toast('Nothing on screen to work with yet. Wait for the page to load, or select something.', '', true); return; }
     const history = historyFor();
-    const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? dName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
+    const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? ctxName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
     S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
     const m = { role: 'kerf', busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
     S.chat.push(m);
@@ -2395,7 +2403,7 @@
     }
   }
   function chatHTML() {
-    const ctx = S.sel ? esc(dName(S.sel.el)) : 'Whole screen';
+    const ctx = S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen';
     const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${kerfHTML(m, i)}</div>`)).join('');
     return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><img class="ceAvatar" src="${TOVI_PIC}" alt=""><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
       <div class="comp">${tasksShown() ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
