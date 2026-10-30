@@ -1889,22 +1889,6 @@
   }
   // While thinking, the agents split the elements they're reading and look them over (only ones in view).
   // While thinking, Tovi looks over a few of the elements it's reading, once, then rests there: "Thinking…".
-  function agentTour(agents, targets) {
-    if (!live()) return () => {};
-    const a = AGENTS[0];
-    const els = [...new Set(targets.map((t) => elOf(t.loc)).filter(Boolean))].filter((el) => { const r = el.getBoundingClientRect(); return r.width && r.bottom > 0 && r.top < W.innerHeight; }).slice(0, 3);
-    if (!els.length) return () => {};
-    let stop = false;
-    (async () => {
-      for (const el of els) { if (stop) return; await lookAt(a, el); }
-      if (stop) return;
-      const g = agentDom(a);
-      track(g, els[0], 'look');
-      g.chip.textContent = 'Thinking…';
-      g.chip.classList.add('on');
-    })();
-    return () => { stop = true; const g = crew.get(a.name); if (g) g.chip.classList.remove('on'); release([a.name]); };
-  }
   // Apply so you can watch it: style changes are shared out to lanes (one per agent), each lane makes its
   // changes one by one as its agent gets there; structure, code and colour-token changes follow together
   // (their order matters). One batch = one undo. A click or key press finishes at once.
@@ -1978,8 +1962,8 @@
       const screen = await captureScreen();
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
-      const stop = agentTour(AGENTS, targets);
-      try { m.proposal = await api('/ai', { request: text, targets, history, screen, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) }); } finally { stop(); }
+      // Tovi shows up on the canvas only when it applies edits (applyLive), not while it thinks or answers.
+      m.proposal = await api('/ai', { request: text, targets, history, screen, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
       if (!m.proposal.edits.length) m.status = 'info';
@@ -2416,9 +2400,7 @@
     };
     const out = [];
     let next = 0;
-    const stopTour = agentTour(AGENTS, all);
     await Promise.all(Array.from({ length: Math.min(4, notes.length) }, async () => { while (next < notes.length) { const k = next++; out[k] = await run(k); } }));
-    stopTour();
     // Put the answers together, one row per task.
     const edits = [], rows = [];
     out.forEach((o, k) => {
