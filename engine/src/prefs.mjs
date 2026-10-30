@@ -1,5 +1,5 @@
 // Preferences that follow the designer across projects and both Tovi pages (start page and editor).
-// Kept in ~/Kerf/prefs.json. theme: 'system' (follow the Mac), 'light' or 'dark'.
+// Kept in ~/Kerf/prefs.json. theme: 'dark' (the default), 'light', or 'system' (follow the Mac).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +10,7 @@ const THEMES = new Set(['system', 'light', 'dark']);
 export function readPrefs() {
   let p = {};
   try { p = JSON.parse(fs.readFileSync(PREFS_FILE, 'utf8')) || {}; } catch {}
-  return { theme: THEMES.has(p.theme) ? p.theme : 'system' };
+  return { theme: THEMES.has(p.theme) ? p.theme : 'dark' };
 }
 
 export function savePrefs(patch = {}) {

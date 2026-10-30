@@ -92,7 +92,7 @@ One dark theme for now (light theme and core components still to do).
 | intent (Tovi pink) | #FCBDDD (light theme #C2508A) |
 | danger | #F06A5F |
 
-**Core colour rule (brand colours set October 2026): purple is the Tovi brand** (buttons, active tools, focus, the Hand off / Create PR button). **Blue means "what you're touching" on the canvas** (selection outlines, handles, drop line, the Layers highlight), kept blue like Figma so it never blends into a design. **Pink means Tovi itself** (its cursor and name tag, guides, rule prompts, change markers, AI proposals). Light and dark themes both exist now (Settings → Appearance).
+**Core colour rule (brand colours set October 2026): purple is the Tovi brand** (buttons, active tools, focus, the Hand off / Create PR button). **Blue means "what you're touching" on the canvas** (selection outlines, handles, drop line, the Layers highlight), kept blue like Figma so it never blends into a design. **Pink means Tovi itself** (its cursor and name tag, guides, rule prompts, change markers, AI proposals). Light and dark themes both exist (Settings → Appearance); dark is the default for everyone.
 
 Type: Geist for the interface (12px is the workhorse size), Geist Mono for code paths. Spacing: 4 / 8 / 12 / 16. Radii: 4 / 6 / 10.
 

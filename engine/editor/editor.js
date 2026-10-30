@@ -2,9 +2,9 @@
 // editor around it (top bar, layers, design panel, toolbar). The iframe is
 // same-origin, so the editor reads and outlines the app's DOM directly.
 (() => {
-  // Theme: Settings → Appearance ("System" follows the Mac). A local copy is applied first so the page doesn't flash.
-  let theme = 'system';
-  const applyTheme = (t) => { theme = t === 'light' || t === 'dark' ? t : 'system'; if (theme === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = theme; try { localStorage.setItem('kerf.theme', theme); } catch {} };
+  // Theme: Settings → Appearance. Dark by default; "System" follows the Mac. A local copy is applied first so the page doesn't flash.
+  let theme = 'dark';
+  const applyTheme = (t) => { theme = t === 'light' || t === 'system' ? t : 'dark'; document.documentElement.dataset.theme = theme; try { localStorage.setItem('kerf.theme', theme); } catch {} };
   try { applyTheme(localStorage.getItem('kerf.theme')); } catch {}
   fetch('prefs').then((r) => r.json()).then((p) => applyTheme(p.theme)).catch(() => {});
   /* ---------- api ---------- */
@@ -692,7 +692,7 @@
       <div class="setBody">
         <div class="setSec"><h3>Tovi</h3>
           <form class="setRow" data-form="person" autocomplete="off"><span class="setTx"><b>Your name</b><span class="note">Shown on the versions and changes you make.</span></span><span class="setName"><input id="setPerson" value="" maxlength="60" placeholder="Your name" aria-label="Your name"><button class="outline sm">Save</button></span></form>
-          ${row('Appearance', 'System follows your Mac.', `<div class="seg setSeg">${[['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].map(([v, n]) => `<button data-act="setTheme" data-v="${v}" class="${theme === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
+          ${row('Appearance', 'Dark unless you choose otherwise. System follows your Mac.', `<div class="seg setSeg">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([v, n]) => `<button data-act="setTheme" data-v="${v}" class="${theme === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
           ${tog('agents', S.agentsOn, 'Show Tovi at work', 'See Tovi’s cursor select and change things as it works.')}
           ${row('AI style', 'How far Tovi may go beyond your design system.', `<div class="seg setSeg">${[['system', 'On system'], ['improve', 'Improve'], ['explore', 'Explore']].map(([v, n]) => `<button data-act="setMode" data-v="${v}" class="${S.styleMode === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
           ${row('Design direction', S.direction ? esc(dirName()) : 'Not set. Tovi follows your design system.', `<button class="outline sm" data-act="setDir">${S.direction ? 'Change' : 'Set'}</button>`)}

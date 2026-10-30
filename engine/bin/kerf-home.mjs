@@ -136,7 +136,7 @@ const PAGE = `<!doctype html>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono&display=swap">
 <style>
 :root{--canvas:#1B1B1E;--panel:#232327;--raised:#2D2D32;--line:#3A3A40;--ink:#EDEDF0;--ink2:#B0B0BA;--ink3:#8B8B95;--select:#8A57BC;--intent:#FCBDDD;--danger:#F06A5F;--ok:#6FD39A;--hi:255,255,255;--menu:#1E1E21;color-scheme:dark}
-@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#8A57BC;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#8A57BC;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}}
 :root[data-theme="light"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#8A57BC;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -251,8 +251,8 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
       </div>
     </div>
     <div><div class="secH"><h2>Appearance</h2></div>
-      <div class="rows"><div class="srow"><div class="tx"><b>Theme</b><span class="hint">System follows your Mac. The editor uses the same setting.</span></div>
-        <select id="themeSel" aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></div>
+      <div class="rows"><div class="srow"><div class="tx"><b>Theme</b><span class="hint">Dark unless you choose otherwise. System follows your Mac. The editor uses the same setting.</span></div>
+        <select id="themeSel" aria-label="Theme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div></div></div>
     <div><div class="secH"><h2>About</h2></div>
       <div class="rows">
         <div class="srow"><div class="tx"><b>Projects folder</b><span class="hint" id="adir"></span></div></div>
@@ -285,8 +285,8 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
   </section>
 </main></div>
 <script>
-// Theme ("System" follows the Mac). A local copy is applied first so the page doesn't flash.
-function applyTheme(t){t=t==='light'||t==='dark'?t:'system';if(t==='system')delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=t;try{localStorage.setItem('kerf.theme',t)}catch{}const s=document.getElementById('themeSel');if(s)s.value=t}
+// Theme: dark by default; "System" follows the Mac. A local copy is applied first so the page doesn't flash.
+function applyTheme(t){t=t==='light'||t==='system'?t:'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('kerf.theme',t)}catch{}const s=document.getElementById('themeSel');if(s)s.value=t}
 try{applyTheme(localStorage.getItem('kerf.theme'))}catch{}
 fetch('/api/prefs').then(r=>r.json()).then(p=>applyTheme(p.theme)).catch(()=>{});
 document.addEventListener('change',e=>{if(e.target.id!=='themeSel')return;applyTheme(e.target.value);fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:e.target.value})})});
