@@ -24,6 +24,14 @@ export const PROVIDERS = {
   openai: { label: 'OpenAI', keyName: 'OPENAI_API_KEY', model: 'gpt-6-astra' },
   gemini: { label: 'Gemini', keyName: 'GEMINI_API_KEY', model: 'gemini-3.6-flash' },
 };
+// The models offered in Settings, grouped by provider. Any other name can be typed in ("Other … model").
+export const MODELS = [
+  { provider: 'anthropic', id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
+  { provider: 'anthropic', id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
+  { provider: 'openai', id: 'gpt-6-astra', label: 'GPT-6 Astra' },
+  { provider: 'gemini', id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
+  { provider: 'gemini', id: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
+];
 function envValue(name) {
   try {
     const m = fs.readFileSync(ENV, 'utf8').match(new RegExp(`^${name}=(\\S+)`, 'm'));

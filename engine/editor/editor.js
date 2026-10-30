@@ -542,13 +542,17 @@
   }
   /* ---------- Settings ---------- */
   const save = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
-  let aiCfg = { provider: 'anthropic', model: '', defaults: {} };
+  let aiCfg = { provider: 'anthropic', model: '', defaults: {} }, aiPick = null;
   // Load the saved AI settings first, so the window shows the right provider and key states.
   function openSettings() {
+    aiPick = null;
     api('/keys').then((k) => { aiCfg = k; showSettings(); }).catch(() => showSettings());
   }
   function showSettings() {
     const m = $('modal'), p = S.project || {};
+    // The provider being set up: a picked "Other … model" waits for its name before it's saved.
+    const pv = aiPick?.provider || aiCfg.provider || 'anthropic';
+    const known = !aiPick?.custom && (aiCfg.models || []).some((x) => x.provider === aiCfg.provider && x.id === aiCfg.model);
     const tog = (id, on, label, sub) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span><button class="switch${on ? ' on' : ''}" data-act="setTog" data-v="${id}" role="switch" aria-checked="${on}" aria-label="${label}"><i></i></button></div>`;
     const row = (label, sub, ctl) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span>${ctl}</div>`;
     const startPage = 'http://localhost:4100/#settings';
@@ -567,9 +571,9 @@
           ${row('Panels', 'Put the side panels back to their usual widths.', '<button class="outline sm" data-act="setPanels">Reset</button>')}
         </div>
         <div class="setSec"><h3>AI</h3>
-          ${row('Provider', 'Which AI answers your requests.', `<div class="seg setSeg">${[['anthropic', 'Claude'], ['openai', 'OpenAI'], ['gemini', 'Gemini']].map(([v, n]) => `<button data-act="aiProv" data-v="${v}" class="${aiCfg.provider === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
-          <form class="setRow" data-form="aimodel" autocomplete="off"><span class="setTx"><b>Model</b><span class="note">Leave empty for the default. Check the name in your provider’s docs.</span></span><span class="setName"><input id="setModel" value="${esc(aiCfg.model || '')}" placeholder="${esc(aiCfg.defaults?.[aiCfg.provider]?.model || '')}" maxlength="80" spellcheck="false" aria-label="Model name"><button class="outline sm">Save</button></span></form>
-          ${[aiCfg.provider || 'anthropic'].map((k) => `<form class="setRow" data-form="aikey" data-p="${k}" autocomplete="off"><span class="setTx"><b>${aiCfg.defaults?.[k]?.label || k} key</b><span class="note">${aiCfg[k] ? 'Saved. Paste a new one to replace it.' : 'Not set yet.'}</span></span><span class="setName"><input type="password" placeholder="Paste key" aria-label="${k} key" autocomplete="new-password" spellcheck="false"><button class="outline sm">Save</button></span></form>`).join('')}
+          <div class="setRow"><span class="setTx"><b>Model</b><span class="note">Which AI answers your requests. Its key goes below.</span></span><select id="setModelSel" class="setSel" aria-label="Model">${Object.keys(aiCfg.defaults || {}).map((p) => `<optgroup label="${esc(aiCfg.defaults[p].label)}">${(aiCfg.models || []).filter((x) => x.provider === p).map((x) => `<option value="${p}:${esc(x.id)}"${known && aiCfg.provider === p && aiCfg.model === x.id ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}<option value="${p}:"${!known && pv === p ? ' selected' : ''}>Other ${esc(aiCfg.defaults[p].label)} model…</option></optgroup>`).join('')}</select></div>
+          ${known ? '' : `<form class="setRow" data-form="aimodel" autocomplete="off"><span class="setTx"><b>Model name</b><span class="note">Copy it from your provider’s docs.</span></span><span class="setName"><input id="setModel" value="${aiPick?.custom ? '' : esc(aiCfg.model || '')}" placeholder="e.g. ${esc(aiCfg.defaults?.[pv]?.model || '')}" maxlength="80" spellcheck="false" aria-label="Model name"><button class="outline sm">Save</button></span></form>`}
+          ${[pv].map((k) => `<form class="setRow" data-form="aikey" data-p="${k}" autocomplete="off"><span class="setTx"><b>${aiCfg.defaults?.[k]?.label || k} key</b><span class="note">${aiCfg[k] ? 'Saved. Paste a new one to replace it.' : 'Not set yet.'}</span></span><span class="setName"><input type="password" placeholder="Paste key" aria-label="${k} key" autocomplete="new-password" spellcheck="false"><button class="outline sm">Save</button></span></form>`).join('')}
           ${row('Unsplash photos', '<span id="setKeyU">Checking…</span>', `<a class="outline sm" href="${startPage}" target="_blank" rel="noopener">Change</a>`)}
           <span class="note">Keys stay on this Mac in a git-ignored file. Tovi never shows them.</span>
         </div>
@@ -1404,7 +1408,6 @@
         if (v === 'scale') { S.scaleArrows = !S.scaleArrows; save('kerf.scale', S.scaleArrows ? 'on' : 'off'); }
         openSettings(); break;
       case 'setMode': setStyleMode(v); openSettings(); break;
-      case 'aiProv': api('/ai-config', { provider: v, model: '' }).then(() => openSettings()).catch((err) => toast(err.message, '', true)); break;
       case 'setDir': $('modal').hidden = true; openDirection(); break;
       case 'setPanels': for (const k of Object.keys(SIDE)) { try { localStorage.removeItem(`kerf.side.${k}`); } catch {} setSide(k, SIDE[k].def); } applyDevice(); toast('Panels are back to their usual widths'); break;
       case 'simScope': S.simScope = v; renderPanel(); break;
@@ -1503,6 +1506,15 @@
     preview(S.sel.el, p, n);
     commitSoon(p, n);
   });
+  // Settings → Model: a listed model is saved at once; "Other … model" asks for its name first.
+  document.addEventListener('change', (e) => {
+    if (e.target.id !== 'setModelSel') return;
+    const [provider, model] = e.target.value.split(':');
+    if (model) { api('/ai-config', { provider, model }).then(() => { toast('Model saved'); openSettings(); }).catch((err) => toast(err.message, '', true)); return; }
+    aiPick = { provider, custom: true };
+    showSettings();
+    setTimeout(() => $('setModel')?.focus(), 0);
+  });
   // Naming a version: Escape or clicking away cancels.
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest?.('.vName')) { e.stopPropagation(); S.vNaming = null; renderPanel(); } }, true);
   document.addEventListener('focusout', (e) => { if (e.target.closest?.('.vName') && S.vNaming != null) setTimeout(() => { if (!document.activeElement?.closest('.vName')) { S.vNaming = null; renderPanel(); } }, 120); });
@@ -1514,7 +1526,7 @@
     if (f === 'chat') sendChat();
     if (f === 'pick' && S.pick) { S.pick.prompt = $('pickQ').value; if (S.pick.kind === 'photo') S.pick.photos = null; else S.pick.drawings = null; runPicker(); }
     if (f === 'note') addNote();
-    if (f === 'aimodel') { api('/ai-config', { provider: aiCfg.provider, model: $('setModel').value.trim() }).then(() => { toast('Model saved'); openSettings(); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'aimodel') { api('/ai-config', { provider: aiPick?.provider || aiCfg.provider, model: $('setModel').value.trim() }).then(() => { toast('Model saved'); openSettings(); }).catch((err) => toast(err.message, '', true)); }
     if (f === 'aikey') { const inp = e.target.querySelector('input'), key = inp.value.trim(), provider = e.target.dataset.p; if (!key) return; api('/keys', { provider, key }).then(() => { toast(`${aiCfg.defaults?.[provider]?.label || 'Key'} saved`); openSettings(); }).catch((err) => toast(err.message, '', true)); }
     if (f === 'person') { const name = $('setPerson').value.trim(); if (!name) return; api('/person', { name }).then((p) => { $('setPerson').value = p.name; toast(`Versions will show ${p.name}`); }).catch((err) => toast(err.message, '', true)); }
     if (f === 'vsave') { const name = e.target.querySelector('input').value.trim(); api('/version', { kind: 'named', name: name || null }).then((v) => { S.versions = v; S.verAt = S.count; renderPanel(); renderTop(); toast(name ? `Saved “${name}”` : 'Saved a version'); }).catch((err) => toast(err.message, '', true)); }

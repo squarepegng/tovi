@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openProject, PROJECTS_DIR, projects, stopAll } from '../src/project.mjs';
 import { readRecent } from '../src/recent.mjs';
+import { MODELS, PROVIDERS } from '../src/ai.mjs';
 
 const ENV = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env');
 
@@ -54,7 +55,8 @@ http.createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/api/job') return send(res, 200, job && { ...job, repoRoot: undefined });
   if (req.method === 'GET' && req.url === '/api/key-status') {
     const env = fs.existsSync(ENV) ? fs.readFileSync(ENV, 'utf8') : '';
-    return send(res, 200, { set: /^ANTHROPIC_API_KEY=sk-ant-\S+/m.test(env), unsplash: /^UNSPLASH_ACCESS_KEY=\S+/m.test(env), openai: /^OPENAI_API_KEY=\S+/m.test(env), gemini: /^GEMINI_API_KEY=\S+/m.test(env), provider: env.match(/^AI_PROVIDER=(\w+)/m)?.[1] || 'anthropic' });
+    const provider = PROVIDERS[env.match(/^AI_PROVIDER=(\w+)/m)?.[1]] ? env.match(/^AI_PROVIDER=(\w+)/m)[1] : 'anthropic';
+    return send(res, 200, { set: /^ANTHROPIC_API_KEY=sk-ant-\S+/m.test(env), unsplash: /^UNSPLASH_ACCESS_KEY=\S+/m.test(env), openai: /^OPENAI_API_KEY=\S+/m.test(env), gemini: /^GEMINI_API_KEY=\S+/m.test(env), provider, model: env.match(/^AI_MODEL=(\S+)/m)?.[1] || PROVIDERS[provider].model, models: MODELS, labels: Object.fromEntries(Object.entries(PROVIDERS).map(([k, v]) => [k, v.label])) });
   }
   if (req.method === 'POST' && req.url === '/api/unsplash-key') {
     let body = '';
@@ -79,9 +81,10 @@ http.createServer(async (req, res) => {
   if (req.method === 'POST' && req.url === '/api/ai-provider') {
     let body = '';
     for await (const c of req) body += c;
-    const { provider } = JSON.parse(body || '{}');
-    const model = { anthropic: 'claude-opus-5-5', openai: 'gpt-6-astra', gemini: 'gemini-3.6-flash' }[provider];
-    if (!model) return send(res, 400, { error: 'Unknown AI.' });
+    const { provider, model: raw } = JSON.parse(body || '{}');
+    const model = String(raw || '').trim() || PROVIDERS[provider]?.model;
+    if (!PROVIDERS[provider]) return send(res, 400, { error: 'Unknown AI.' });
+    if (!/^[\w.:/-]{2,80}$/.test(model)) return send(res, 400, { error: 'That model name does not look right.' });
     setEnv('AI_PROVIDER', provider);
     setEnv('AI_MODEL', model);
     return send(res, 200, { ok: true });
@@ -180,9 +183,8 @@ details.logs summary{cursor:pointer;color:var(--ink3);font-size:12px}details.log
 .rows{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .srow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.06)}
 .srow:last-child{border-bottom:0}
-.pick{display:flex;gap:2px;padding:2px;border-radius:8px;background:rgba(255,255,255,.05)}
-.pick button{background:none;color:var(--ink2,#B0B0BA);box-shadow:none}
-.pick button.on{background:#2D2D32;color:#EDEDF0}
+select{flex:0 0 auto;align-self:flex-start;height:36px;min-width:200px;padding:0 32px 0 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23B0B0BA' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--ink);font:inherit;appearance:none;cursor:pointer;outline:none}
+select:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(43,102,217,.2)}
 .srow .tx{display:flex;flex-direction:column;gap:3px;min-width:0}
 .srow .tx b{font-weight:500}
 .srow form{display:flex;gap:8px;margin-top:10px;width:100%}
@@ -226,7 +228,9 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
     <div><h1 id="sT">Settings</h1><p>Saved only on this Mac. Keys live in a git-ignored file, and Tovi never shows them again.</p></div>
     <div><div class="secH"><h2>AI</h2></div>
       <div class="rows">
-        <div class="srow"><div class="tx"><b>Use</b><span class="hint">Which AI answers your requests. Change the model in the editor’s Settings.</span></div><div class="pick" id="aiPick">${[['anthropic', 'Claude'], ['openai', 'OpenAI'], ['gemini', 'Gemini']].map(([v, n]) => `<button class="sm" data-p="${v}">${n}</button>`).join('')}</div></div>
+        <div class="srow"><div class="tx"><b>Model</b><span class="hint">Which AI answers your requests. Its key goes below.</span>
+          <form id="cmf" hidden><input id="cmIn" placeholder="Model name from your provider’s docs" autocomplete="off" spellcheck="false" aria-label="Model name"><button class="sm">Save</button></form><span class="err" id="cmErr"></span></div>
+          <select id="aiModel" aria-label="Model"></select></div>
         <div class="srow" data-key="anthropic"><div class="tx"><b>Anthropic key</b><span class="hint" id="keystat">Checking…</span>
           <form id="kf"><input id="kin" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" aria-label="Anthropic API key"><button class="sm" id="ksave">Save</button></form><span class="err" id="kerr"></span></div></div>
         ${[['openai', 'OpenAI key', 'sk-...', 'https://platform.openai.com/api-keys', 'platform.openai.com'], ['gemini', 'Gemini key', 'AIza...', 'https://aistudio.google.com/apikey', 'aistudio.google.com']].map(([p, n, ph, url, host]) => `<div class="srow" data-key="${p}" hidden><div class="tx"><b>${n}</b><span class="hint" id="st-${p}" data-url="${url}" data-host="${host}">Checking…</span>
@@ -301,7 +305,10 @@ $('recent').addEventListener('click',e=>{const b=e.target.closest('[data-src]');
 async function loadKey(){const s=await (await fetch('/api/key-status')).json();
   $('keystat').innerHTML=s.set?'<span class="ok">Saved.</span> Tovi’s AI is on. Paste a new key to replace it.':'No key yet. Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.';
   for(const p of ['openai','gemini']){const el=$('st-'+p);el.innerHTML=s[p]?'<span class="ok">Saved.</span> Paste a new key to replace it.':'No key yet. Get one at <a href="'+el.dataset.url+'" target="_blank" rel="noopener">'+el.dataset.host+'</a>.'}
-  document.querySelectorAll('#aiPick button').forEach(b=>b.classList.toggle('on',b.dataset.p===s.provider));
+  const sel=$('aiModel'),known=s.models.some(m=>m.provider===s.provider&&m.id===s.model);
+  sel.innerHTML=Object.keys(s.labels).map(p=>'<optgroup label="'+s.labels[p]+'">'+s.models.filter(m=>m.provider===p).map(m=>'<option value="'+p+':'+m.id+'">'+m.label+'</option>').join('')+'<option value="'+p+':">Other '+s.labels[p]+' model…</option></optgroup>').join('');
+  sel.value=s.provider+':'+(known?s.model:'');
+  $('cmf').hidden=known;if(!known)$('cmIn').value=s.model;
   document.querySelectorAll('[data-key]').forEach(r=>r.hidden=r.dataset.key!==s.provider);
   $('ustat').innerHTML=s.unsplash?'<span class="ok">Saved.</span> Photo search is on.':'Not set: photo search is off.';
   $('keyBanner').hidden=!!s.set;}
@@ -309,6 +316,9 @@ async function loadAbout(){try{const a=await (await fetch('/api/about')).json();
 $('uf').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/unsplash-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('uin').value})});const j=await r.json();if(!r.ok){$('uerr').textContent=j.error;return}$('uin').value='';$('uerr').textContent='';loadKey()});
 $('kf').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('kin').value})});const j=await r.json();if(!r.ok){$('kerr').textContent=j.error;return}$('kin').value='';$('kerr').textContent='';loadKey()});
 document.querySelectorAll('.aif').forEach(f=>f.addEventListener('submit',async e=>{e.preventDefault();const i=f.querySelector('input'),er=f.parentNode.querySelector('.err');const r=await fetch('/api/ai-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:f.dataset.p,key:i.value})});const j=await r.json();if(!r.ok){er.textContent=j.error;return}i.value='';er.textContent='';loadKey()}));
-$('aiPick').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;await fetch('/api/ai-provider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:b.dataset.p})});loadKey()});
+async function setModel(provider,model){const r=await fetch('/api/ai-provider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider,model})});const j=await r.json();$('cmErr').textContent=r.ok?'':j.error;if(r.ok)loadKey()}
+$('aiModel').addEventListener('change',e=>{const [p,m]=e.target.value.split(':');if(m)return setModel(p,m);
+  document.querySelectorAll('[data-key]').forEach(r=>r.hidden=r.dataset.key!==p);$('cmf').hidden=false;$('cmIn').value='';$('cmIn').focus()});
+$('cmf').addEventListener('submit',e=>{e.preventDefault();const m=$('cmIn').value.trim();if(m)setModel($('aiModel').value.split(':')[0],m)});
 loadKey();loadRecent();loadAbout();poll();
 </script></body></html>`;

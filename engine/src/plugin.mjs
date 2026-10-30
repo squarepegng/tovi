@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { tagSource } from './ast.mjs';
 import { loadTheme } from './tailwind.mjs';
 import { createEditor, KerfError } from './edit.mjs';
-import { propose, aiConfig, PROVIDERS } from './ai.mjs';
+import { propose, aiConfig, PROVIDERS, MODELS } from './ai.mjs';
 import { createSession } from './session.mjs';
 import { readPerson, savePerson } from './person.mjs';
 import { createLibrary } from './library.mjs';
@@ -77,7 +77,7 @@ export async function createKerf(webRoot) {
         // Which AI keys are saved (never the keys themselves), the chosen AI and its model.
         if (req.method === 'GET' && route === '/keys') {
           const c = aiConfig();
-          return send(200, { anthropic: !!envKey('ANTHROPIC_API_KEY'), openai: !!envKey('OPENAI_API_KEY'), gemini: !!envKey('GEMINI_API_KEY'), unsplash: !!envKey('UNSPLASH_ACCESS_KEY'), provider: c.provider, model: c.model, defaults: Object.fromEntries(Object.entries(PROVIDERS).map(([k, v]) => [k, { label: v.label, model: v.model }])) });
+          return send(200, { anthropic: !!envKey('ANTHROPIC_API_KEY'), openai: !!envKey('OPENAI_API_KEY'), gemini: !!envKey('GEMINI_API_KEY'), unsplash: !!envKey('UNSPLASH_ACCESS_KEY'), provider: c.provider, model: c.model, models: MODELS, defaults: Object.fromEntries(Object.entries(PROVIDERS).map(([k, v]) => [k, { label: v.label, model: v.model }])) });
         }
         if (req.method === 'GET' && route === '/direction') { const d = session.direction(); return send(200, d ? { ...d, refs: d.refs.map(({ data, ...r }) => r) } : null); }
         if (req.method === 'GET' && route === '/images/photos') {
