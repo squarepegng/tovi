@@ -227,9 +227,9 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
     <div><div class="secH"><h2>AI</h2></div>
       <div class="rows">
         <div class="srow"><div class="tx"><b>Use</b><span class="hint">Which AI answers your requests. Change the model in the editor’s Settings.</span></div><div class="pick" id="aiPick">${[['anthropic', 'Claude'], ['openai', 'OpenAI'], ['gemini', 'Gemini']].map(([v, n]) => `<button class="sm" data-p="${v}">${n}</button>`).join('')}</div></div>
-        <div class="srow"><div class="tx"><b>Anthropic key</b><span class="hint" id="keystat">Checking…</span>
+        <div class="srow" data-key="anthropic"><div class="tx"><b>Anthropic key</b><span class="hint" id="keystat">Checking…</span>
           <form id="kf"><input id="kin" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" aria-label="Anthropic API key"><button class="sm" id="ksave">Save</button></form><span class="err" id="kerr"></span></div></div>
-        ${[['openai', 'OpenAI key', 'sk-...', 'https://platform.openai.com/api-keys', 'platform.openai.com'], ['gemini', 'Gemini key', 'AIza...', 'https://aistudio.google.com/apikey', 'aistudio.google.com']].map(([p, n, ph, url, host]) => `<div class="srow"><div class="tx"><b>${n}</b><span class="hint" id="st-${p}" data-url="${url}" data-host="${host}">Checking…</span>
+        ${[['openai', 'OpenAI key', 'sk-...', 'https://platform.openai.com/api-keys', 'platform.openai.com'], ['gemini', 'Gemini key', 'AIza...', 'https://aistudio.google.com/apikey', 'aistudio.google.com']].map(([p, n, ph, url, host]) => `<div class="srow" data-key="${p}" hidden><div class="tx"><b>${n}</b><span class="hint" id="st-${p}" data-url="${url}" data-host="${host}">Checking…</span>
           <form class="aif" data-p="${p}"><input type="password" placeholder="${ph}" autocomplete="off" spellcheck="false" aria-label="${n}"><button class="sm">Save</button></form><span class="err"></span></div></div>`).join('')}
         <div class="srow"><div class="tx"><b>Unsplash photos <span class="hint">(optional, free)</span></b><span class="hint" id="ustat">Checking…</span><span class="hint">Create an app at <a href="https://unsplash.com/oauth/applications" target="_blank" rel="noopener">unsplash.com/developers</a> and paste its Access Key.</span>
           <form id="uf"><input id="uin" type="password" placeholder="Unsplash Access Key" autocomplete="off" spellcheck="false" aria-label="Unsplash Access Key"><button class="sm">Save</button></form><span class="err" id="uerr"></span></div></div>
@@ -302,6 +302,7 @@ async function loadKey(){const s=await (await fetch('/api/key-status')).json();
   $('keystat').innerHTML=s.set?'<span class="ok">Saved.</span> Tovi’s AI is on. Paste a new key to replace it.':'No key yet. Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.';
   for(const p of ['openai','gemini']){const el=$('st-'+p);el.innerHTML=s[p]?'<span class="ok">Saved.</span> Paste a new key to replace it.':'No key yet. Get one at <a href="'+el.dataset.url+'" target="_blank" rel="noopener">'+el.dataset.host+'</a>.'}
   document.querySelectorAll('#aiPick button').forEach(b=>b.classList.toggle('on',b.dataset.p===s.provider));
+  document.querySelectorAll('[data-key]').forEach(r=>r.hidden=r.dataset.key!==s.provider);
   $('ustat').innerHTML=s.unsplash?'<span class="ok">Saved.</span> Photo search is on.':'Not set: photo search is off.';
   $('keyBanner').hidden=!!s.set;}
 async function loadAbout(){try{const a=await (await fetch('/api/about')).json();$('ver').textContent='Version '+a.version;$('aver').textContent=a.version;$('adir').textContent=a.projectsDir+' (Tovi’s copies of the repos you open)';$('pdir').textContent='Newest first';}catch{}}
