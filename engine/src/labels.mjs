@@ -3,10 +3,10 @@ export const PROP_NAMES = {
   bg: 'Fill', color: 'Text color', borderC: 'Stroke color', fontSize: 'Size', fontWeight: 'Weight', lineHeight: 'Line height',
   letterSpacing: 'Letter spacing', align: 'Text align', radius: 'Corner radius', rTL: 'Top-left corner', rTR: 'Top-right corner',
   rBR: 'Bottom-right corner', rBL: 'Bottom-left corner', padX: 'Horizontal padding', padY: 'Vertical padding', mX: 'Horizontal margin',
-  mY: 'Vertical margin', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', fit: 'Image fit', gradient: 'Gradient',
+  mY: 'Vertical margin', mT: 'Top margin', mB: 'Bottom margin', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', fit: 'Image fit', gradient: 'Gradient',
   clipText: 'Gradient text', w: 'Width', h: 'Height', layout: 'Layout', alignItems: 'Align', justify: 'Distribute', wrap: 'Wrap',
 };
-const PX = new Set(['fontSize', 'lineHeight', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'mX', 'mY', 'gap', 'borderW', 'w', 'h']);
+const PX = new Set(['fontSize', 'lineHeight', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'mX', 'mY', 'mT', 'mB', 'gap', 'borderW', 'w', 'h']);
 const PCT = new Set(['opacity', 'letterSpacing']);
 const DIRS = { r: 'right', l: 'left', b: 'down', t: 'up', br: 'down-right', bl: 'down-left', tr: 'up-right', tl: 'up-left' };
 const WEIGHTS = { 100: 'Thin', 200: 'Extra light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold', 800: 'Extra bold', 900: 'Black' };

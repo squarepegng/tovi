@@ -56,6 +56,8 @@
     shadow: { css: () => ({}) },
     mX: { min: -400, max: 400, css: (v) => ({ 'margin-left': v + 'px', 'margin-right': v + 'px' }) },
     mY: { min: -400, max: 400, css: (v) => ({ 'margin-top': v + 'px', 'margin-bottom': v + 'px' }) },
+    mT: { min: -400, max: 400, css: (v) => ({ 'margin-top': v + 'px' }) },
+    mB: { min: -400, max: 400, css: (v) => ({ 'margin-bottom': v + 'px' }) },
     w: { max: 4000, css: PX('width') },
     h: { max: 4000, css: PX('height') },
   };
@@ -119,6 +121,8 @@
       case 'opacity': return Math.round(Number(c.opacity) * 100);
       case 'mX': return Math.round(parseFloat(c.marginLeft)) || 0;
       case 'mY': return Math.round(parseFloat(c.marginTop)) || 0;
+      case 'mT': return Math.round(parseFloat(c.marginTop)) || 0;
+      case 'mB': return Math.round(parseFloat(c.marginBottom)) || 0;
       case 'w': return Math.round(el.getBoundingClientRect().width);
       case 'h': return Math.round(el.getBoundingClientRect().height);
     }
@@ -1742,7 +1746,7 @@
     const v = clamp(p, Math.round(n * 10) / 10);
     // Zero padding, margin or gap: remove the class (like a developer would) rather than write px-0,
     // unless something else (a component's own classes) still sets it.
-    if (v === 0 && ['padX', 'padY', 'mX', 'mY', 'gap'].includes(p)) return clearStyle([{ prop: p, value: null }], [{ prop: p, value: 0 }], (el) => (+read(p, el) || 0) !== 0);
+    if (v === 0 && ['padX', 'padY', 'mX', 'mY', 'mT', 'mB', 'gap'].includes(p)) return clearStyle([{ prop: p, value: null }], [{ prop: p, value: 0 }], (el) => (+read(p, el) || 0) !== 0);
     if (v === 100 && p === 'opacity') return clearStyle([{ prop: p, value: null }], [{ prop: p, value: 100 }], (el) => +read(p, el) !== 100);
     // Icons keep their proportions when resized, like Figma.
     if ((p === 'w' || p === 'h') && S.sel?.el?.tagName.toLowerCase() === 'svg') {
@@ -3400,8 +3404,8 @@
     const L = layoutVal(el);
     let h = '';
     const shown = (k) => S.reveal?.el === el && S.reveal[k];
-    const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = (+val('mX') || 0) !== 0 || (+val('mY') || 0) !== 0;
-    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${nf('mX', 'padH', 'Horizontal margin')}${nf('mY', 'padV', 'Vertical margin')}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
+    const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = ['mX', 'mT', 'mB'].some((k) => (+val(k) || 0) !== 0);
+    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${nf('mX', 'padH', 'Horizontal margin')}<span></span></div><div class="r2">${nf('mT', '<b class="tg">T</b>', 'Top margin')}${nf('mB', '<b class="tg">B</b>', 'Bottom margin')}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
     // Like Figma: one field per axis, "W 468" with Fixed / Hug / Fill inside it. Typing a number makes it fixed.
     const MODES = [['fixed', 'Fixed'], ['hug', 'Hug'], ['fill', 'Fill'], ['auto', 'Auto']];
     const sizeField = (axis) => {

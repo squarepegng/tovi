@@ -287,7 +287,7 @@ export function describe(code, line, col, ctx = {}) {
   };
 }
 // Properties set differently per screen size (md:text-lg…), so the panel can mark them, like Framer's overrides.
-const SIZED_PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'padX', 'padY', 'mX', 'mY', 'gap', 'borderW', 'opacity', 'shadow', 'w', 'h', 'layout', 'alignItems', 'justify'];
+const SIZED_PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'padX', 'padY', 'mX', 'mY', 'mT', 'mB', 'gap', 'borderW', 'opacity', 'shadow', 'w', 'h', 'layout', 'alignItems', 'justify'];
 function sizedProps(classes, theme) {
   const screens = new Set((theme?.screens || []).map((x) => x.name));
   const rest = (classes || []).map((c) => c.match(/^([\w-]+):([^:]+)$/)).filter((m) => m && screens.has(m[1])).map((m) => m[2]);

@@ -14,7 +14,7 @@ import { checkSnippet } from './structure.mjs';
 
 const ENV = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env');
 
-export const PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity', 'shadow', 'fit', 'gradient', 'clipText', 'mX', 'mY', 'w', 'h', 'layout', 'alignItems', 'justify', 'wrap'];
+export const PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity', 'shadow', 'mT', 'mB', 'fit', 'gradient', 'clipText', 'mX', 'mY', 'w', 'h', 'layout', 'alignItems', 'justify', 'wrap'];
 const NUMERIC = new Set(['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity']);
 const COLOR = new Set(['bg', 'color', 'borderC']);
 
@@ -227,7 +227,7 @@ export function cleanOps(ops, theme) {
       else if (/^#?[0-9a-f]{6}$/i.test(v)) out.push({ prop, value: '#' + v.replace('#', '').toUpperCase() });
     } else if (prop === 'shadow') {
       if (v === 'none' || theme.shadow.includes(v)) out.push({ prop, value: v });
-    } else if (prop === 'mX' || prop === 'mY') {
+    } else if (prop === 'mX' || prop === 'mY' || prop === 'mT' || prop === 'mB') {
       if (v === 'auto') out.push({ prop, value: 'auto' });
       else if (isFinite(parseFloat(v))) out.push({ prop, value: Math.round(parseFloat(v)) });
     } else if (prop === 'w' || prop === 'h') {

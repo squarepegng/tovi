@@ -183,6 +183,12 @@ test('insert next to a page’s outer box goes inside it instead', () => {
   assert.match(summary.action, /went inside/);
 });
 
+test('top and bottom margin are separate, and split my-* / m-* so the other side keeps its value', () => {
+  assert.equal(ops('mt-4 text-xl', [{ prop: 'mT', value: 8 }]), 'mt-2 text-xl');
+  assert.equal(ops('my-4 text-xl', [{ prop: 'mT', value: 8 }]), 'mb-4 text-xl mt-2');
+  assert.equal(ops('my-4 text-xl', [{ prop: 'mB', value: null }]), 'mt-4 text-xl');
+  assert.equal(ops('m-4', [{ prop: 'mB', value: 0 }]), 'mx-4 mt-4 mb-0');
+});
 test('gradient stops can carry positions, written only when not the usual 0 / 50 / 100', () => {
   assert.equal(ops('bg-surface p-4', [{ prop: 'gradient', value: 'r #FCBDDD@10 primary@37 #967184' }]), 'p-4 bg-gradient-to-r from-[#FCBDDD] from-10% via-primary via-[37%] to-[#967184]');
   assert.equal(ops('bg-gradient-to-r from-primary from-10% to-surface p-4', [{ prop: 'gradient', value: 'r primary@0 surface@100' }]), 'bg-gradient-to-r from-primary to-surface p-4');

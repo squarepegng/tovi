@@ -117,6 +117,8 @@ export function matcher(prop, th) {
     case 'padX': return (c) => /^(px|pl|pr|ps|pe)-/.test(c);
     case 'mX': return (c) => /^-?(mx|ml|mr|ms|me)-/.test(c);
     case 'mY': return (c) => /^-?(my|mt|mb)-/.test(c);
+    case 'mT': return (c) => /^-?mt-/.test(c);
+    case 'mB': return (c) => /^-?mb-/.test(c);
     case 'w': return (c) => /^w-/.test(c) || c === 'flex-1' || c === 'grow' || c === 'flex-auto';
     case 'h': return (c) => /^h-/.test(c) || c === 'flex-1';
     case 'layout': return (c) => ['flex', 'inline-flex', 'flex-row', 'flex-col', 'flex-row-reverse', 'flex-col-reverse', 'block', 'inline-block', 'grid', 'inline-grid'].includes(c);
@@ -144,8 +146,8 @@ function scale(prefix, map, px, unit = 'px') {
 export function classFor(prop, v, th) {
   switch (prop) {
     case 'padX': return scale('px', th.spacing, v);
-    case 'mX': case 'mY': {
-      const pre = prop === 'mX' ? 'mx' : 'my';
+    case 'mX': case 'mY': case 'mT': case 'mB': {
+      const pre = { mX: 'mx', mY: 'my', mT: 'mt', mB: 'mb' }[prop];
       if (v === 'auto') return `${pre}-auto`;
       const n = Number(v);
       return n < 0 ? '-' + scale(pre, th.spacing, -n) : scale(pre, th.spacing, n);
@@ -233,6 +235,21 @@ export function applyOps(list, ops, th) {
         out.splice(i, 1, keep);
       }
     }
+    // my-4 / m-4 set top and bottom together: changing one side splits it so the other side keeps its value.
+    if (prop === 'mT' || prop === 'mB') {
+      const keepSide = prop === 'mT' ? 'mb-' : 'mt-';
+      const i = out.findIndex((c) => base(c) && /^-?my-/.test(c));
+      if (i > -1) {
+        const keep = (out[i].startsWith('-') ? '-' : '') + keepSide + out[i].replace(/^-?my-/, '');
+        removed.push(out[i]); added.push(keep); out.splice(i, 1, keep);
+      } else {
+        const j = out.findIndex((c) => base(c) && /^-?m-/.test(c));
+        if (j > -1) {
+          const neg = out[j].startsWith('-') ? '-' : '', v0 = out[j].replace(/^-?m-/, '');
+          removed.push(out[j]); added.push(`${neg}mx-${v0}`, `${neg}${keepSide}${v0}`); out.splice(j, 1, `${neg}mx-${v0}`, `${neg}${keepSide}${v0}`);
+        }
+      }
+    }
     if (prop === 'layout' && value === 'none') value = null;
     if (prop === 'padX' || prop === 'padY') {
       const i = out.findIndex((c) => base(c) && /^p-/.test(c));
@@ -266,8 +283,8 @@ export function applyOps(list, ops, th) {
   return { classes: out, removed, added, changes };
 }
 
-const PREFIX = { padX: ['px', 'p'], padY: ['py', 'p'], mX: ['mx', 'm'], mY: ['my', 'm'], gap: ['gap'], radius: ['rounded'], rTL: ['rounded-tl'], rTR: ['rounded-tr'], rBR: ['rounded-br'], rBL: ['rounded-bl'], fontSize: ['text'], lineHeight: ['leading'], borderW: ['border'], opacity: ['opacity'], w: ['w'], h: ['h'] };
-const SCALE = { padX: 'spacing', padY: 'spacing', mX: 'spacing', mY: 'spacing', gap: 'spacing', w: 'spacing', h: 'spacing', radius: 'radius', rTL: 'radius', rTR: 'radius', rBR: 'radius', rBL: 'radius', fontSize: 'fontSize', lineHeight: 'lineHeight', borderW: 'borderWidth', opacity: 'opacity' };
+const PREFIX = { padX: ['px', 'p'], padY: ['py', 'p'], mX: ['mx', 'm'], mY: ['my', 'm'], mT: ['mt', 'my', 'm'], mB: ['mb', 'my', 'm'], gap: ['gap'], radius: ['rounded'], rTL: ['rounded-tl'], rTR: ['rounded-tr'], rBR: ['rounded-br'], rBL: ['rounded-bl'], fontSize: ['text'], lineHeight: ['leading'], borderW: ['border'], opacity: ['opacity'], w: ['w'], h: ['h'] };
+const SCALE = { padX: 'spacing', padY: 'spacing', mX: 'spacing', mY: 'spacing', mT: 'spacing', mB: 'spacing', gap: 'spacing', w: 'spacing', h: 'spacing', radius: 'radius', rTL: 'radius', rTR: 'radius', rBR: 'radius', rBL: 'radius', fontSize: 'fontSize', lineHeight: 'lineHeight', borderW: 'borderWidth', opacity: 'opacity' };
 export function valueOfClass(prop, cls, th) {
   if (!cls) return null;
   const neg = cls.startsWith('-');
