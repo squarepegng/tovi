@@ -964,3 +964,37 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 
 .setSel{flex:0 0 auto;height:28px;min-width:180px;padding:0 28px 0 8px;border:1px solid var(--line);border-radius:6px;background:var(--canvas) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23B0B0BA' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center;color:var(--ink);font:400 12px/16px Geist,system-ui,sans-serif;appearance:none;cursor:pointer}
 .setSel:focus{outline:none;border-color:var(--select)}
+
+/* Selection tag: a grip to drag the element within its group */
+.tag{display:flex;align-items:center;gap:4px}
+.tGrip{display:none;place-items:center;width:14px;height:14px;margin-left:-3px;border-radius:3px;pointer-events:auto;cursor:grab;color:rgba(255,255,255,.85)}
+.tag.canDrag .tGrip{display:grid}
+.tGrip:hover{background:rgba(255,255,255,.18);color:#fff}
+.tGrip:active{cursor:grabbing}
+
+/* Colour picker, like Figma's */
+.cpop{gap:10px;padding:10px;background:var(--menu);border:1px solid rgba(var(--hi),.08);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.cpTabs{display:flex;gap:2px;margin:-2px -2px 2px;padding-bottom:8px;border-bottom:1px solid rgba(var(--hi),.08)}
+.cpTabs button{height:26px;padding:0 10px;border:0;border-radius:6px;background:none;color:var(--ink3);font-weight:500}
+.cpTabs button.on{background:var(--raised);color:var(--ink)}
+.cpTabs button:hover{color:var(--ink)}
+.cpSV{position:relative;height:180px;border-radius:6px;cursor:crosshair;touch-action:none;background:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,var(--hue))}
+.cpBar{position:relative;height:12px;border-radius:6px;cursor:pointer;touch-action:none}
+.cpHue{background:linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+.cpAlpha{background:linear-gradient(to right,transparent,var(--c)),repeating-conic-gradient(#ccc 0 25%,#fff 0 50%) 0 0/8px 8px}
+.cpK{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25),0 1px 3px rgba(0,0,0,.35);transform:translate(-50%,-50%);pointer-events:none}
+.cpBar .cpK{top:50%}
+.cpRow{display:flex;gap:6px;align-items:center}
+.cpMode{display:flex;align-items:center;height:28px;padding:0 8px;border:1px solid rgba(var(--hi),.1);border-radius:6px;color:var(--ink2)}
+.cpVal{flex:1;display:flex;align-items:center;height:28px;border:1px solid rgba(var(--hi),.1);border-radius:6px;background:var(--canvas);overflow:hidden}
+.cpVal:focus-within{border-color:var(--select)}
+.cpVal input{min-width:0;height:100%;padding:0 8px;border:0;background:none;outline:none;font:400 12px/16px 'Geist Mono',ui-monospace,monospace}
+.cpVal input[data-cphex]{flex:1;border-right:1px solid rgba(var(--hi),.1)}
+.cpVal input[data-cpa]{width:42px;text-align:right;padding-right:2px}
+.cpVal span{padding-right:8px;color:var(--ink3)}
+
+/* Shadow, like Figma's: labelled rows */
+.shGrid{display:grid;grid-template-columns:56px 1fr;gap:6px 8px;align-items:center;margin-top:6px}
+.shL{color:var(--ink3)}
+.shC input[data-shhex]{flex:1;min-width:0;font-family:'Geist Mono',ui-monospace,monospace}
+.shC input[data-shv="a"]{width:34px;text-align:right}

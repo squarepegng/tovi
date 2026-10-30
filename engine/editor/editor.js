@@ -70,6 +70,26 @@
   const clamp = (p, v) => Math.max(PROPS[p].min ?? 0, Math.min(PROPS[p].max ?? 9999, v));
   // An element from a page that has since reloaded has no window: fall back to the current one.
   const cs = (el) => (el.ownerDocument?.defaultView || W || window).getComputedStyle(el);
+  // Colour picker maths: HSV for the square and hue slider, alpha 0–100.
+  const hex3 = (h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const hsvToHex = (h, s, v) => {
+    const f = (n) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+    return [f(5), f(3), f(1)].map((x) => ('0' + Math.round(x * 255).toString(16)).slice(-2)).join('').toUpperCase();
+  };
+  const hexToHsv = (hex) => {
+    const [r, g, b] = hex3(hex).map((x) => x / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return { h: (h * 60 + 360) % 360, s: mx ? d / mx : 0, v: mx };
+  };
+  const CSSPROP = { bg: 'backgroundColor', color: 'color', borderC: 'borderTopColor' };
+  // The element's colour for a property, with its transparency.
+  function colorNow(p) {
+    const m = S.sel?.el?.isConnected ? String(cs(S.sel.el)[CSSPROP[p]] || '').match(/[\d.]+/g) : null;
+    if (!m) return { hex: 'FFFFFF', a: 100 };
+    return { hex: m.slice(0, 3).map((x) => ('0' + Math.round(+x).toString(16)).slice(-2)).join('').toUpperCase(), a: m.length > 3 ? Math.round(+m[3] * 100) : 100 };
+  }
+  const cpOut = (c) => '#' + hsvToHex(c.h, c.s, c.v) + (c.a >= 100 ? '' : ('0' + Math.round(c.a * 2.55).toString(16)).slice(-2).toUpperCase());
   const rgbHex = (c) => {
     const m = String(c).match(/[\d.]+/g);
     if (!m) return '';
@@ -124,6 +144,33 @@
     const cls = (info()?.classes || []).filter((c) => !c.includes(':') && c.startsWith(pre)).map((c) => c.slice(pre.length).split('/')[0]);
     return cls.find((c) => S.theme && c in S.theme.colors) || (cls.find((c) => /^\[#/.test(c)) || '').replace(/[[\]]/g, '');
   }
+  // The element's visible shadow (the first layer that shows), as Figma's fields: X, Y, blur, spread, colour, opacity.
+  function shadowNow() {
+    const el = S.sel?.el, out = { inset: false, x: 0, y: 4, blur: 4, spread: 0, hex: '000000', a: 25 };
+    if (!el?.isConnected) return out;
+    const layers = cs(el).boxShadow.split(/,(?![^(]*\))/).map((x) => x.trim()).filter((x) => x && x !== 'none');
+    for (const l of layers) {
+      const col = l.match(/rgba?\([^)]*\)/)?.[0] || 'rgb(0,0,0)', m = col.match(/[\d.]+/g).map(Number);
+      const a = m.length > 3 ? m[3] : 1, n = l.replace(col, '').match(/-?[\d.]+px/g)?.map(parseFloat) || [];
+      if (!a || (!n.some(Boolean))) continue;
+      return { inset: /inset/.test(l), x: n[0] || 0, y: n[1] || 0, blur: n[2] || 0, spread: n[3] || 0, hex: m.slice(0, 3).map((x) => ('0' + Math.round(x).toString(16)).slice(-2)).join('').toUpperCase(), a: Math.round(a * 100) };
+    }
+    return out;
+  }
+  const px = (n) => (n ? `${n}px` : '0');
+  const shadowValue = (o) => `[${o.inset ? 'inset_' : ''}${px(o.x)}_${px(o.y)}_${px(o.blur)}_${px(o.spread)}_#${o.hex}${o.a >= 100 ? '' : ('0' + Math.round(o.a * 2.55).toString(16)).slice(-2).toUpperCase()}]`;
+  function shadowBody(sh) {
+    const o = shadowNow(), keys = (S.theme?.shadow || []).filter((k) => k !== 'none' && k !== 'inner'), custom = !keys.includes(sh);
+    const f = (k, label, icon) => `<label class="inp" title="${label}">${icon ? `<span class="ic">${icon}</span>` : ''}<input type="text" inputmode="decimal" data-shv="${k}" value="${o[k]}" aria-label="${label}"></label>`;
+    return `<div class="cr"><label class="inp"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label><button class="ib" data-act="rmShadow" title="Remove shadow" aria-label="Remove shadow">${ico('x')}</button></div>
+      <div class="shGrid">
+        <span class="shL">Style</span><label class="inp"><select data-sel="shadow" aria-label="Shadow style">${custom ? '<option selected>Custom</option>' : ''}${keys.map((k) => `<option value="${esc(k)}"${k === sh ? ' selected' : ''}>${k === 'DEFAULT' ? 'Default' : esc(k)}</option>`).join('')}</select>${ico('chev', 12)}</label>
+        <span class="shL">Position</span><div class="r2">${f('x', 'X', 'X')}${f('y', 'Y', 'Y')}</div>
+        <span class="shL">Blur</span>${f('blur', 'Blur')}
+        <span class="shL">Spread</span>${f('spread', 'Spread')}
+        <span class="shL">Color</span><label class="inp shC"><i class="sw1" style="background:#${o.hex}${('0' + Math.round(o.a * 2.55).toString(16)).slice(-2)}"></i><input data-shhex value="${o.hex}" maxlength="7" spellcheck="false" aria-label="Shadow colour"><input data-shv="a" value="${o.a}" inputmode="numeric" aria-label="Shadow opacity"><span class="u">%</span></label>
+      </div>`;
+  }
   function shadowOf() {
     const c = (info()?.classes || []).find((x) => !x.includes(':') && (x === 'shadow' || x.startsWith('shadow-')));
     if (!c) return 'none';
@@ -174,13 +221,13 @@
     S.srcScope = 'key';
     S.iconQ = null;
     closeIconPop?.();
-    if (!el) { S.multi = []; S.sel = null; S.cpick = null; renderPanel(); renderLayers(); chatCtx(); return; }
+    if (!el) { S.multi = []; S.sel = null; S.cpick = S.cp = null; renderPanel(); renderLayers(); chatCtx(); return; }
     S.pageSel = false;
     const list = [...sameLoc(el)];
     S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null };
     if (!S.sel.def) S.scope = 'here';
     else if (!S.sel.use) S.scope = 'all';
-    S.cpick = null;
+    S.cpick = S.cp = null;
     let p = el.parentElement;
     while (p) { const t = pick(p); if (!t) break; S.open[keyOf(t)] = true; p = t.parentElement; }
     renderPanel();
@@ -860,8 +907,16 @@
     const hex = val(p), tok = tokenOf(p), none = hex === 'transparent';
     let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label>${removeAct ? `<button class="ib" data-act="${removeAct}" title="Remove">${ico('minus')}</button>` : ''}</div>`;
     if (S.cpick === p) {
-      h += `<div class="cpop"><div class="cpT">Project tokens</div><div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('')}</div>
-        <label class="cust"><input type="color" data-colorinput="${p}" value="${/^#[0-9A-F]{6}$/.test(hex) ? hex : '#FFFFFF'}"><span>Custom color</span><span class="u">off scale</span></label></div>`;
+      if (!S.cp || S.cp.p !== p) { const n = colorNow(p); S.cp = { p, ...hexToHsv(n.hex), a: n.a }; }
+      const c = S.cp, hx = hsvToHex(c.h, c.s, c.v), tab = S.cpTab || 'custom';
+      h += `<div class="cpop" data-cpop="${p}">
+        <div class="cpTabs"><button data-act="cpTab" data-v="custom" class="${tab === 'custom' ? 'on' : ''}">Custom</button><button data-act="cpTab" data-v="vars" class="${tab === 'vars' ? 'on' : ''}">Variables</button></div>
+        ${tab === 'custom' ? `<div class="cpSV" data-cpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
+        <div class="cpBar cpHue" data-cpdrag="hue"><i class="cpK" style="left:${c.h / 3.6}%;background:hsl(${c.h} 100% 50%)"></i></div>
+        <div class="cpBar cpAlpha" data-cpdrag="alpha" style="--c:#${hx}"><i class="cpK" style="left:${c.a}%"></i></div>
+        <div class="cpRow"><span class="cpMode">Hex</span><label class="cpVal"><input data-cphex="${p}" value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"><input data-cpa="${p}" value="${c.a}" inputmode="numeric" aria-label="Opacity"><span>%</span></label></div>`
+        : `<div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('') || '<span class="note">This project has no colour variables yet.</span>'}</div>`}
+      </div>`;
     }
     return h;
   }
@@ -1076,8 +1131,8 @@
       h += sec('Fill', hasFill ? fillBody(g, el) : '', hasFill ? '' : hb('addFill', 'plus', 'Add fill'));
       const hasStroke = val('borderW') > 0;
       h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${nf('borderW', 'sw', 'Stroke width')}<span></span></div>` : '', hasStroke ? '' : hb('addStroke', 'plus', 'Add stroke'));
-      const sh = shadowOf(), keys = (S.theme?.shadow || []).filter((k) => k !== 'none' && k !== 'inner');
-      h += sec('Effects', sh !== 'none' ? `<div class="cr"><label class="inp"><select data-sel="shadow" aria-label="Shadow">${keys.map((k) => `<option value="${esc(k)}"${k === sh ? ' selected' : ''}>Shadow · ${k === 'DEFAULT' ? 'default' : esc(k)}</option>`).join('')}</select>${ico('chev', 12)}</label><button class="ib" data-act="rmShadow" title="Remove shadow">${ico('minus')}</button></div>` : '', sh !== 'none' ? '' : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
+      const sh = shadowOf();
+      h += sec('Effects', sh !== 'none' ? shadowBody(sh) : '', sh !== 'none' ? '' : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
     }
     const st = p.querySelector('.scroll')?.scrollTop || 0;
     p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
@@ -1215,9 +1270,19 @@
     box.style.width = r.width + 'px';
     box.style.height = r.height + 'px';
     const t = box.querySelector('.tag');
-    if (label != null && t) { t.textContent = label; t.classList.toggle('in', r.top < 22); }
+    if (label != null && t) {
+      const tt = t.querySelector('.tagT');
+      if (tt) { if (tt.textContent !== label) tt.textContent = label; t.classList.toggle('canDrag', canReorder(el)); } else t.textContent = label;
+      t.classList.toggle('in', r.top < 22);
+    }
   }
   const labelOf = (el) => dName(el);
+  // The grip on the selection tag shows only when the element has siblings it can trade places with.
+  const reorderSibs = (el) => [...(el.parentElement?.children || [])].filter((c) => c.matches('[data-kerf],[data-kerf-use]'));
+  // Items repeated from one template (a list of products) can't trade places in code, so they get no grip.
+  const domLoc = (el) => el.getAttribute('data-kerf-use') || el.getAttribute('data-kerf');
+  const repeated = (el) => reorderSibs(el).filter((c) => domLoc(c) === domLoc(el)).length > 1;
+  const canReorder = (el) => picking() && !S.editing && reorderSibs(el).length > 1 && !repeated(el);
   function pool(container, n, cls) {
     while (container.children.length < n) { const d = document.createElement('div'); d.className = 'box ' + cls; d.innerHTML = '<span class="tag"></span>'; container.appendChild(d); }
     return [...container.children];
@@ -1339,7 +1404,7 @@
     if (S.askOpen && !S.card?.busy) { S.askOpen = false; changed = true; }
     if (S.card && !S.card.busy && S.card.where === 'notes') { S.card = null; changed = true; }
     if (S.changesOpen) { S.changesOpen = false; renderChanges(); }
-    if (S.cpick) { S.cpick = null; renderPanel(); }
+    if (S.cpick) { S.cpick = S.cp = null; renderPanel(); }
     if (changed) { S.amber = []; renderAsk(); renderMarks(); renderBar(); }
   }
 
@@ -1362,7 +1427,7 @@
       if (S.mode === 'edit' && S.tool === 'interact' && t?.ownerDocument === D) return;
       e.preventDefault();
       if (!$('modal').hidden) { $('modal').hidden = true; }
-      else if (S.cpick) { S.cpick = null; renderPanel(); }
+      else if (S.cpick) { S.cpick = S.cp = null; renderPanel(); }
       else if (S.noteDraft) { S.noteDraft = null; renderMarks(); }
       else if (S.pendingInsert) { S.pendingInsert = false; $('toast').hidden = true; }
       else if (S.card && !S.card.busy && S.card.where !== 'chat') { S.card = null; S.amber = []; renderAll(); }
@@ -1416,7 +1481,7 @@
       return;
     }
     if (!a) {
-      if (S.cpick && !e.target.closest('.cpop')) { S.cpick = null; renderPanel(); }
+      if (S.cpick && !e.target.closest('.cpop')) { S.cpick = S.cp = null; renderPanel(); }
       if (!e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal')) closeFloating();
       return;
     }
@@ -1439,7 +1504,7 @@
       case 'undo': undo(); break;
       case 'changes': S.changesOpen = !S.changesOpen; renderChanges(); break;
       case 'toastClose': $('toast').hidden = true; break;
-      case 'scope': S.scope = v; S.cpick = null; renderPanel(); break;
+      case 'scope': S.scope = v; S.cpick = S.cp = null; renderPanel(); break;
       case 'srcScope': S.srcScope = v; renderPanel(); break;
       case 'sizeOnly': S.sizeOnly[S.device] = v === 'true'; renderPanel(); break;
       case 'reveal': S.reveal = { el: S.sel?.el, ...(S.reveal?.el === S.sel?.el ? S.reveal : {}), [v]: true }; renderPanel(); break;
@@ -1462,13 +1527,14 @@
       case 'copyLoc': navigator.clipboard?.writeText(activeLoc() || '').then(() => toast('Copied the code location', activeLoc() || '')).catch(() => {}); break;
       case 'parent': { const p = S.sel && pick(S.sel.el.parentElement); if (p) select(p); break; }
       case 'corners': S.corners = !S.corners; renderPanel(); break;
-      case 'cpick': S.cpick = S.cpick === v ? null : v; renderPanel(); break;
+      case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; renderPanel(); break;
+      case 'cpTab': S.cpTab = v; renderPanel(); break;
       case 'token': case 'set': commit({ ops: [{ prop: a.dataset.p, value: v }] }); break;
       case 'addFill': commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }); break;
-      case 'rmFill': S.cpick = null; if (gradOf()) commit({ ops: [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] }); else clearStyle([{ prop: 'bg', value: null }], [{ prop: 'bg', value: 'transparent' }], (el) => !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs(el).backgroundColor)); break;
+      case 'rmFill': S.cpick = S.cp = null; if (gradOf()) commit({ ops: [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] }); else clearStyle([{ prop: 'bg', value: null }], [{ prop: 'bg', value: 'transparent' }], (el) => !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs(el).backgroundColor)); break;
       case 'rmShadow': clearStyle([{ prop: 'shadow', value: null }], [{ prop: 'shadow', value: 'none' }], (el) => cs(el).boxShadow.split(/,(?![^(]*\))/).some((x) => !/rgba\([^)]*,\s*0\)/.test(x) && /[1-9]\d*(\.\d+)?px/.test(x))); break;
       case 'addStroke': commit({ ops: [{ prop: 'borderW', value: 1 }, { prop: 'borderC', value: tokens().find(([n]) => n === 'border')?.[0] || 'black' }] }); break;
-      case 'rmStroke': S.cpick = null; clearStyle([{ prop: 'borderW', value: null }, { prop: 'borderC', value: null }], [{ prop: 'borderW', value: 0 }], (el) => parseFloat(cs(el).borderTopWidth) > 0); break;
+      case 'rmStroke': S.cpick = S.cp = null; clearStyle([{ prop: 'borderW', value: null }, { prop: 'borderC', value: null }], [{ prop: 'borderW', value: 0 }], (el) => parseFloat(cs(el).borderTopWidth) > 0); break;
       case 'setProp': commit({ props: [{ name: a.dataset.p, value: v }] }); break;
       case 'ask': toggleAI(false); break;
       case 'layersToggle': S.layersOpen = !S.layersOpen; renderLeft(); renderTop(); setTimeout(applyDevice, 0); break;
@@ -1495,7 +1561,20 @@
     if (t.dataset.proptext) return commit({ props: [{ name: t.dataset.proptext, value: t.value }] });
     if (t.dataset.sel) return commit({ ops: [{ prop: t.dataset.sel, value: /^\d+$/.test(t.value) ? +t.value : t.value }] });
     if (t.dataset.text) return t.value.trim() && commit({ text: t.value.trim() });
-    if (t.dataset.colorinput) return commit({ ops: [{ prop: t.dataset.colorinput, value: t.value.toUpperCase() }] });
+    if (t.dataset.shv != null || t.dataset.shhex != null || t.dataset.shtype != null) {
+      const o = shadowNow();
+      if (t.dataset.shtype != null) o.inset = t.value === 'inner';
+      else if (t.dataset.shhex != null) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderPanel(); o.hex = hx.toUpperCase(); }
+      else { const n = parseFloat(t.value); if (!isFinite(n)) return renderPanel(); const k = t.dataset.shv; o[k] = k === 'a' ? Math.max(0, Math.min(100, Math.round(n))) : k === 'blur' ? Math.max(0, Math.round(n)) : Math.round(n); }
+      return commit({ ops: [{ prop: 'shadow', value: shadowValue(o) }] });
+    }
+    if (t.dataset.cphex || t.dataset.cpa) {
+      const p = t.dataset.cphex || t.dataset.cpa, c = S.cp;
+      if (!c) return;
+      if (t.dataset.cphex) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderPanel(); Object.assign(c, hexToHsv(hx.toUpperCase())); }
+      else { const n = parseFloat(t.value); if (!isFinite(n)) return renderPanel(); c.a = Math.max(0, Math.min(100, Math.round(n))); }
+      return commit({ ops: [{ prop: p, value: cpOut(c) }] });
+    }
     const p = t.dataset.prop;
     if (!p) return;
     if (t.dataset.color) {
@@ -1540,6 +1619,36 @@
     $('setModel').value = '';
     $('setModel').focus();
   });
+  // Colour picker: drag the square, hue or opacity. The element previews live; the change is written once on release.
+  document.addEventListener('pointerdown', (e) => {
+    const area = e.target.closest?.('[data-cpdrag]');
+    if (!area || !S.cp || !S.sel) return;
+    e.preventDefault();
+    const kind = area.dataset.cpdrag, c = S.cp, pop = area.closest('.cpop');
+    const paint = () => {
+      const hx = hsvToHex(c.h, c.s, c.v);
+      pop.querySelector('.cpSV').style.setProperty('--hue', `hsl(${c.h} 100% 50%)`);
+      const [sv, hue, al] = pop.querySelectorAll('.cpK');
+      sv.style.left = c.s * 100 + '%'; sv.style.top = (1 - c.v) * 100 + '%';
+      hue.style.left = c.h / 3.6 + '%'; hue.style.background = `hsl(${c.h} 100% 50%)`;
+      al.style.left = c.a + '%';
+      pop.querySelector('.cpAlpha').style.setProperty('--c', '#' + hx);
+      pop.querySelector('[data-cphex]').value = hx;
+      pop.querySelector('[data-cpa]').value = c.a;
+      const chip = document.querySelector(`[data-act="cpick"][data-v="${c.p}"]`);
+      if (chip) chip.style.background = cpOut(c);
+      preview(S.sel.el, c.p, cpOut(c));
+    };
+    const at = (ev) => {
+      const r = area.getBoundingClientRect(), x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+      if (kind === 'sv') { c.s = x; c.v = 1 - y; } else if (kind === 'hue') c.h = Math.min(359.9, x * 360); else c.a = Math.round(x * 100);
+      paint();
+    };
+    at(e);
+    area.setPointerCapture(e.pointerId);
+    const up = () => { area.removeEventListener('pointermove', at); area.removeEventListener('pointerup', up); area.removeEventListener('pointercancel', up); commit({ ops: [{ prop: c.p, value: cpOut(c) }] }); };
+    area.addEventListener('pointermove', at); area.addEventListener('pointerup', up); area.addEventListener('pointercancel', up);
+  }, true);
   // Naming a version: Escape or clicking away cancels.
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest?.('.vName')) { e.stopPropagation(); S.vNaming = null; renderPanel(); } }, true);
   document.addEventListener('focusout', (e) => { if (e.target.closest?.('.vName') && S.vNaming != null) setTimeout(() => { if (!document.activeElement?.closest('.vName')) { S.vNaming = null; renderPanel(); } }, 120); });
@@ -3051,39 +3160,59 @@
     W.addEventListener('keydown', structKeys, true);
     W.addEventListener('pointerdown', (e) => {
       if (!picking() || thru(e) || !S.sel || !S.sel.el.contains(e.target) || S.editing) return;
-      const el = S.sel.el, parent = el.parentElement;
-      if (!parent) return;
-      const sibs = [...parent.children].filter((c) => c.matches('[data-kerf],[data-kerf-use]'));
-      if (sibs.length < 2) return;
-      drag = { el, sibs, x: e.clientX, y: e.clientY, on: false, idx: sibs.indexOf(el) };
+      dragStart(S.sel.el, e.clientX, e.clientY);
     }, true);
-    W.addEventListener('pointermove', (e) => {
-      if (!drag) return;
-      if (!drag.on && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
-      drag.on = true;
-      const flow = cs(drag.el.parentElement);
-      const horiz = /row/.test(flow.flexDirection) && /flex/.test(flow.display) || /grid/.test(flow.display);
-      let best = 0, bd = 1e9, after = false;
-      drag.sibs.forEach((s, k) => {
-        const r = s.getBoundingClientRect(), c = horiz ? r.left + r.width / 2 : r.top + r.height / 2;
-        const d = Math.abs((horiz ? e.clientX : e.clientY) - c);
-        if (d < bd) { bd = d; best = k; after = (horiz ? e.clientX : e.clientY) > c; }
-      });
-      let to = best + (after ? 1 : 0);
-      if (to > drag.idx) to -= 1;
-      drag.to = to;
-      const r = drag.sibs[best].getBoundingClientRect(), line = $('dropLine');
-      line.hidden = false;
-      line.style.cssText = horiz ? `left:${(after ? r.right : r.left) - 1}px;top:${r.top}px;width:3px;height:${r.height}px` : `left:${r.left}px;top:${(after ? r.bottom : r.top) - 1}px;width:${r.width}px;height:3px`;
-    }, true);
-    W.addEventListener('pointerup', () => {
-      if (!drag) return;
-      const d = drag;
-      drag = null;
-      $('dropLine').hidden = true;
-      if (d.on && d.to != null && d.to !== d.idx) structure({ type: 'move', index: d.to });
-    }, true);
+    W.addEventListener('pointermove', (e) => dragMove(e.clientX, e.clientY), true);
+    W.addEventListener('pointerup', dragEnd, true);
   }
+  // Reorder within the parent: pick a spot among the siblings, show a blue line, move the JSX on release.
+  // Coordinates are the app's own (inside the frame).
+  function dragStart(el, x, y, now = false) {
+    const sibs = reorderSibs(el);
+    if (sibs.length < 2 || repeated(el)) return false;
+    drag = { el, sibs, x, y, on: false, idx: sibs.indexOf(el) };
+    if (now) dragMove(x, y, true);
+    return true;
+  }
+  function dragMove(x, y, force) {
+    if (!drag) return;
+    if (!drag.on && !force && Math.hypot(x - drag.x, y - drag.y) < 6) return;
+    if (!drag.on) { drag.on = true; drag.op = drag.el.style.opacity; drag.el.style.opacity = '0.45'; }
+    const flow = cs(drag.el.parentElement);
+    const horiz = /row/.test(flow.flexDirection) && /flex/.test(flow.display) || /grid/.test(flow.display);
+    let best = 0, bd = 1e9, after = false;
+    drag.sibs.forEach((s, k) => {
+      const r = s.getBoundingClientRect(), c = horiz ? r.left + r.width / 2 : r.top + r.height / 2;
+      const d = Math.abs((horiz ? x : y) - c);
+      if (d < bd) { bd = d; best = k; after = (horiz ? x : y) > c; }
+    });
+    let to = best + (after ? 1 : 0);
+    if (to > drag.idx) to -= 1;
+    drag.to = to;
+    const r = drag.sibs[best].getBoundingClientRect(), line = $('dropLine');
+    line.hidden = false;
+    line.style.cssText = horiz ? `left:${(after ? r.right : r.left) - 1}px;top:${r.top}px;width:3px;height:${r.height}px` : `left:${r.left}px;top:${(after ? r.bottom : r.top) - 1}px;width:${r.width}px;height:3px`;
+  }
+  function dragEnd() {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    $('dropLine').hidden = true;
+    if (d.on) d.el.style.opacity = d.op || '';
+    if (d.on && d.to != null && d.to !== d.idx) structure({ type: 'move', index: d.to });
+  }
+  // The grip on the selection tag: drag it to move the element. Editor coordinates → the app's.
+  const toApp = (e) => { const r = frame.getBoundingClientRect(); return [(e.clientX - r.left) / S.z, (e.clientY - r.top) / S.z]; };
+  document.addEventListener('pointerdown', (e) => {
+    const g = e.target.closest?.('[data-drag]');
+    if (!g || !S.sel?.el) return;
+    e.preventDefault(); e.stopPropagation();
+    if (!dragStart(S.sel.el, ...toApp(e))) return;
+    g.setPointerCapture(e.pointerId);
+    const move = (ev) => dragMove(...toApp(ev));
+    const up = () => { g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); dragEnd(); };
+    g.addEventListener('pointermove', move); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+  }, true);
   frame.addEventListener('load', bindDrag);
   if (frame.contentDocument?.readyState === 'complete') setTimeout(bindDrag, 0);
 
