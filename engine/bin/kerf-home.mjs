@@ -185,7 +185,8 @@ details.logs summary{cursor:pointer;color:var(--ink3);font-size:12px}details.log
 .pick button.on{background:#2D2D32;color:#EDEDF0}
 .srow .tx{display:flex;flex-direction:column;gap:3px;min-width:0}
 .srow .tx b{font-weight:500}
-.srow form{display:flex;gap:8px;margin-top:10px}
+.srow form{display:flex;gap:8px;margin-top:10px;width:100%}
+.srow .tx:has(form){flex:1}
 .srow input{height:36px;border-radius:8px}
 .ok{color:var(--ok)}
 .steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
