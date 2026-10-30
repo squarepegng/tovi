@@ -65,6 +65,8 @@ export function buildTheme(t) {
       borderWidth: Object.keys(t.borderWidth || {}),
       fontFamily: Object.keys(t.fontFamily || {}),
     },
+    // Each font family's first font, for people and for the AI: { sans: 'Inter', display: 'DM Serif Display' }.
+    fonts: Object.fromEntries(Object.entries(t.fontFamily || {}).map(([k, v]) => [k, String(Array.isArray(v) ? (Array.isArray(v[0]) ? v[0][0] : v[0]) : v).replace(/["']/g, '').split(',')[0].trim()])),
   };
 }
 
@@ -108,6 +110,7 @@ export function matcher(prop, th) {
     case 'fontSize': return (c) => c.startsWith('text-') && (fs.has(c.slice(5)) || /^\[[\d.]+(px|rem|em)\]$/.test(c.slice(5)));
     case 'align': return (c) => /^text-(left|center|right|justify|start|end)$/.test(c);
     case 'fontWeight': return (c) => c.startsWith('font-') && (th.keys.fontWeight.includes(c.slice(5)) || /^\[\d+\]$/.test(c.slice(5)));
+    case 'fontFamily': return (c) => c.startsWith('font-') && (th.keys.fontFamily || []).includes(c.slice(5));
     case 'lineHeight': return (c) => c.startsWith('leading-');
     case 'letterSpacing': return (c) => c.startsWith('tracking-');
     case 'opacity': return (c) => c.startsWith('opacity-');
@@ -175,6 +178,7 @@ export function classFor(prop, v, th) {
     case 'borderW': return scale('border', th.borderWidth, v);
     case 'letterSpacing': { const k = th.letterSpacing[v]; return k ? `tracking-${k}` : `tracking-[${v / 100}em]`; }
     case 'fontWeight': { const k = th.fontWeight[String(v)]; return k ? `font-${k}` : `font-[${v}]`; }
+    case 'fontFamily': return `font-${v}`;
     case 'opacity': { const k = th.opacity[v]; return k != null ? `opacity-${k}` : `opacity-[${v / 100}]`; }
     case 'align': return `text-${v}`;
     case 'fit': return `object-${v}`;
@@ -290,6 +294,7 @@ export function valueOfClass(prop, cls, th) {
   const neg = cls.startsWith('-');
   const c = neg ? cls.slice(1) : cls;
   if (prop === 'bg' || prop === 'color' || prop === 'borderC') return c.replace(/^(bg|text|border)-/, '').replace(/^\[|\]$/g, '');
+  if (prop === 'fontFamily') return c.replace(/^font-/, '');
   if (prop === 'fontWeight') { const k = c.replace(/^font-/, ''); return th.byKey?.fontWeight?.[k] ?? k.replace(/^\[|\]$/g, ''); }
   if (prop === 'shadow') return c === 'shadow' ? 'default' : c.replace(/^shadow-/, '');
   if (prop === 'align') return c.replace(/^text-/, '');

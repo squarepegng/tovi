@@ -14,7 +14,7 @@ import { checkSnippet } from './structure.mjs';
 
 const ENV = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env');
 
-export const PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity', 'shadow', 'mT', 'mB', 'fit', 'gradient', 'clipText', 'mX', 'mY', 'w', 'h', 'layout', 'alignItems', 'justify', 'wrap'];
+export const PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity', 'shadow', 'mT', 'mB', 'fontFamily', 'fit', 'gradient', 'clipText', 'mX', 'mY', 'w', 'h', 'layout', 'alignItems', 'justify', 'wrap'];
 const NUMERIC = new Set(['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity']);
 const COLOR = new Set(['bg', 'color', 'borderC']);
 
@@ -99,7 +99,7 @@ const Proposal = z.object({
     z.object({
       loc: z.string().describe('Exactly one of the element ids you were given'),
       note: z.number().int().nullable().describe('When the request has numbered notes: the note this edit answers; otherwise null'),
-      ops: z.array(z.object({ prop: z.enum(PROPS), value: z.string().describe('For w/h: hug, fill or px. For layout: row, col or none. A number for sizes (px; % for opacity and letterSpacing; 100-900 for fontWeight), a color token name or #RRGGBB for colors, a shadow key or "none", left/center/right/justify for align') })),
+      ops: z.array(z.object({ prop: z.enum(PROPS), value: z.string().describe('For w/h: hug, fill or px. For layout: row, col or none. A number for sizes (px; % for opacity and letterSpacing; 100-900 for fontWeight), a color token name or #RRGGBB for colors, a shadow key or "none", left/center/right/justify for align, a font family key for fontFamily') })),
       text: z.string().nullable().describe('New text, only when the element’s text is editable and the request asks to change wording; otherwise null'),
       props: z.array(z.object({ name: z.string(), value: z.string() })).describe('Component property changes, only names listed as editable for that element, with one of its allowed values; [] if none'),
       target: z.string().nullable().describe('For style edits: where to make the change. null lets Tovi choose (where the property is set now). Otherwise one of the element’s listed style targets: "element" (only this element), "table:NAME:KEY" (that entry of a style table, so every element using it), "table:NAME:*" (every entry), "css:NAME" (that CSS class everywhere), "const:NAME"'),
@@ -143,6 +143,18 @@ Work like a sharp collaborator:
 - Be decisive: for vague requests ("make it pop", "more premium"), make tasteful, on-system choices and say in one sentence what you chose. Ask one short question (and return no edits) only when two very different readings are equally likely.
 - Keep the message to one or two plain sentences. Don't list every class; the edit list shows the details.
 
+Design craft (use your eye, like a senior designer reviewing this screen):
+- Hierarchy: one clear focal point per area; levels differ in size, weight or colour (a heading at least one step up the type scale or a weight step from body), not everything bold.
+- Rhythm: spacing from the project's scale; related things closer than unrelated ones; the same padding inside similar containers; edges aligned to a shared grid.
+- Contrast: body text at least WCAG AA (4.5:1), large text and icons 3:1; check text over images and tinted fills.
+- Consistency: siblings that do the same job look the same; reuse the tokens, radii and shadows already on the screen.
+- Typography: headings about 1.1-1.3 line height with slightly tighter tracking when large, body about 1.5; comfortable line length (45-75 characters). Use the project's font families for their roles (a display font for headings when the project has one).
+- Primary controls at least 40-44px tall.
+- Restraint: the fewest changes that clearly improve the result; don't restyle what already works.
+For vague requests ("make it better", "polish this", "more premium"), first find the two or three things that would most improve it by these principles (looking at the screenshot), fix those, and name them in the message.
+
+Reading code: when the source file of the selection is included, read it first to understand the structure (what wraps what, what repeats from a list, what comes from props or a shared component) before deciding. For action code, copy the find snippet exactly from that source.
+
 How to work:
 - When the request has numbered notes (the designer marked parts of the screen), answer each note on its own: set note on every edit, and fill notes with one entry per note saying what you changed for it or why it could not be done. Elements tagged (note N) sit under that note's mark. Keep message to one short overall sentence.
 - Only edit elements from the list you are given, by their exact id. Prefer the fewest edits that achieve the request.
@@ -151,10 +163,11 @@ How to work:
 - Text is editable only where marked editable. Never invent product data.
 - Components can also have editable properties, like Figma component properties (an icon's weight or stroke, a button's variant). Use them: they are often the right tool for "more refined", "lighter", "bolder" icons and controls. Only use property names and values listed for that element.
 - You can also change structure, like a designer in Figma: delete an element, duplicate it, move it up or down among its siblings, swap an icon or component for another (use the exact icon names from the project's library, e.g. "replace the bookmark with a heart" is a swap to Heart), insert new elements before, after or inside an element, and change an image's source or alt text. To replace an element with something different, use replace with the new JSX (never insert plus delete).
+- Fonts: fontFamily takes one of the project's font family keys listed below (e.g. display for headings, sans for body).
 - Gradients are a style: set the gradient property to "<direction> <from> <to>" or "<direction> <from> <via> <to>" with directions t, tr, r, br, b, bl, l, tl and project color tokens (e.g. "r primary positive"); "none" removes it. For gradient text, also set clipText to "on". Don't also set a fill: the gradient is the fill. Never rebuild an element just to restyle it. Elements shown by a condition or repeated by a list can't be deleted or moved; edit their parent or their style instead.
 - To arrange some siblings differently from the rest (e.g. put an input and a button side by side while the label stays above), group them: action group on the first one, groupWith the others, and groupClass for the new frame's layout. Then set Fill width on the child that should take the remaining space. Ungroup removes a plain wrapper and keeps its children.
 - New elements must fit the design: reuse the project's components where one fits, and use the project's tokens and scales in their classes.
-- Layout works like Figma auto layout: layout row/col/none (direction), alignItems start/center/end/stretch, justify start/center/end/between, wrap wrap/nowrap, gap, padX/padY, margins mX/mY (px or auto), and width/height w/h as hug, fill or a px size.
+- Layout works like Figma auto layout: layout row/col/none (direction), alignItems start/center/end/stretch, justify start/center/end/between, wrap wrap/nowrap, gap, padX/padY, margins mX (left and right), mT (top), mB (bottom) (px or auto), and width/height w/h as hug, fill or a px size.
 - To put a new picture in an image (a photo, a drawing, "an illustration of…", "a picture of…"), use action image with imageSrc "photo: <4 to 12 words of what it shows>" for real photographs, or "illustration: <…>" for drawn or flat art. Tovi shows the designer options to pick from. Never say you can't create images.
 - action token changes a design-system colour everywhere it's used: token.name from the token list, token.value #RRGGBB, token.theme light, dark or both.
 - action code is the last resort for visual changes no other action can make (classes computed in an unusual way, inline styles): code.file is the file shown for that element or its style sources, code.find an exact snippet of code you were shown that occurs once, code.replace the new text. Keep it minimal and visual only: never change logic, data, handlers or imports.
@@ -173,6 +186,7 @@ function themeSummary(theme) {
     `Radius scale: ${scale(theme.radius)}`,
     `Font sizes: ${scale(theme.fontSize)}`,
     `Shadows: ${theme.shadow.join(', ')}`,
+    theme.fonts && Object.keys(theme.fonts).length ? `Font families (fontFamily): ${Object.entries(theme.fonts).map(([k, f]) => `${k}=${f}`).join(', ')}` : '',
   ].join('\n');
 }
 
@@ -250,6 +264,8 @@ export function cleanOps(ops, theme) {
       out.push({ prop, value: /^(on|true|yes)$/i.test(v) ? 'on' : 'off' });
     } else if (prop === 'fit') {
       if (['cover', 'contain', 'fill', 'none', 'scale-down'].includes(v)) out.push({ prop, value: v });
+    } else if (prop === 'fontFamily') {
+      if ((theme.keys?.fontFamily || []).includes(v)) out.push({ prop, value: v });
     } else if (prop === 'align') {
       if (['left', 'center', 'right', 'justify'].includes(v)) out.push({ prop, value: v });
     }
@@ -369,7 +385,19 @@ export async function propose({ request, targets, history = [], images = [], tok
   const m = MODES[mode] ? mode : 'system';
   const dir = direction && (direction.preset || direction.text) ? `Design direction for this project: ${[PRESETS[direction.preset], direction.text].filter(Boolean).join(' ')}${m === 'system' ? ' (keep within the design system).' : ''}` : '';
   const refs = m !== 'system' && direction?.refs?.length ? direction.refs.slice(0, 3) : [];
-  const lastText = `${MODES[m]}\n${dir ? dir + '\n' : ''}${refs.length ? `The ${refs.length} reference image${refs.length > 1 ? 's' : ''} labelled "Reference" show the look the designer wants.\n` : ''}${where}\n${shot ? 'The first image is a screenshot of exactly what the designer sees. Use it to judge contrast, alignment, spacing and hierarchy. Element boxes below are x,y,w,h in CSS pixels of that same visible area.\n' : ''}\nElements on screen:\n${targets.map(describeTarget).join('\n')}\n\n${imgs.length ? `The designer attached ${imgs.length} image${imgs.length > 1 ? 's' : ''} (above). Treat them as a reference to match, a screenshot pointing at a problem, or an image to put in the design, whichever the request means. To place one, use imageSrc "attachment:N" (or src="attachment:N" in insertJsx).\n\n` : ''}Request:\n${request}`;
+  // For a selection (not the whole screen), show the source of its file(s) so the AI understands the structure and
+  // can write precise code edits: up to two files, trimmed if very long.
+  let source = '';
+  if (webRoot && targets.length <= 15) {
+    const files = [...new Set(targets.map((t) => t.file).filter(Boolean))].slice(0, 2);
+    for (const f of files) {
+      let code;
+      try { code = fs.readFileSync(path.join(webRoot, f), 'utf8'); } catch { continue; }
+      if (code.length > 12000) code = code.slice(0, 12000) + '\n… (file continues)';
+      source += `\n--- ${f} ---\n${code}\n--- end of ${f} ---\n`;
+    }
+  }
+  const lastText = `${MODES[m]}\n${dir ? dir + '\n' : ''}${refs.length ? `The ${refs.length} reference image${refs.length > 1 ? 's' : ''} labelled "Reference" show the look the designer wants.\n` : ''}${where}\n${shot ? 'The first image is a screenshot of exactly what the designer sees. Use it to judge contrast, alignment, spacing and hierarchy. Element boxes below are x,y,w,h in CSS pixels of that same visible area.\n' : ''}\nElements on screen:\n${targets.map(describeTarget).join('\n')}\n${source ? `\nSource of the selection's file(s), exactly as saved:${source}` : ''}\n${imgs.length ? `The designer attached ${imgs.length} image${imgs.length > 1 ? 's' : ''} (above). Treat them as a reference to match, a screenshot pointing at a problem, or an image to put in the design, whichever the request means. To place one, use imageSrc "attachment:N" (or src="attachment:N" in insertJsx).\n\n` : ''}Request:\n${request}`;
   const lastContent = [
     ...(shot ? [{ type: 'text', text: 'Screenshot of the screen:' }, { type: 'image', source: { type: 'base64', media_type: shot.media_type, data: shot.data } }] : []),
     ...refs.flatMap((r, n) => [{ type: 'text', text: `Reference ${n + 1} for the design direction:` }, { type: 'image', source: { type: 'base64', media_type: r.media_type, data: r.data } }]),
@@ -388,6 +416,8 @@ export async function propose({ request, targets, history = [], images = [], tok
         max_tokens: 16000,
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
+        // Think before answering: design judgement and code reading both benefit, and it stays quick for simple asks.
+        thinking: { type: 'adaptive' },
         output_config: { effort: 'medium', format: betaZodOutputFormat(Proposal) },
         // The instructions and design system are the same on every request: cache them so later requests start faster.
         system: [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }],

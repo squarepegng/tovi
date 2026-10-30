@@ -183,6 +183,10 @@ test('insert next to a page’s outer box goes inside it instead', () => {
   assert.match(summary.action, /went inside/);
 });
 
+test('font family uses the project’s own font keys', () => {
+  assert.equal(ops('text-xl font-bold', [{ prop: 'fontFamily', value: 'display' }]), 'text-xl font-bold font-display');
+  assert.equal(ops('font-display text-xl', [{ prop: 'fontFamily', value: 'sans' }]), 'font-sans text-xl');
+});
 test('top and bottom margin are separate, and split my-* / m-* so the other side keeps its value', () => {
   assert.equal(ops('mt-4 text-xl', [{ prop: 'mT', value: 8 }]), 'mt-2 text-xl');
   assert.equal(ops('my-4 text-xl', [{ prop: 'mT', value: 8 }]), 'mb-4 text-xl mt-2');

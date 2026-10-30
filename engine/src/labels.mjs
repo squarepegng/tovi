@@ -3,7 +3,7 @@ export const PROP_NAMES = {
   bg: 'Fill', color: 'Text color', borderC: 'Stroke color', fontSize: 'Size', fontWeight: 'Weight', lineHeight: 'Line height',
   letterSpacing: 'Letter spacing', align: 'Text align', radius: 'Corner radius', rTL: 'Top-left corner', rTR: 'Top-right corner',
   rBR: 'Bottom-right corner', rBL: 'Bottom-left corner', padX: 'Horizontal padding', padY: 'Vertical padding', mX: 'Horizontal margin',
-  mY: 'Vertical margin', mT: 'Top margin', mB: 'Bottom margin', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', fit: 'Image fit', gradient: 'Gradient',
+  mY: 'Vertical margin', mT: 'Top margin', mB: 'Bottom margin', fontFamily: 'Font', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', fit: 'Image fit', gradient: 'Gradient',
   clipText: 'Gradient text', w: 'Width', h: 'Height', layout: 'Layout', alignItems: 'Align', justify: 'Distribute', wrap: 'Wrap',
 };
 const PX = new Set(['fontSize', 'lineHeight', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'mX', 'mY', 'mT', 'mB', 'gap', 'borderW', 'w', 'h']);
