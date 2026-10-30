@@ -1896,7 +1896,8 @@
     const every = [...S.versions.versions.flatMap((v) => v.changes), ...S.versions.draft];
     const all = every.slice(S.versions.sent || 0); // only what hasn't been handed off yet
     const files = [...new Set(all.map((c) => c.file))];
-    const title = !all.length ? 'Design updates from Tovi' : all.length === 1 ? `Design: ${all[0].name ? all[0].name + ' · ' : ''}${all[0].label}`.slice(0, 72) : `Design updates: ${all.length} changes${S.path === '/' ? '' : ` on ${S.path}`}`;
+    const nm = (c) => (c.name || '').replace(/\s*“[^”]*…”/, ''); // no cut-off quotes in a PR title
+    const title = !all.length ? 'Design updates from Tovi' : all.length === 1 ? `Design: ${nm(all[0]) ? nm(all[0]) + ' · ' : ''}${all[0].label}`.slice(0, 72) : `Design updates: ${all.length} changes${S.path === '/' ? '' : ` on ${S.path}`}`;
     const retry = plan && !plan.error && !all.length && plan.unpushed;
     const ok = p.repo && plan && !plan.error;
     S.prAll = all;

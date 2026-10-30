@@ -183,6 +183,10 @@ test('insert next to a page’s outer box goes inside it instead', () => {
   assert.match(summary.action, /went inside/);
 });
 
+test('editing for all screen sizes keeps the class in its place', () => {
+  const r = applyResponsive('mt-4 text-sm font-bold text-content'.split(' '), [{ prop: 'fontSize', value: 18 }], th, { mode: 'all' });
+  assert.equal(r.classes.join(' '), 'mt-4 text-lg font-bold text-content');
+});
 test('font family uses the project’s own font keys', () => {
   assert.equal(ops('text-xl font-bold', [{ prop: 'fontFamily', value: 'display' }]), 'text-xl font-bold font-display');
   assert.equal(ops('font-display text-xl', [{ prop: 'fontFamily', value: 'sans' }]), 'font-sans text-xl');
@@ -309,7 +313,7 @@ test('grouping reports where each element moved', () => {
 
 const rsp = (list, o, bp) => applyResponsive(list.split(' '), o, th, bp).classes.join(' ');
 test('only on mobile keeps the old value from tablet up', () => {
-  assert.equal(rsp('text-lg px-4', [{ prop: 'fontSize', value: 14 }], { mode: 'only', start: null, end: 'md' }), 'px-4 text-sm md:text-lg');
+  assert.equal(rsp('text-lg px-4', [{ prop: 'fontSize', value: 14 }], { mode: 'only', start: null, end: 'md' }), 'text-sm px-4 md:text-lg');
 });
 test('only on tablet sets md: and keeps desktop as it was', () => {
   assert.equal(rsp('px-4', [{ prop: 'padX', value: 24 }], { mode: 'only', start: 'md', end: 'lg' }), 'px-4 md:px-6 lg:px-4');
@@ -318,10 +322,10 @@ test('only on desktop replaces lg: and drops bigger overrides', () => {
   assert.equal(rsp('px-4 lg:px-5 xl:px-6', [{ prop: 'padX', value: 8 }], { mode: 'only', start: 'lg', end: null }), 'px-4 lg:px-2');
 });
 test('all sizes sets the base value and removes size overrides', () => {
-  assert.equal(rsp('text-sm md:text-lg font-bold', [{ prop: 'fontSize', value: 16 }], { mode: 'all' }), 'font-bold text-base');
+  assert.equal(rsp('text-sm md:text-lg font-bold', [{ prop: 'fontSize', value: 16 }], { mode: 'all' }), 'text-base font-bold');
 });
 test('an existing override at the end screen is left alone', () => {
-  assert.equal(rsp('px-4 md:px-6', [{ prop: 'padX', value: 8 }], { mode: 'only', start: null, end: 'md' }), 'md:px-6 px-2');
+  assert.equal(rsp('px-4 md:px-6', [{ prop: 'padX', value: 8 }], { mode: 'only', start: null, end: 'md' }), 'px-2 md:px-6');
 });
 
 // Styles that live outside the element: a status table in another file, like Stratemark's chips.

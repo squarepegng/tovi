@@ -328,8 +328,10 @@ export function applyResponsive(list, ops, th, bp) {
     const pre = (c) => (s == null ? c : `${s}:${c}`);
     const keep = new Set(r.classes);
     const gone = levelCls.filter((c) => !keep.has(c)).map(pre), fresh = r.classes.filter((c) => !levelCls.includes(c)).map(pre);
+    // The new class takes the old one's place, so the diff is a one-word change like a developer's.
+    const spot = classes.findIndex((c) => gone.includes(c));
     classes = classes.filter((c) => !gone.includes(c));
-    classes.push(...fresh);
+    if (spot >= 0) classes.splice(Math.min(spot, classes.length), 0, ...fresh); else classes.push(...fresh);
     summary.removed.push(...gone);
     summary.added.push(...fresh);
     summary.changes.push(...r.changes);
