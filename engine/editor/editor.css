@@ -1090,3 +1090,22 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .diagPages button:hover{background:rgba(var(--hi),.06)}
 .diagPages button.on{background:rgba(217,70,143,.1)}
 .diagPages b{font-weight:500;color:#D9468F;font-size:11px}
+
+/* Tovi's selections: what it's working on, like a selection in Tovi's pink */
+#work{position:absolute;inset:0;pointer-events:none}
+.box.work{outline:calc(1.5px*var(--iz,1)) solid #D9468F;outline-offset:calc(1px*var(--iz,1));border-radius:3px;background:rgba(217,70,143,.035);overflow:visible;transition:opacity .5s}
+.box.work::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none}
+.box.work[data-state="look"]::after{background:linear-gradient(100deg,transparent 35%,rgba(217,70,143,.16) 50%,transparent 65%);background-size:260% 100%;animation:workSweep 1.8s linear infinite}
+.box.work[data-state="edit"]{outline-width:calc(2px*var(--iz,1));animation:workPulse .9s ease-out infinite}
+.box.work[data-state="done"]{outline-color:#3E9B6B;background:rgba(62,155,107,.05)}
+.box.work.fading{opacity:0}
+.box.work .tag{display:flex;align-items:center;gap:4px;background:#D9468F;color:#fff;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.box.work[data-state="done"] .tag{background:#3E9B6B}
+.box.work .tagT{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.box.work .wAv{width:14px;height:14px;margin-left:-3px;border-radius:50%;flex:0 0 auto}
+.box.work .wCheck{display:none}
+.box.work[data-state="done"] .wCheck{display:grid;place-items:center;position:absolute;right:calc(-8px*var(--iz,1));top:calc(-8px*var(--iz,1));width:16px;height:16px;border-radius:50%;background:#3E9B6B;scale:var(--iz,1)}
+.box.work[data-state="done"] .wCheck::before{content:'';width:7px;height:4px;border-left:1.5px solid #fff;border-bottom:1.5px solid #fff;transform:rotate(-45deg) translate(1px,-1px)}
+@keyframes workSweep{from{background-position:130% 0}to{background-position:-130% 0}}
+@keyframes workPulse{0%{box-shadow:0 0 0 0 rgba(217,70,143,.35)}100%{box-shadow:0 0 0 calc(8px*var(--iz,1)) rgba(217,70,143,0)}}
+@media (prefers-reduced-motion: reduce){.box.work::after,.box.work[data-state="edit"]{animation:none}}

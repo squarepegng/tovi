@@ -1492,6 +1492,38 @@
     }
   }
   const labelOf = (el) => dName(el);
+  // What Tovi is working on, shown like a selection in Tovi's pink: an outline per element (a card, a heading, a
+  // section) with a tag naming it and what Tovi is doing ("Pricing · Reviewing"). States: look (thinking about
+  // it, a slow light sweep), edit (changing it now, a pulse), done (a check, then it fades).
+  S.working = [];
+  const locOfEl = (el) => el?.getAttribute?.('data-kerf-use') || el?.getAttribute?.('data-kerf') || null;
+  function workOn(locs, label, state = 'look') {
+    const now = Date.now();
+    for (const loc of locs.filter(Boolean)) {
+      const w = S.working.find((x) => x.loc === loc);
+      if (w) Object.assign(w, { label, state, t: now }); else S.working.push({ loc, label, state, t: now });
+    }
+    S.working = S.working.slice(-16);
+  }
+  const workClear = () => { S.working = S.working.filter((w) => w.state !== 'look'); };
+  function workDone(locs) { const now = Date.now(); for (const w of S.working) if (!locs || locs.includes(w.loc)) { w.state = 'done'; w.t = now; } }
+  // Elements in scope for a request: the selection (and anything selected with it), or the visible sections.
+  const scopeLocs = () => (S.sel ? uniq([S.sel.el, ...(S.multi || []).map((x) => x.el || x)].map(locOfEl)) : pageBlocks().filter(onScreen).map(locOfEl)).filter(Boolean).slice(0, 12);
+  function drawWork() {
+    let host = $('work');
+    if (!host) { host = document.createElement('div'); host.id = 'work'; $('ov').appendChild(host); }
+    const now = Date.now();
+    S.working = S.working.filter((w) => w.state !== 'done' || now - w.t < 1600);
+    const items = S.agentsOn && D ? S.working.map((w) => ({ w, el: elOf(w.loc) })).filter((x) => x.el?.isConnected) : [];
+    while (host.children.length < items.length) { const d = document.createElement('div'); d.className = 'box work'; d.innerHTML = `<span class="tag"><img class="wAv" src="${TOVI_PIC}" alt=""><span class="tagT"></span></span><i class="wCheck"></i>`; host.appendChild(d); }
+    [...host.children].forEach((b, i) => {
+      const x = items[i];
+      const nm = x && /^(section|header|footer|nav)$/i.test(x.el.tagName) ? blockName(x.el) : x ? dName(x.el) : '';
+      place(b, x?.el || null, x ? `${nm}${x.w.label ? ` · ${x.w.label}` : ''}` : null);
+      if (x && b.dataset.state !== x.w.state) b.dataset.state = x.w.state;
+      if (x) b.classList.toggle('fading', x.w.state === 'done' && now - x.w.t > 900);
+    });
+  }
   // The grip on the selection tag shows only when the element has siblings it can trade places with.
   const reorderSibs = (el) => [...(el.parentElement?.children || [])].filter((c) => c.matches('[data-kerf],[data-kerf-use]'));
   // Items repeated from one template (a list of products) can't trade places in code, so they get no grip.
@@ -1521,6 +1553,7 @@
     pool($('sibs'), sib.length, 'sib').forEach((b, i) => place(b, sib[i] || null, null));
     const aEls = D ? (S.amber || []).flatMap((loc) => [...D.querySelectorAll(q(loc))]).slice(0, 60) : [];
     pool($('amb'), aEls.length, 'amber').forEach((b, i) => place(b, aEls[i] || null, null));
+    drawWork();
     if (W) $('marksG').setAttribute('transform', `translate(${-W.scrollX} ${-W.scrollY})`);
     placeHandles(); placeMulti(); measureLines();
     if (W && W.location.pathname + W.location.search !== S.path) {
@@ -2113,11 +2146,12 @@
     let jobs = [];
     const blocks = pageBlocks();
     if (blocks.length >= 2) {
-      const locOfEl = (b) => b.getAttribute('data-kerf-use') || b.getAttribute('data-kerf');
       m.progress = `${label} · taking screenshots`;
+      workOn(blocks.map(locOfEl), 'Reading');
       renderChat();
       const real = await realShots({ locs: blocks.map(locOfEl).filter(Boolean) });
-      jobs = blocks.map((b) => ({ name: blockName(b), make: async () => ({ targets: uniq(tagged(b).concat(b.matches('[data-kerf],[data-kerf-use]') ? [b] : []).flatMap((el) => targetsOf(el))).slice(0, 70), screen: jpeg(real?.sections?.[locOfEl(b)]) || await captureEl(b), scope: 'section' }) }));
+      S.working = S.working.filter((w) => w.state !== 'look');
+      jobs = blocks.map((b) => ({ name: blockName(b), loc: locOfEl(b), make: async () => ({ targets: uniq(tagged(b).concat(b.matches('[data-kerf],[data-kerf-use]') ? [b] : []).flatMap((el) => targetsOf(el))).slice(0, 70), screen: jpeg(real?.sections?.[locOfEl(b)]) || await captureEl(b), scope: 'section' }) }));
     } else {
       const parts = Math.max(1, Math.min(8, Math.ceil(D.documentElement.scrollHeight / W.innerHeight)));
       for (let k = 0; k < parts; k++) jobs.push({ name: `screen ${k + 1}`, make: async () => { W.scrollTo(0, k * W.innerHeight); await wait(600); return { targets: visibleTargets(), screen: await captureScreen(), scope: 'page' }; } });
@@ -2133,8 +2167,11 @@
       while (next < prepared.length && !S.diagStop) {
         const k = next++, x = prepared[k];
         m.progress = `${label}${jobs.length > 1 ? ` · ${jobs[k].name} (${k + 1} of ${jobs.length})` : ''}`;
+        const bl = jobs[k].loc;
+        if (bl) workOn([bl], 'Reviewing');
         renderChat();
         results[k] = x.targets.length ? await api('/diagnose', { targets: x.targets, screen: x.screen, context: ctx, scope: x.scope }).catch((e) => ({ error: e.message, findings: [] })) : { findings: [] };
+        if (bl) S.working = S.working.filter((w) => w.loc !== bl);
         finished++;
       }
     }));
@@ -2225,6 +2262,7 @@
     try {
       let r;
       if (scope === 'selection') {
+        workOn(scopeLocs(), 'Reviewing');
         const [screen, focus] = await Promise.all([captureScreen(), captureFocus()]);
         r = await api('/diagnose', { targets, screen, focus, context: aiContext(), scope });
         r.notes = notesFrom(r.findings);
@@ -2243,6 +2281,7 @@
     m.busy = false;
     m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
     S.diagnosing = false;
+    workClear();
     S.openTask = [];
     renderBar();
     renderAI();
@@ -2554,9 +2593,13 @@
         await editOn(a, el, e, async () => {});
       }
     })().catch(() => {});
+    // Short tags: the first change, and how many more ("Top margin 0 +3").
+    const short = (t) => { const p = String(t || '').split(' · '); return p.length > 1 ? `${p[0]} +${p.length - 1}` : p[0]; };
+    for (const e of all) workOn([e.loc], short(editLabel(e)) || e.why || 'Changing', 'edit');
     try {
       const r = await api('/ai/apply', { batch, edits: all });
       await Promise.race([tour, wait(1200)]);
+      workDone(r.results.filter((x) => x.ok).map((x) => x.loc));
       return { results: r.results, n: r.n };
     } catch (err) {
       return { error: err.message };
@@ -2577,6 +2620,7 @@
     const m = { role: 'kerf', second: !!opts.review, checkLabel: opts.notes ? (opts.round > 1 ? 'Final check' : 'Checking the fixes') : opts.round > 1 ? 'Final check' : null, busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
     S.chat.push(m);
     S.card = m;
+    workOn(opts.notes ? uniq(opts.notes.flatMap((n) => n.locs || [])) : scopeLocs(), opts.review ? 'Checking' : 'Looking');
     renderAI();
     try {
       const [screen, focus] = await Promise.all([opts.full ? realFull().then((x) => x || captureScreen(true)) : captureScreen(), !opts.full && (where === 'chat' || where === 'ask') ? captureFocus() : null]);
@@ -2593,6 +2637,7 @@
     renderAI();
     // Tasks: Apply means apply. Every change is undoable, and the answer has its own Undo.
     if (autoApply && m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
+    workClear();
     saveChat();
     // Tovi checks its own work like a designer stepping back: after a look-and-feel change it screenshots the
     // result, judges it against the request, fixes what's still off, and checks once more if it changed anything.
@@ -3029,6 +3074,7 @@
     const m = { role: 'kerf', busy: true, status: 'pending', where: 'notes', targets: all, noteTexts: notes.map((n) => n.text), skip: [], started: Date.now(), looked: all.map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: all.length, helpers: notes.map((n, i) => ({ n: i + 1, name: helperFor(i + 1).name })) };
     S.chat.push(m);
     S.card = m;
+    notes.forEach((n, k) => workOn(n.locs?.length ? n.locs : per[k].slice(0, 3).map((t) => t.loc), `Note ${k + 1}`));
     renderAI();
     const offScreen = notes.some((n) => W && (n.y + (n.h || 0) < W.scrollY || n.y > W.scrollY + W.innerHeight));
     const screen = offScreen ? (await realFull()) || (await captureScreen(true)) : await captureScreen();
@@ -3075,6 +3121,7 @@
     m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
     renderAI();
     if (m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
+    workClear();
     saveChat();
     // Then look at the page and check every note was really fixed; fix what's left (up to two checks).
     if (m.status === 'applied') await checkAndFix({ request: notes.map((n) => n.title || n.text).join('; '), done: chosen(m), round: 1, notes, full: true });
