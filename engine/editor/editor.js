@@ -685,6 +685,7 @@
     eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>',
     dots: '<circle cx="3.5" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="12.5" cy="8" r="1.2" fill="currentColor"/>',
     gear: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g>',
+    markAI: '<path d="M4.2 13.6l.7-2.9 6.4-6.4a1.5 1.5 0 0 1 2.1 2.1l-6.4 6.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M10.3 5.3l2.1 2.1" stroke="currentColor" stroke-width="1.3"/><path d="M4.6 1.2c.2 1.3.6 1.7 1.9 1.9-1.3.2-1.7.6-1.9 1.9-.2-1.3-.6-1.7-1.9-1.9 1.3-.2 1.7-.6 1.9-1.9z" fill="currentColor"/>',
     diag: '<path d="M2 5V3.5A1.5 1.5 0 0 1 3.5 2H5M11 2h1.5A1.5 1.5 0 0 1 14 3.5V5M14 11v1.5a1.5 1.5 0 0 1-1.5 1.5H11M5 14H3.5A1.5 1.5 0 0 1 2 12.5V11" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.4 9.4L11 11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     comment: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></g>',
     addEl: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></g>',
@@ -1023,7 +1024,7 @@
       </div>
       <span class="div"></span>
       <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 20)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
-      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('comment', 20)}${tip('Annotate', 'A')}</button>
+      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Mark for Tovi">${ico('markAI', 20)}${tip('Mark for Tovi', 'A')}</button>
       <button class="tb${S.diagnosing ? ' busy' : ''}" data-act="diagnose" aria-label="Diagnose">${ico('diag', 20)}${S.notes.some((x) => x.by === 'tovi') ? '<i class="badgeDot tovi" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip(S.diagnosing ? 'Tovi is reviewing…' : 'Diagnose: find what to fix')}</button>
       <span class="div"></span>
       <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 20)}${tip('Undo', '⌘Z')}</button>
@@ -2627,7 +2628,7 @@
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
       // Tovi shows up on the canvas only when it applies edits (applyLive), not while it thinks or answers.
-      m.proposal = await api('/ai', { request: opts.review ? opts.review : text, light: !!opts.review, targets, history, screen, focus, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
+      m.proposal = await api('/ai', { request: opts.review ? opts.review : text, light: !!opts.review, fast: !opts.review, targets, history, screen, focus, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
       if (!m.proposal.edits.length) m.status = 'info';
