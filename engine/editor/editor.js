@@ -1726,7 +1726,7 @@
       case 'keys': shortcuts(); break;
       case 'undo': undo(); break;
       case 'changes': S.changesOpen = !S.changesOpen; renderChanges(); break;
-      case 'diagnose': { if (S.diagnosing) break; const r = a.getBoundingClientRect(); openMenu([{ head: 'Diagnose with Tovi' }, { label: 'This page', sub: 'Everything on screen · about 30 seconds', run: () => runDiagnose('page') }, { label: 'This selection', sub: S.sel ? ctxName(S.sel.el) : 'Select something first', disabled: !S.sel, run: () => runDiagnose('selection') }, { label: 'Whole product', sub: 'Every page it can reach, up to 10 · a few minutes', run: () => runDiagnoseProduct() }], { x: r.left - 90, y: r.top - 200 }); break; }
+      case 'diagnose': { if (S.diagnosing) break; const r = a.getBoundingClientRect(); openMenu([{ head: 'Diagnose with Tovi' }, { label: 'This page', sub: 'Every section, top to bottom · about a minute', run: () => runDiagnose('page') }, { label: 'This selection', sub: S.sel ? ctxName(S.sel.el) : 'Select something first', disabled: !S.sel, run: () => runDiagnose('selection') }, { label: 'Whole product', sub: 'Every page it can reach, up to 10 · a few minutes', run: () => runDiagnoseProduct() }], { x: r.left - 90, y: r.top - 200 }); break; }
       case 'toastClose': $('toast').hidden = true; break;
       case 'scope': S.scope = v; S.cpick = S.cp = null; renderPanel(); break;
       case 'srcScope': S.srcScope = v; renderPanel(); break;
@@ -2084,6 +2084,61 @@
     return uniq(els.flatMap((el) => targetsOf(el, i + 1))).slice(0, 24);
   }
 
+  // The page's sections, top to bottom: the header, each <section>, the footer (outermost ones only, and only
+  // real blocks). Pages without such tags get none, and are reviewed a screen at a time instead.
+  function pageBlocks() {
+    if (!D) return [];
+    const all = [...D.querySelectorAll('header, nav, section, footer, [role="banner"], [role="contentinfo"]')].filter((el) => { const r = el.getBoundingClientRect(); return r.height >= 60 && r.width >= 200 && tagged(el).length + (el.matches('[data-kerf],[data-kerf-use]') ? 1 : 0) > 0; });
+    return all.filter((el) => !all.some((o) => o !== el && o.contains(el))).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top).slice(0, 14);
+  }
+  // A picture of one element, whole (even the parts off screen), sharp enough to judge detail.
+  async function captureEl(el) {
+    if (!el?.isConnected || !D) return null;
+    try {
+      const lib = await loadH2i();
+      const css = await fontsFor(lib);
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return null;
+      const k = Math.min(1.5, 1400 / r.width, 3000 / r.height);
+      const shot = lib.toJpeg(el, { pixelRatio: k, quality: 0.8, backgroundColor: cs(D.body).backgroundColor, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
+      const url = await Promise.race([shot, new Promise((res) => setTimeout(() => res(null), 6000))]);
+      return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
+    } catch { return null; }
+  }
+  const blockName = (el) => { const h = el.querySelector('h1, h2, h3'); const t = (h?.innerText || '').trim().split('\n')[0]; return /^(header|nav)$/i.test(el.tagName) ? 'Header' : /^footer$/i.test(el.tagName) ? 'Footer' : t ? (t.length > 28 ? t.slice(0, 27) + '…' : t) : 'Section'; };
+  // Review the whole current page: every section on its own (three at a time), or a screen at a time down the
+  // page when it has no sections. Returns the findings (as notes) and a summary.
+  async function reviewPage(m, label) {
+    const ctx = aiContext();
+    let jobs = [];
+    const blocks = pageBlocks();
+    if (blocks.length >= 2) {
+      jobs = blocks.map((b) => ({ name: blockName(b), make: async () => ({ targets: uniq(tagged(b).concat(b.matches('[data-kerf],[data-kerf-use]') ? [b] : []).flatMap((el) => targetsOf(el))).slice(0, 70), screen: await captureEl(b), scope: 'section' }) }));
+    } else {
+      const parts = Math.max(1, Math.min(8, Math.ceil(D.documentElement.scrollHeight / W.innerHeight)));
+      for (let k = 0; k < parts; k++) jobs.push({ name: `screen ${k + 1}`, make: async () => { W.scrollTo(0, k * W.innerHeight); await wait(600); return { targets: visibleTargets(), screen: await captureScreen(), scope: 'page' }; } });
+    }
+    const results = new Array(jobs.length);
+    let next = 0, finished = 0;
+    // Pictures are taken one at a time (scrolling must not overlap); reviews run three at a time.
+    const prepared = [];
+    for (const j of jobs) { if (S.diagStop) break; prepared.push(await j.make()); }
+    W.scrollTo(0, 0);
+    m.lookedN = (m.lookedN || 0) + prepared.reduce((a, x) => a + x.targets.length, 0);
+    await Promise.all(Array.from({ length: Math.min(3, prepared.length) }, async () => {
+      while (next < prepared.length && !S.diagStop) {
+        const k = next++, x = prepared[k];
+        m.progress = `${label}${jobs.length > 1 ? ` · ${jobs[k].name} (${k + 1} of ${jobs.length})` : ''}`;
+        renderChat();
+        results[k] = x.targets.length ? await api('/diagnose', { targets: x.targets, screen: x.screen, context: ctx, scope: x.scope }).catch((e) => ({ error: e.message, findings: [] })) : { findings: [] };
+        finished++;
+      }
+    }));
+    const titles = new Set();
+    const found = results.filter(Boolean).flatMap((r) => r.findings || []).filter((f) => { const key = `${f.title.toLowerCase()}|${f.locs.join(',')}`; if (titles.has(key)) return false; titles.add(key); return true; });
+    const sum = results.find((r) => r?.summary)?.summary || '';
+    return { notes: notesFrom(found), summary: sum, failed: results.filter((r) => r?.error).length, reviewed: finished, sections: jobs.length };
+  }
   // Findings become Tovi's notes: a box around the elements each one is about, in page coordinates.
   function notesFrom(findings) {
     const out = [];
@@ -2123,32 +2178,12 @@
           if (u.origin === W.location.origin && !u.pathname.startsWith('/__kerf') && !/\.[a-z0-9]{2,5}$/i.test(u.pathname) && !seen.has(k) && seen.size < 10) { seen.add(k); queue.push(k); }
         }
         const no = m.pages.length + 1, name = pageName(p);
-        // The page a screen at a time: capture each, then review them side by side.
-        const parts = Math.max(1, Math.min(3, Math.ceil(D.documentElement.scrollHeight / W.innerHeight)));
-        const shots = [];
-        for (let k = 0; k < parts && !S.diagStop; k++) {
-          m.progress = `Page ${no} of ${seen.size} · ${name} · reading`;
-          renderChat();
-          W.scrollTo(0, k * W.innerHeight);
-          await wait(600);
-          const targets = visibleTargets();
-          if (targets.length) shots.push({ targets, screen: await captureScreen() });
-        }
-        W.scrollTo(0, 0);
-        m.progress = `Page ${no} of ${seen.size} · ${name} · reviewing`;
-        m.lookedN += shots.reduce((a, x) => a + x.targets.length, 0);
-        renderChat();
-        const ctx = aiContext();
-        const res = await Promise.all(shots.map((x) => api('/diagnose', { targets: x.targets, screen: x.screen, context: ctx, scope: 'page' }).catch((e) => ({ error: e.message, findings: [] }))));
+        const r = await reviewPage(m, `Page ${no} of ${seen.size} · ${name}`);
         if (S.path !== p) break; // the designer went somewhere else
-        // Same issue seen in two screens: keep one note.
-        const titles = new Set();
-        const found = res.flatMap((r) => r.findings || []).filter((f) => { const k = f.title.toLowerCase(); if (titles.has(k)) return false; titles.add(k); return true; }).slice(0, 10);
-        S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...notesFrom(found)];
+        S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...r.notes];
         const n = S.notes.filter((x) => x.by === 'tovi').length;
-        m.pages.push({ path: p, name, n });
-        if (res[0]?.summary) sums.push(res[0].summary);
-        if (res.every((r) => r.error) && res.length) m.pages[m.pages.length - 1].error = res[0].error;
+        m.pages.push({ path: p, name, n, ...(r.failed && r.failed === r.sections ? { error: 'Couldn’t review' } : {}) });
+        if (r.summary) sums.push(r.summary);
         refreshTasks();
         renderBar();
       }
@@ -2184,12 +2219,21 @@
     if (S.mode === 'edit') { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
     renderAI();
     try {
-      const [screen, focus] = await Promise.all([captureScreen(), scope === 'selection' ? captureFocus() : null]);
-      const r = await api('/diagnose', { targets, screen, focus, context: aiContext(), scope });
+      let r;
+      if (scope === 'selection') {
+        const [screen, focus] = await Promise.all([captureScreen(), captureFocus()]);
+        r = await api('/diagnose', { targets, screen, focus, context: aiContext(), scope });
+        r.notes = notesFrom(r.findings);
+      } else {
+        S.diagStop = false;
+        r = await reviewPage(m, 'Reviewing this page');
+        m.progress = null;
+      }
       // Fresh notes replace Tovi's earlier ones; the person's own notes stay.
-      S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...notesFrom(r.findings)];
+      S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...r.notes];
       const n = S.notes.filter((x) => x.by === 'tovi').length;
-      m.proposal = { message: `${r.summary}${n ? ` I left ${n} note${n === 1 ? '' : 's'} on the screen. Keep the ones you agree with, change or remove the rest, then Apply.` : ''}`, edits: [] };
+      const what = scope === 'selection' ? r.summary : `I reviewed ${r.sections > 1 ? `all ${r.sections} sections of this page` : 'this page'}${S.diagStop ? ' until you stopped me' : ''}.`;
+      m.proposal = { message: `${what}${n ? ` I left ${n} note${n === 1 ? '' : 's'} on it. Keep the ones you agree with, change or remove the rest, then Apply, and I’ll check the result.` : ' Nothing stood out that needs fixing.'}`, edits: [] };
       m.status = n ? 'diag' : 'info';
     } catch (e) { m.error = e.message; }
     m.busy = false;
@@ -2281,14 +2325,15 @@
     return fontCss;
   }
   const loadH2i = () => (h2i ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js'; sc.onload = () => res(window.htmlToImage); sc.onerror = rej; document.head.appendChild(sc); }));
-  async function captureScreen() {
+  async function captureScreen(full = false) {
     if (!D || !W) return null;
     try {
       const lib = await loadH2i();
       const css = await fontsFor(lib);
-      const w = W.innerWidth, h = W.innerHeight, k = Math.min(1, 1280 / w);
+      // full: the whole page top to bottom (capped), for checking changes that may be off screen.
+      const w = W.innerWidth, h = full ? Math.min(D.documentElement.scrollHeight, 6000) : W.innerHeight, k = Math.min(1, 1280 / w, full ? 7000 / h : 1);
       const shot = lib.toJpeg(D.documentElement, { width: w, height: h, canvasWidth: Math.round(w * k), canvasHeight: Math.round(h * k), pixelRatio: 1, quality: 0.72, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
-      const url = await Promise.race([shot, new Promise((r) => setTimeout(() => r(null), 4000))]);
+      const url = await Promise.race([shot, new Promise((r) => setTimeout(() => r(null), full ? 9000 : 4000))]);
       return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
     } catch { h2i = null; return null; }
   }
@@ -2496,12 +2541,12 @@
     const history = historyFor();
     const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? ctxName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
     if (!opts.review) S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
-    const m = { role: 'kerf', second: !!opts.review, busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
+    const m = { role: 'kerf', second: !!opts.review, checkLabel: opts.notes ? (opts.round > 1 ? 'Final check' : 'Checking the fixes') : opts.round > 1 ? 'Final check' : null, busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
     S.chat.push(m);
     S.card = m;
     renderAI();
     try {
-      const [screen, focus] = await Promise.all([captureScreen(), where === 'chat' || where === 'ask' ? captureFocus() : null]);
+      const [screen, focus] = await Promise.all([captureScreen(!!opts.full), !opts.full && (where === 'chat' || where === 'ask') ? captureFocus() : null]);
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
       // Tovi shows up on the canvas only when it applies edits (applyLive), not while it thinks or answers.
@@ -2516,15 +2561,26 @@
     // Tasks: Apply means apply. Every change is undoable, and the answer has its own Undo.
     if (autoApply && m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
     saveChat();
-    // Look-and-feel requests get a second look, like a designer stepping back: Tovi screenshots the result,
-    // critiques the whole composition and fixes what's still off.
-    if (!opts.review && m.status === 'applied' && where === 'chat' && isLookAndFeel(text)) {
-      await wait(1800);
-      refind();
-      const done = chosen(m).map((e) => `${e.name || e.tag}: ${editLabel(e)}`).join('; ');
-      const ask = `Second look. The designer asked: "${text}". You already applied: ${done}. The screenshots now show the result. Step back and judge the whole selection the way a demanding design lead at a top product company would in a design review, using the designer moves for this kind of request. Common misses to check: buttons or controls left at their old size or weight when the request is about feel ("premium", "modern"); items that should line up but don't, or alignment faked with fixed margins; spacing between groups not clearly larger than spacing inside a group; secondary text not quiet enough, or the focal point not strong enough; siblings with the same role styled differently (sizes, weights, radii, colours); nested or fussy frames; anything your first pass made worse. Fix every miss you find with edits. Return no edits only if it would pass that review as it is, and then say in one short sentence why it works.`;
-      await runAI(text, S.sel ? selectionTargets() : visibleTargets(), where, null, true, [], true, { review: ask });
+    // Tovi checks its own work like a designer stepping back: after a look-and-feel change it screenshots the
+    // result, judges it against the request, fixes what's still off, and checks once more if it changed anything.
+    if (m.status === 'applied' && where === 'chat' && !opts.notes && (opts.review ? (opts.round || 1) < 2 && chosen(m).length : isLookAndFeel(text))) {
+      await checkAndFix({ request: text, done: chosen(m), round: (opts.round || 0) + 1, notes: opts.notes, full: opts.full });
+    } else if (m.status === 'applied' && opts.notes && (opts.round || 1) < 2 && chosen(m).length) {
+      await checkAndFix({ request: text, done: chosen(m), round: (opts.round || 1) + 1, notes: opts.notes, full: true });
     }
+  }
+  // One check: a fresh screenshot, the request (or each note) as a checklist, and what was applied so far.
+  async function checkAndFix({ request, done, round, notes, full }) {
+    await wait(1800);
+    refind();
+    const applied = done.map((e) => `${e.name || e.tag}: ${editLabel(e)}`).join('; ');
+    const list = notes ? notes.map((n, k) => `${k + 1}. ${n.title ? `${n.title}: ` : ''}${n.text}`).join('\n') : '';
+    const ask = notes
+      ? `Check the result${round > 1 ? ' once more' : ''}. The designer asked Tovi to fix these notes:\n${list}\nYou applied: ${applied}. The screenshot shows the whole page now. Go through the notes one by one and check on screen that each is really fixed, fully and everywhere it applies, not just in one place. Then look at those same areas for anything still conspicuous, or anything these changes made worse. Fix all of it now with edits. In the message, give a short verdict for each note (e.g. "1 fixed. 2 two labels were still grey, fixed now."). Return no edits only if every note is fully fixed and the areas look right, and then say why.`
+      : `${round > 1 ? 'Final check' : 'Second look'}. The designer asked: "${request}". You${round > 1 ? ' have now' : ' already'} applied: ${applied}. The screenshots now show the result. Step back and judge the whole selection the way a demanding design lead at a top product company would in a design review, using the designer moves for this kind of request. Common misses to check: buttons or controls left at their old size or weight when the request is about feel ("premium", "modern"); items that should line up but don't, or alignment faked with fixed margins; spacing between groups not clearly larger than spacing inside a group; secondary text not quiet enough, or the focal point not strong enough; siblings with the same role styled differently (sizes, weights, radii, colours); nested or fussy frames; anything your earlier passes made worse. Fix every miss you find with edits. Return no edits only if it would pass that review as it is, and then say in one short sentence why it works.`;
+    const own = notes ? uniq(notes.flatMap((n) => (n.locs || []).map(elOf).filter(Boolean).flatMap((el) => targetsOf(el)))) : [];
+    const targets = uniq([...own, ...(S.sel && !notes ? selectionTargets() : visibleTargets())]).slice(0, 80);
+    await runAI(request, targets, 'chat', null, true, [], true, { review: ask, round, notes, full });
   }
   const isLookAndFeel = (t) => /premium|polish|better|clean|modern|nice|improv|refin|elegant|beautif|pop|feel|look|tidy|balance|hierarch|design|luxur|minimal|professional|fresh|sleek|ugly|messy|cluttered/i.test(t) && !/\d\s*(px|%|pt)?\b/.test(t);
   async function decide(m, v) {
@@ -2713,7 +2769,7 @@
   }
   function chatHTML() {
     const ctx = S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen';
-    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}Second look</div>` : ''}${kerfHTML(m, i)}${m.progress ? `<div class="diagProg"><span>${esc(m.progress)}</span><button class="ghostBtn" data-act="diagStop">Stop</button></div>` : ''}${!m.busy && m.pages?.length ? `<div class="diagPages">${m.pages.map((x) => `<button data-act="goPage" data-v="${esc(x.path)}"${x.path === S.path ? ' class="on"' : ''}><span>${esc(x.name)}</span><b>${x.error ? 'Couldn’t review' : x.n ? `${x.n} note${x.n === 1 ? '' : 's'}` : 'Looks good'}</b></button>`).join('')}</div>` : ''}</div>`)).join('');
+    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}${m.checkLabel || 'Second look'}</div>` : ''}${kerfHTML(m, i)}${m.progress ? `<div class="diagProg"><span>${esc(m.progress)}</span><button class="ghostBtn" data-act="diagStop">Stop</button></div>` : ''}${!m.busy && m.pages?.length ? `<div class="diagPages">${m.pages.map((x) => `<button data-act="goPage" data-v="${esc(x.path)}"${x.path === S.path ? ' class="on"' : ''}><span>${esc(x.name)}</span><b>${x.error ? 'Couldn’t review' : x.n ? `${x.n} note${x.n === 1 ? '' : 's'}` : 'Looks good'}</b></button>`).join('')}</div>` : ''}</div>`)).join('');
     return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><img class="ceAvatar" src="${TOVI_PIC}" alt=""><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
       <div class="comp">${tasksShown() ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
   }
@@ -2941,7 +2997,8 @@
     S.chat.push(m);
     S.card = m;
     renderAI();
-    const screen = await captureScreen();
+    const offScreen = notes.some((n) => W && (n.y + (n.h || 0) < W.scrollY || n.y > W.scrollY + W.innerHeight));
+    const screen = await captureScreen(offScreen);
     m.mode = S.modeOnce || S.styleMode;
     S.modeOnce = null;
     const run = async (k) => {
@@ -2986,6 +3043,8 @@
     renderAI();
     if (m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
     saveChat();
+    // Then look at the page and check every note was really fixed; fix what's left (up to two checks).
+    if (m.status === 'applied') await checkAndFix({ request: notes.map((n) => n.title || n.text).join('; '), done: chosen(m), round: 1, notes, full: true });
   }
   let draw = null;
   const ovPoint = (e) => { const r = $('ov').getBoundingClientRect(); return { x: (e.clientX - r.left) / S.z + W.scrollX, y: (e.clientY - r.top) / S.z + W.scrollY }; };

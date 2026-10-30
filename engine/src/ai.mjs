@@ -590,7 +590,7 @@ export async function diagnose({ targets, screen = null, focus = null, context =
   const img = (x) => (x && typeof x.data === 'string' && x.data.length < 7e6 && /^image\/(jpeg|png)$/.test(x.media_type) ? x : null);
   const shot = img(screen), close = img(focus);
   const ctx = context && typeof context === 'object' ? context : {};
-  const text = `${ctx.page ? `Page: ${String(ctx.page).slice(0, 80)} (${String(ctx.path || '').slice(0, 120)})\n` : ''}${ctx.device ? `Screen size: ${ctx.device}${ctx.width ? `, ${ctx.width}px wide` : ''}\n` : ''}Review ${scope === 'selection' ? 'the selected part of the screen' : 'this screen as visible'}.\n\nElements:\n${targets.map(describeTarget).join('\n')}`;
+  const text = `${ctx.page ? `Page: ${String(ctx.page).slice(0, 80)} (${String(ctx.path || '').slice(0, 120)})\n` : ''}${ctx.device ? `Screen size: ${ctx.device}${ctx.width ? `, ${ctx.width}px wide` : ''}\n` : ''}Review ${scope === 'selection' ? 'the selected part of the screen' : scope === 'section' ? 'this one section of the page (the screenshot shows just this section, top to bottom). Report at most 5 findings for it' : 'this screen as visible'}.\n\nElements:\n${targets.map(describeTarget).join('\n')}`;
   const lastContent = [
     ...(shot ? [{ type: 'text', text: 'Screenshot of the screen:' }, { type: 'image', source: { type: 'base64', media_type: shot.media_type, data: shot.data } }] : []),
     ...(close ? [{ type: 'text', text: 'Close-up of the selection at twice the size:' }, { type: 'image', source: { type: 'base64', media_type: close.media_type, data: close.data } }] : []),
@@ -618,6 +618,6 @@ export async function diagnose({ targets, screen = null, focus = null, context =
   // Keep only findings that point at elements we were given; most important first.
   const ids = new Set(targets.map((t) => t.loc));
   const rank = { high: 0, medium: 1, low: 2 };
-  const findings = (d.findings || []).map((f) => ({ ...f, locs: [...new Set((f.locs || []).filter((l) => ids.has(l)))] })).filter((f) => f.locs.length && f.fix).sort((a, b) => rank[a.severity] - rank[b.severity]).slice(0, 8);
+  const findings = (d.findings || []).map((f) => ({ ...f, locs: [...new Set((f.locs || []).filter((l) => ids.has(l)))] })).filter((f) => f.locs.length && f.fix).sort((a, b) => rank[a.severity] - rank[b.severity]).slice(0, scope === 'section' ? 5 : 8);
   return { summary: d.summary, findings };
 }
