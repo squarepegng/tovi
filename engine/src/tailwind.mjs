@@ -176,7 +176,12 @@ export function classFor(prop, v, th) {
     case 'rBR': return scale('rounded-br', th.radius, v);
     case 'rBL': return scale('rounded-bl', th.radius, v);
     case 'fontSize': return scale('text', th.fontSize, v);
-    case 'lineHeight': return scale('leading', th.lineHeight, v);
+    case 'lineHeight': {
+      // A small number is a ratio of the font size (1.2), not pixels: leading-[1.2], never leading-[1.2px].
+      const n = Number(v);
+      if (n > 0 && n < 4) { const named = { 1: 'none', 1.25: 'tight', 1.375: 'snug', 1.5: 'normal', 1.625: 'relaxed', 2: 'loose' }[Math.round(n * 1000) / 1000]; return named ? `leading-${named}` : `leading-[${Math.round(n * 100) / 100}]`; }
+      return scale('leading', th.lineHeight, v);
+    }
     case 'borderW': return scale('border', th.borderWidth, v);
     case 'letterSpacing': { const k = th.letterSpacing[v]; return k ? `tracking-${k}` : `tracking-[${v / 100}em]`; }
     case 'fontWeight': { const k = th.fontWeight[String(v)]; return k ? `font-${k}` : `font-[${v}]`; }

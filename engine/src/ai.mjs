@@ -384,7 +384,7 @@ function parseProposal(raw) {
   return r.data;
 }
 
-export async function propose({ request, targets, history = [], images = [], tokens = [], webRoot = null, screen = null, focus = null, light = false, context = null, mode = 'system', direction = null }, theme, library) {
+export async function propose({ request, targets, history = [], images = [], tokens = [], webRoot = null, screen = null, focus = null, light = false, fast = false, context = null, mode = 'system', direction = null }, theme, library) {
   const { provider, model, key } = aiConfig();
   if (!key) throw new KerfError(`Add your ${PROVIDERS[provider].label} key in Tovi’s Settings to use AI.`);
   if (!request || !String(request).trim()) throw new KerfError('Say or type what should change.');
@@ -451,7 +451,7 @@ export async function propose({ request, targets, history = [], images = [], tok
         fallbacks: 'default',
         // Think before answering: design judgement and code reading both benefit, and it stays quick for simple asks.
         thinking: { type: 'adaptive' },
-        output_config: { effort: light ? 'low' : 'medium', format: betaZodOutputFormat(Proposal) },
+        output_config: { effort: light || fast ? 'low' : 'medium', format: betaZodOutputFormat(Proposal) },
         // The instructions and design system are the same on every request: cache them so later requests start faster.
         system: [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }],
         messages: [
@@ -471,7 +471,7 @@ export async function propose({ request, targets, history = [], images = [], tok
     usedModel = res.model;
     usage = { input: res.usage.input_tokens, output: res.usage.output_tokens, cacheRead: res.usage.cache_read_input_tokens, cacheWrite: res.usage.cache_creation_input_tokens };
   } else {
-    ({ p, usedModel, usage } = await askOther(provider, model, key, { systemText, history8, lastContent, light }));
+    ({ p, usedModel, usage } = await askOther(provider, model, key, { systemText, history8, lastContent, light: light || fast }));
   }
 
   const edits = [];

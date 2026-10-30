@@ -187,6 +187,10 @@ test('editing for all screen sizes keeps the class in its place', () => {
   const r = applyResponsive('mt-4 text-sm font-bold text-content'.split(' '), [{ prop: 'fontSize', value: 18 }], th, { mode: 'all' });
   assert.equal(r.classes.join(' '), 'mt-4 text-lg font-bold text-content');
 });
+test('a small line height is a ratio, not pixels', () => {
+  assert.equal(ops('text-xl', [{ prop: 'lineHeight', value: 1.2 }]), 'text-xl leading-[1.2]');
+  assert.equal(ops('text-xl', [{ prop: 'lineHeight', value: 1.25 }]), 'text-xl leading-tight');
+});
 test('equal horizontal and vertical padding become one class', () => {
   assert.equal(ops('card', [{ prop: 'padX', value: 24 }, { prop: 'padY', value: 24 }]), 'card p-6');
   assert.equal(ops('card px-6 py-2', [{ prop: 'padY', value: 24 }]), 'card p-6');

@@ -1513,7 +1513,7 @@
     let host = $('work');
     if (!host) { host = document.createElement('div'); host.id = 'work'; $('ov').appendChild(host); }
     const now = Date.now();
-    S.working = S.working.filter((w) => w.state !== 'done' || now - w.t < 1600);
+    S.working = S.working.filter((w) => w.state !== 'done' || now - w.t < 4000);
     const items = S.agentsOn && D ? S.working.map((w) => ({ w, el: elOf(w.loc) })).filter((x) => x.el?.isConnected) : [];
     while (host.children.length < items.length) { const d = document.createElement('div'); d.className = 'box work'; d.innerHTML = `<span class="tag"><img class="wAv" src="${TOVI_PIC}" alt=""><span class="tagT"></span></span><i class="wCheck"></i>`; host.appendChild(d); }
     [...host.children].forEach((b, i) => {
@@ -1521,7 +1521,7 @@
       const nm = x && /^(section|header|footer|nav)$/i.test(x.el.tagName) ? blockName(x.el) : x ? dName(x.el) : '';
       place(b, x?.el || null, x ? `${nm}${x.w.label ? ` · ${x.w.label}` : ''}` : null);
       if (x && b.dataset.state !== x.w.state) b.dataset.state = x.w.state;
-      if (x) b.classList.toggle('fading', x.w.state === 'done' && now - x.w.t > 900);
+      if (x) b.classList.toggle('fading', x.w.state === 'done' && now - x.w.t > 3300);
     });
   }
   // The grip on the selection tag shows only when the element has siblings it can trade places with.
@@ -2573,8 +2573,7 @@
   // Apply everything in one go (one save, one reload of the app), with Tovi's cursor touring a few of the changed
   // elements on screen at the same time. The tour never holds up the work: it stops as soon as the save is done
   // (plus a moment to finish its current move), or at once on a click or key press. One batch = one undo.
-  async function applyLive(m, edits) {
-    const batch = Date.now();
+  async function applyLive(m, edits, batch = Date.now()) {
     m.batch = batch;
     const styles = edits.filter((e) => !e.structure), rest = edits.filter((e) => e.structure);
     const all = [...styles, ...rest];
@@ -2596,17 +2595,17 @@
     // Short tags: the first change, and how many more ("Top margin 0 +3").
     const short = (t) => { const p = String(t || '').split(' · '); return p.length > 1 ? `${p[0]} +${p.length - 1}` : p[0]; };
     for (const e of all) workOn([e.loc], short(editLabel(e)) || e.why || 'Changing', 'edit');
+    // The cursor tour is only an effect: the save never waits for it. It finishes its current move on its own.
+    const endTour = () => { skip = true; window.removeEventListener('pointerdown', onSkip, true); window.removeEventListener('keydown', onSkip, true); W?.removeEventListener('pointerdown', onSkip, true); release([...used]); };
     try {
       const r = await api('/ai/apply', { batch, edits: all });
-      await Promise.race([tour, wait(1200)]);
       workDone(r.results.filter((x) => x.ok).map((x) => x.loc));
       return { results: r.results, n: r.n };
     } catch (err) {
       return { error: err.message };
     } finally {
       skip = true;
-      window.removeEventListener('pointerdown', onSkip, true); window.removeEventListener('keydown', onSkip, true); W?.removeEventListener('pointerdown', onSkip, true);
-      release([...used]);
+      tour.finally(endTour);
     }
   }
 
@@ -2847,7 +2846,7 @@
   }
   function chatHTML() {
     const ctx = S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen';
-    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}${m.checkLabel || 'Second look'}</div>` : ''}${kerfHTML(m, i)}${m.progress ? `<div class="diagProg"><span>${esc(m.progress)}</span><button class="ghostBtn" data-act="diagStop">Stop</button></div>` : ''}${!m.busy && m.pages?.length ? `<div class="diagPages">${m.pages.map((x) => `<button data-act="goPage" data-v="${esc(x.path)}"${x.path === S.path ? ' class="on"' : ''}><span>${esc(x.name)}</span><b>${x.error ? 'Couldn’t review' : x.n ? `${x.n} note${x.n === 1 ? '' : 's'}` : 'Looks good'}</b></button>`).join('')}</div>` : ''}</div>`)).join('');
+    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}${m.checkLabel || 'Second look'}</div>` : ''}${kerfHTML(m, i)}${m.progress ? `<div class="diagProg"><span>${esc(m.progress)}</span>${m.noStop ? '' : '<button class="ghostBtn" data-act="diagStop">Stop</button>'}</div>` : ''}${!m.busy && m.pages?.length ? `<div class="diagPages">${m.pages.map((x) => `<button data-act="goPage" data-v="${esc(x.path)}"${x.path === S.path ? ' class="on"' : ''}><span>${esc(x.name)}</span><b>${x.error ? 'Couldn’t review' : x.n ? `${x.n} note${x.n === 1 ? '' : 's'}` : 'Looks good'}</b></button>`).join('')}</div>` : ''}</div>`)).join('');
     return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><img class="ceAvatar" src="${TOVI_PIC}" alt=""><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
       <div class="comp">${tasksShown() ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
   }
@@ -3085,13 +3084,33 @@
       const stop = () => {};
       const atts = (notes[k].atts || []).slice(0, 4);
       try {
-        const p = await api('/ai', { request: `Note ${k + 1}: ${notes[k].text}\nEach element is tagged with the note it sits under.`, targets: per[k], history, screen, context: aiContext(), mode: m.mode, images: atts.map((x) => ({ name: x.name, media_type: x.type, data: x.data, orig: x.orig })) });
+        const p = await api('/ai', { request: `Note ${k + 1}: ${notes[k].text}\nEach element is tagged with the note it sits under.`, fast: true, targets: per[k], history, screen, context: aiContext(), mode: m.mode, images: atts.map((x) => ({ name: x.name, media_type: x.type, data: x.data, orig: x.orig })) });
         return { p };
       } catch (e) { return { error: e.message }; } finally { stop(); }
     };
     const out = [];
     let next = 0;
-    await Promise.all(Array.from({ length: Math.min(4, notes.length) }, async () => { while (next < notes.length) { const k = next++; out[k] = await run(k); } }));
+    // Each note's changes land as soon as its answer arrives, so the page starts changing within seconds.
+    // Saves run one after another (never two writing at once) and share one batch, so one Undo reverts them all.
+    const batch = Date.now(), results = [];
+    let saving = Promise.resolve(), landed = 0, nNow = S.count;
+    m.noStop = true;
+    const land = (k) => {
+      const es = (out[k]?.p?.edits || []).filter((e) => e.structure?.type !== 'imageAsk').map((e) => (e.structure ? { ...e, note: k + 1 } : { ...e, note: k + 1, bp: bpParam() }));
+      if (!es.length) { landed++; return; }
+      saving = saving.then(async () => {
+        const r = await applyLive(m, es, batch).catch((e) => ({ error: e.message }));
+        if (r.results) { results.push(...r.results); nNow = Math.max(nNow, r.n || nNow); S.count = nNow; afterEdit(); }
+        landed++;
+        m.progress = `Applied ${landed} of ${notes.length} note${notes.length === 1 ? '' : 's'}…`;
+        renderChat();
+      });
+    };
+    m.progress = `Working on ${notes.length} note${notes.length === 1 ? '' : 's'}…`;
+    renderChat();
+    await Promise.all(Array.from({ length: Math.min(4, notes.length) }, async () => { while (next < notes.length) { const k = next++; out[k] = await run(k); land(k); } }));
+    await saving;
+    m.progress = null;
     // Put the answers together, one row per task.
     const edits = [], rows = [];
     out.forEach((o, k) => {
@@ -3120,7 +3139,18 @@
     m.busy = false;
     m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
     renderAI();
-    if (m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
+    if (m.status === 'pending' && chosen(m).length) {
+      const ok = results.filter((x) => x.ok && x.changed).length, bad = results.filter((x) => !x.ok);
+      m.failed = bad.map((x) => x.loc);
+      m.appliedN = ok;
+      m.status = ok ? 'applied' : 'failed';
+      toast(`Applied ${ok} change${ok === 1 ? '' : 's'}`, bad.length ? `${bad.length} skipped: ${bad[0].error}` : '', !!bad.length && !ok, !!ok);
+      if (ok) S.notes = [];
+      if (chosen(m).some((e) => e.structure?.type === 'token')) S.tokens = null;
+      S.amber = [];
+      afterEdit();
+      renderAI();
+    }
     workClear();
     saveChat();
     // Then look at the page and check every note was really fixed; fix what's left (up to two checks).
