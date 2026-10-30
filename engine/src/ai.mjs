@@ -22,15 +22,16 @@ const COLOR = new Set(['bg', 'color', 'borderC']);
 export const PROVIDERS = {
   anthropic: { label: 'Claude', keyName: 'ANTHROPIC_API_KEY', model: 'claude-opus-5-5' },
   openai: { label: 'OpenAI', keyName: 'OPENAI_API_KEY', model: 'gpt-6-astra' },
-  gemini: { label: 'Gemini', keyName: 'GEMINI_API_KEY', model: 'gemini-3.6-flash' },
+  gemini: { label: 'Gemini', keyName: 'GEMINI_API_KEY', model: 'gemini-4-argon' },
 };
 // The models offered in Settings, grouped by provider. Any other name can be typed in ("Other … model").
 export const MODELS = [
   { provider: 'anthropic', id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
   { provider: 'anthropic', id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
   { provider: 'openai', id: 'gpt-6-astra', label: 'GPT-6 Astra' },
-  { provider: 'gemini', id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
-  { provider: 'gemini', id: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' },
+  { provider: 'gemini', id: 'gemini-4-argon', label: 'Gemini 4 Argon' },
+  { provider: 'gemini', id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+  { provider: 'gemini', id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
 ];
 function envValue(name) {
   try {
@@ -43,7 +44,7 @@ function envValue(name) {
 // The models a saved key can use, asked from the provider itself (free), so new models appear on their own.
 // Kept for 10 minutes. Without a key, or if the provider can't be reached, the short list above is used.
 const modelCache = new Map();
-const CHAT_ONLY = /(embed|audio|realtime|tts|transcribe|whisper|dall-e|image|moderation|search|instruct|babbage|davinci|computer-use|live|aqa|learnlm|gemma)/i;
+const CHAT_ONLY = /(embed|audio|realtime|tts|transcribe|whisper|dall-e|image|moderation|search|instruct|babbage|davinci|computer-use|live|aqa|learnlm|gemma|banana|omni|robotics|translate|lyria|research|antigravity)/i;
 export async function listModels(provider) {
   const pr = PROVIDERS[provider];
   if (!pr) return { models: [], live: false };
