@@ -159,17 +159,97 @@
   }
   const px = (n) => (n ? `${n}px` : '0');
   const shadowValue = (o) => `[${o.inset ? 'inset_' : ''}${px(o.x)}_${px(o.y)}_${px(o.blur)}_${px(o.spread)}_#${o.hex}${o.a >= 100 ? '' : ('0' + Math.round(o.a * 2.55).toString(16)).slice(-2).toUpperCase()}]`;
-  function shadowBody(sh) {
+  function shadowBody() {
+    const o = shadowNow();
+    return `<div class="cr shRow"><button class="ib shIco${S.cpick === 'shadow' ? ' on' : ''}" data-act="cpick" data-v="shadow" title="Edit shadow" aria-label="Edit shadow"><i></i></button><label class="inp"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label><button class="ib" data-act="rmShadow" title="Remove shadow" aria-label="Remove shadow">${ico('minus')}</button></div>`;
+  }
+  function shadowFields(sh) {
     const o = shadowNow(), keys = (S.theme?.shadow || []).filter((k) => k !== 'none' && k !== 'inner'), custom = !keys.includes(sh);
     const f = (k, label, icon) => `<label class="inp" title="${label}">${icon ? `<span class="ic">${icon}</span>` : ''}<input type="text" inputmode="decimal" data-shv="${k}" value="${o[k]}" aria-label="${label}"></label>`;
-    return `<div class="cr"><label class="inp"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label><button class="ib" data-act="rmShadow" title="Remove shadow" aria-label="Remove shadow">${ico('x')}</button></div>
-      <div class="shGrid">
+    return `<div class="shGrid">
         <span class="shL">Style</span><label class="inp"><select data-sel="shadow" aria-label="Shadow style">${custom ? '<option selected>Custom</option>' : ''}${keys.map((k) => `<option value="${esc(k)}"${k === sh ? ' selected' : ''}>${k === 'DEFAULT' ? 'Default' : esc(k)}</option>`).join('')}</select>${ico('chev', 12)}</label>
         <span class="shL">Position</span><div class="r2">${f('x', 'X', 'X')}${f('y', 'Y', 'Y')}</div>
         <span class="shL">Blur</span>${f('blur', 'Blur')}
         <span class="shL">Spread</span>${f('spread', 'Spread')}
         <span class="shL">Color</span><label class="inp shC"><i class="sw1" style="background:#${o.hex}${('0' + Math.round(o.a * 2.55).toString(16)).slice(-2)}"></i><input data-shhex value="${o.hex}" maxlength="7" spellcheck="false" aria-label="Shadow colour"><input data-shv="a" value="${o.a}" inputmode="numeric" aria-label="Shadow opacity"><span class="u">%</span></label>
       </div>`;
+  }
+
+  /* ---------- floating editor: colour, gradient and shadow, over the canvas beside the panel ---------- */
+  const NAMES = { bg: 'Fill', color: 'Text color', borderC: 'Stroke color' };
+  // Any CSS colour (a token's value, rgb(), hex) as hex + opacity, resolved in the app's page.
+  function toHexA(css) {
+    const doc = D || document, probe = doc.createElement('span');
+    probe.style.color = String(css || '#000').replace('<alpha-value>', '1');
+    doc.body.appendChild(probe);
+    const m = getComputedStyle(probe).color.match(/[\d.]+/g) || ['0', '0', '0'];
+    probe.remove();
+    return { hex: m.slice(0, 3).map((x) => ('0' + Math.round(+x).toString(16)).slice(-2)).join('').toUpperCase(), a: m.length > 3 ? Math.round(+m[3] * 100) : 100 };
+  }
+  function cpInit() {
+    if (S.cp && S.cp.p === S.cpick && S.cp.stop === S.gstop) return;
+    let n;
+    if (S.cpick === 'grad') { const g = gradOf() || {}; S.gstop = S.gstop && (S.gstop !== 'via' || g.via) ? S.gstop : 'from'; n = toHexA(tokenSwatch(g[S.gstop])); }
+    else n = colorNow(S.cpick);
+    S.cp = { p: S.cpick, stop: S.gstop, ...hexToHsv(n.hex), a: n.a };
+  }
+  function pickerHTML(p, tok) {
+    const c = S.cp, hx = hsvToHex(c.h, c.s, c.v), tab = S.cpTab || 'custom';
+    return `<div class="cpTabs"><button data-act="cpTab" data-v="custom" class="${tab === 'custom' ? 'on' : ''}">Custom</button><button data-act="cpTab" data-v="vars" class="${tab === 'vars' ? 'on' : ''}">Variables</button></div>
+      ${tab === 'custom' ? `<div class="cpSV" data-cpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
+      <div class="cpBar cpHue" data-cpdrag="hue"><i class="cpK" style="left:${c.h / 3.6}%;background:hsl(${c.h} 100% 50%)"></i></div>
+      <div class="cpBar cpAlpha" data-cpdrag="alpha" style="--c:#${hx}"><i class="cpK" style="left:${c.a}%"></i></div>
+      <div class="cpRow"><span class="cpMode">Hex</span><label class="cpVal"><input data-cphex="${p}" value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"><input data-cpa="${p}" value="${c.a}" inputmode="numeric" aria-label="Opacity"><span>%</span></label></div>`
+      : `<div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('') || '<span class="note">This project has no colour variables yet.</span>'}</div>`}`;
+  }
+  function renderFpop() {
+    let f = $('fpop');
+    if (!f) { f = document.createElement('div'); f.id = 'fpop'; f.className = 'fpop'; f.setAttribute('role', 'dialog'); document.body.appendChild(f); }
+    const k = S.cpick;
+    if (!k || !S.sel?.el) { f.hidden = true; return; }
+    const close = `<button class="ib fpX" data-act="fpClose" aria-label="Close" title="Close · Esc">${ico('x')}</button>`;
+    let head = '', body = '';
+    if (k === 'shadow') {
+      const o = shadowNow();
+      head = `<label class="inp fpSel"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label>`;
+      body = shadowFields(shadowOf());
+    } else {
+      cpInit();
+      const fillType = k === 'bg' || k === 'grad';
+      head = fillType ? `<label class="inp fpSel"><select data-fptype aria-label="Fill type"><option value="solid"${k === 'bg' ? ' selected' : ''}>Solid</option><option value="gradient"${k === 'grad' ? ' selected' : ''}>Linear gradient</option></select>${ico('chev', 12)}</label>` : `<span class="fpT">${NAMES[k]}</span>`;
+      if (k === 'grad') {
+        const g = gradOf() || { dir: 'r' }, stops = ['from', g.via ? 'via' : null, 'to'].filter(Boolean), at = { from: 0, via: 50, to: 100 };
+        body = `<div class="gRow"><label class="inp"><select data-gstop="dir" aria-label="Direction">${DIRS.map(([v, n]) => `<option value="${v}"${v === g.dir ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label>
+            <button class="outline sm" data-act="gVia">${g.via ? 'Remove middle' : 'Add middle'}</button></div>
+          <div class="gBar" style="background:${esc(gradCss({ ...g, dir: 'r' }))}">${stops.map((st) => `<button class="gStop${S.gstop === st ? ' on' : ''}" data-act="gStop" data-v="${st}" style="left:${at[st]}%;--c:${esc(tokenSwatch(g[st]))}" aria-label="${st === 'from' ? 'Start' : st === 'via' ? 'Middle' : 'End'} colour"></button>`).join('')}</div>
+          ${pickerHTML('grad', g[S.gstop])}`;
+      } else body = pickerHTML(k, tokenOf(k));
+    }
+    f.innerHTML = `<div class="fpH">${head}${close}</div><div class="cpop" data-cpop="${k}">${body}</div>`;
+    f.hidden = false;
+    // Beside the panel, level with the row that opened it, kept on screen.
+    const pr = $('panel').getBoundingClientRect(), h = f.offsetHeight;
+    f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
+    f.style.top = Math.max(56, Math.min(innerHeight - h - 8, (S.fpY ?? 120) - 14)) + 'px';
+  }
+  function closeFpop() { if (!S.cpick) return; S.cpick = S.cp = null; renderPanel(); }
+  // Save the picker's colour: a property, or the chosen gradient stop.
+  function cpCommit(c) {
+    if (c.p !== 'grad') return commit({ ops: [{ prop: c.p, value: cpOut(c) }] });
+    const g = gradOf() || { dir: 'r' };
+    g[c.stop || 'from'] = cpOut(c);
+    return commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] });
+  }
+  function cpPreview(c) {
+    if (c.p !== 'grad') return preview(S.sel.el, c.p, cpOut(c));
+    const g = { ...(gradOf() || { dir: 'r' }) };
+    g[c.stop || 'from'] = cpOut(c);
+    S.sel.el.style.setProperty('background-image', gradCss(g), 'important');
+    previewed = { el: S.sel.el, keys: ['background-image'] };
+    const st = document.querySelector(`.gStop[data-v="${c.stop}"]`);
+    if (st) st.style.setProperty('--c', cpOut(c));
+    const bar = document.querySelector('.gBar');
+    if (bar) bar.style.background = gradCss({ ...g, dir: 'r' });
   }
   function shadowOf() {
     const c = (info()?.classes || []).find((x) => !x.includes(':') && (x === 'shadow' || x.startsWith('shadow-')));
@@ -906,18 +986,6 @@
   function colorRow(p, title, removeAct) {
     const hex = val(p), tok = tokenOf(p), none = hex === 'transparent';
     let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label>${removeAct ? `<button class="ib" data-act="${removeAct}" title="Remove">${ico('minus')}</button>` : ''}</div>`;
-    if (S.cpick === p) {
-      if (!S.cp || S.cp.p !== p) { const n = colorNow(p); S.cp = { p, ...hexToHsv(n.hex), a: n.a }; }
-      const c = S.cp, hx = hsvToHex(c.h, c.s, c.v), tab = S.cpTab || 'custom';
-      h += `<div class="cpop" data-cpop="${p}">
-        <div class="cpTabs"><button data-act="cpTab" data-v="custom" class="${tab === 'custom' ? 'on' : ''}">Custom</button><button data-act="cpTab" data-v="vars" class="${tab === 'vars' ? 'on' : ''}">Variables</button></div>
-        ${tab === 'custom' ? `<div class="cpSV" data-cpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
-        <div class="cpBar cpHue" data-cpdrag="hue"><i class="cpK" style="left:${c.h / 3.6}%;background:hsl(${c.h} 100% 50%)"></i></div>
-        <div class="cpBar cpAlpha" data-cpdrag="alpha" style="--c:#${hx}"><i class="cpK" style="left:${c.a}%"></i></div>
-        <div class="cpRow"><span class="cpMode">Hex</span><label class="cpVal"><input data-cphex="${p}" value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"><input data-cpa="${p}" value="${c.a}" inputmode="numeric" aria-label="Opacity"><span>%</span></label></div>`
-        : `<div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('') || '<span class="note">This project has no colour variables yet.</span>'}</div>`}
-      </div>`;
-    }
     return h;
   }
   const isText = (el) => el && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
@@ -935,15 +1003,10 @@
   const gradValue = (g) => [g.dir, g.from, g.via, g.to].filter(Boolean).join(' ');
   const tokenSwatch = (n) => { const t = tokens().find(([k]) => k === n); return t ? swatch(t[1]) : n?.startsWith('#') ? n : 'transparent'; };
   const stopSel = (key, cur, allowNone) => `<label class="inp"><i class="sw1" style="background:${esc(tokenSwatch(cur))}"></i><select data-gstop="${key}" aria-label="Gradient ${key}">${allowNone ? `<option value=""${cur ? '' : ' selected'}>No middle color</option>` : ''}${tokens().filter(([n]) => n !== 'transparent').map(([n]) => `<option${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
+  const gradCss = (g) => `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${[g.from, g.via, g.to].filter(Boolean).map(tokenSwatch).join(', ')})`;
   function fillBody(g, el) {
-    const seg = `<div class="seg"><button data-act="fillType" data-v="solid" class="${g ? '' : 'on'}">Solid</button><button data-act="fillType" data-v="gradient" class="${g ? 'on' : ''}">Gradient</button></div>`;
-    if (!g) return seg + colorRow('bg', 'Fill', 'rmFill');
-    const prev = `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${[g.from, g.via, g.to].filter(Boolean).map(tokenSwatch).join(', ')})`;
-    return seg + `<div class="gprev" style="background:${esc(prev)}"></div>
-      <div class="cr"><label class="inp"><select data-gstop="dir" aria-label="Direction">${DIRS.map(([v, n]) => `<option value="${v}"${v === g.dir ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label><button class="ib" data-act="rmFill" title="Remove fill">${ico('minus')}</button></div>
-      <div class="kv"><span>From</span>${stopSel('from', g.from)}</div>
-      <div class="kv"><span>Middle</span>${stopSel('via', g.via, true)}</div>
-      <div class="kv"><span>To</span>${stopSel('to', g.to)}</div>
+    if (!g) return colorRow('bg', 'Fill', 'rmFill');
+    return `<div class="cr"><label class="inp" title="Fill"><button class="cchip" data-act="cpick" data-v="grad" style="background:${esc(gradCss(g))}" aria-label="Edit gradient"></button><span class="gName">Linear gradient</span></label><button class="ib" data-act="rmFill" title="Remove fill" aria-label="Remove fill">${ico('minus')}</button></div>
       ${isText(el) ? `<div class="kv"><span>On text</span><div class="seg"><button data-act="clipText" data-v="off" class="${g.clip ? '' : 'on'}">Off</button><button data-act="clipText" data-v="on" class="${g.clip ? 'on' : ''}">On</button></div></div>` : ''}`;
   }
   document.addEventListener('change', (e) => {
@@ -953,6 +1016,21 @@
     g[k] = e.target.value || null;
     commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] });
   });
+  document.addEventListener('change', (e) => {
+    if (e.target.dataset?.fptype == null || !S.sel) return;
+    S.cpick = e.target.value === 'gradient' ? 'grad' : 'bg'; S.cp = null; S.gstop = 'from';
+    setFillType(e.target.value);
+  });
+  function setFillType(v) {
+    const g = gradOf();
+    const names = tokens().map(([n]) => n).filter((n) => !['transparent', 'black', 'white'].includes(n));
+    if (v === 'gradient' && !g) {
+      const from = tokenOf('bg') && !tokenOf('bg').startsWith('#') ? tokenOf('bg') : names.includes('primary') ? 'primary' : names[0];
+      const to = names.find((n) => n !== from && /positive|accent|secondary|primary/.test(n)) || names.find((n) => n !== from);
+      commit({ ops: [{ prop: 'gradient', value: `r ${from} ${to}` }] });
+    } else if (v === 'solid' && g) commit({ ops: [{ prop: 'bg', value: g.from || 'transparent' }, { prop: 'clipText', value: 'off' }] });
+    else renderPanel();
+  }
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-act="fillType"],[data-act="clipText"]');
     if (!a || !S.sel) return;
@@ -1132,11 +1210,12 @@
       const hasStroke = val('borderW') > 0;
       h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${nf('borderW', 'sw', 'Stroke width')}<span></span></div>` : '', hasStroke ? '' : hb('addStroke', 'plus', 'Add stroke'));
       const sh = shadowOf();
-      h += sec('Effects', sh !== 'none' ? shadowBody(sh) : '', sh !== 'none' ? '' : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
+      h += sec('Effects', sh !== 'none' ? shadowBody() : '', sh !== 'none' ? '' : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
     }
     const st = p.querySelector('.scroll')?.scrollTop || 0;
     p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
     p.querySelector('.scroll').scrollTop = st;
+    renderFpop();
   }
 
   /* ---------- history ---------- */
@@ -1481,7 +1560,7 @@
       return;
     }
     if (!a) {
-      if (S.cpick && !e.target.closest('.cpop')) { S.cpick = S.cp = null; renderPanel(); }
+      if (S.cpick && !e.target.closest('#fpop')) closeFpop();
       if (!e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal')) closeFloating();
       return;
     }
@@ -1527,9 +1606,12 @@
       case 'copyLoc': navigator.clipboard?.writeText(activeLoc() || '').then(() => toast('Copied the code location', activeLoc() || '')).catch(() => {}); break;
       case 'parent': { const p = S.sel && pick(S.sel.el.parentElement); if (p) select(p); break; }
       case 'corners': S.corners = !S.corners; renderPanel(); break;
-      case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; renderPanel(); break;
-      case 'cpTab': S.cpTab = v; renderPanel(); break;
-      case 'token': case 'set': commit({ ops: [{ prop: a.dataset.p, value: v }] }); break;
+      case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; S.fpY = a.getBoundingClientRect().top; if (v === 'grad') S.gstop = 'from'; renderPanel(); break;
+      case 'fpClose': closeFpop(); break;
+      case 'gStop': S.gstop = v; S.cp = null; renderFpop(); break;
+      case 'gVia': { const g = gradOf(); if (!g) break; if (g.via) { g.via = null; if (S.gstop === 'via') S.gstop = 'from'; } else { g.via = g.from; S.gstop = 'via'; } S.cp = null; commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] }); break; }
+      case 'cpTab': S.cpTab = v; renderFpop(); break;
+      case 'token': case 'set': if (a.dataset.p === 'grad') { const g = gradOf() || { dir: 'r' }; g[S.gstop || 'from'] = v; S.cp = null; commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] }); } else { if (a.dataset.act === 'token') S.cp = null; commit({ ops: [{ prop: a.dataset.p, value: v }] }); } break;
       case 'addFill': commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }); break;
       case 'rmFill': S.cpick = S.cp = null; if (gradOf()) commit({ ops: [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] }); else clearStyle([{ prop: 'bg', value: null }], [{ prop: 'bg', value: 'transparent' }], (el) => !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs(el).backgroundColor)); break;
       case 'rmShadow': clearStyle([{ prop: 'shadow', value: null }], [{ prop: 'shadow', value: 'none' }], (el) => cs(el).boxShadow.split(/,(?![^(]*\))/).some((x) => !/rgba\([^)]*,\s*0\)/.test(x) && /[1-9]\d*(\.\d+)?px/.test(x))); break;
@@ -1573,7 +1655,7 @@
       if (!c) return;
       if (t.dataset.cphex) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderPanel(); Object.assign(c, hexToHsv(hx.toUpperCase())); }
       else { const n = parseFloat(t.value); if (!isFinite(n)) return renderPanel(); c.a = Math.max(0, Math.min(100, Math.round(n))); }
-      return commit({ ops: [{ prop: p, value: cpOut(c) }] });
+      return cpCommit(c);
     }
     const p = t.dataset.prop;
     if (!p) return;
@@ -1635,9 +1717,9 @@
       pop.querySelector('.cpAlpha').style.setProperty('--c', '#' + hx);
       pop.querySelector('[data-cphex]').value = hx;
       pop.querySelector('[data-cpa]').value = c.a;
-      const chip = document.querySelector(`[data-act="cpick"][data-v="${c.p}"]`);
+      const chip = c.p !== 'grad' && document.querySelector(`#panel [data-act="cpick"][data-v="${c.p}"]`);
       if (chip) chip.style.background = cpOut(c);
-      preview(S.sel.el, c.p, cpOut(c));
+      cpPreview(c);
     };
     const at = (ev) => {
       const r = area.getBoundingClientRect(), x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
@@ -1646,7 +1728,7 @@
     };
     at(e);
     area.setPointerCapture(e.pointerId);
-    const up = () => { area.removeEventListener('pointermove', at); area.removeEventListener('pointerup', up); area.removeEventListener('pointercancel', up); commit({ ops: [{ prop: c.p, value: cpOut(c) }] }); };
+    const up = () => { area.removeEventListener('pointermove', at); area.removeEventListener('pointerup', up); area.removeEventListener('pointercancel', up); cpCommit(c); };
     area.addEventListener('pointermove', at); area.addEventListener('pointerup', up); area.addEventListener('pointercancel', up);
   }, true);
   // Naming a version: Escape or clicking away cancels.

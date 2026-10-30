@@ -998,3 +998,21 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .shL{color:var(--ink3)}
 .shC input[data-shhex]{flex:1;min-width:0;font-family:'Geist Mono',ui-monospace,monospace}
 .shC input[data-shv="a"]{width:34px;text-align:right}
+
+/* Floating editor beside the panel (colour, gradient, shadow), like Figma's */
+.fpop{position:fixed;z-index:55;width:248px;background:var(--menu);border:1px solid rgba(var(--hi),.08);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.fpH{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 10px;border-bottom:1px solid rgba(var(--hi),.08)}
+.fpH .fpSel{flex:0 1 auto;min-width:0}
+.fpH .fpT{flex:1;font-weight:600}
+.fpH .fpX{margin-left:auto}
+.fpop .cpop{border:0;box-shadow:none;border-radius:0 0 12px 12px;background:none}
+.gRow{display:flex;gap:6px;align-items:center}
+.gRow .inp{flex:1}
+.gBar{position:relative;height:20px;margin:6px 7px 4px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(var(--hi),.1)}
+.gStop{position:absolute;top:50%;width:16px;height:16px;padding:0;border:2px solid #fff;border-radius:4px;background:var(--c);box-shadow:0 0 0 1px rgba(0,0,0,.3),0 1px 3px rgba(0,0,0,.3);transform:translate(-50%,-50%);cursor:pointer}
+.gStop.on{box-shadow:0 0 0 2px var(--select),0 1px 3px rgba(0,0,0,.3)}
+.gName{flex:1;color:var(--ink)}
+.shRow .inp{flex:1}
+.shIco i{display:block;width:12px;height:12px;border-radius:3px;background:var(--panel);box-shadow:1px 2px 0 rgba(var(--hi),.35),inset 0 0 0 1.5px var(--ink2)}
+.shIco.on{background:rgba(43,102,217,.18)}
+.cr.shRow{grid-template-columns:auto minmax(0,1fr) auto}
