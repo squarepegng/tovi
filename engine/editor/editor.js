@@ -2,23 +2,45 @@
 // editor around it (top bar, layers, design panel, toolbar). The iframe is
 // same-origin, so the editor reads and outlines the app's DOM directly.
 (() => {
+  // Theme: Settings → Appearance. Dark by default; "System" follows the Mac. A local copy is applied first so the page doesn't flash.
+  let theme = 'dark';
+  const applyTheme = (t) => { theme = t === 'light' || t === 'system' ? t : 'dark'; document.documentElement.dataset.theme = theme; try { localStorage.setItem('kerf.theme', theme); } catch {} };
+  try { applyTheme(localStorage.getItem('kerf.theme')); } catch {}
+  fetch('prefs').then((r) => r.json()).then((p) => applyTheme(p.theme)).catch(() => {});
   /* ---------- api ---------- */
-  const api = (route, body) =>
-    fetch('/__kerf' + route, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined).then(async (r) => {
+  // Talk to Tovi's server. When the connection blips (the server restarting, the app reloading), requests that only
+  // read are retried a few times before giving up; saves never are, so nothing is applied twice.
+  const READS = new Set(['/inspect', '/theme', '/project', '/versions', '/keys', '/models', '/prefs', '/person', '/chat', '/direction', '/tokens', '/changes']);
+  const OFFLINE = 'Tovi lost touch with your app for a moment. Check that the app is still running.';
+  const api = async (route, body) => {
+    const path = route.split('?')[0], read = !body || READS.has(path) || (path === '/pr' && body?.dryRun);
+    for (let attempt = 0; ; attempt++) {
+      let r;
+      try { r = await fetch('/__kerf' + route, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined); }
+      catch (e) {
+        if (read && attempt < 5) { await new Promise((res) => setTimeout(res, [300, 700, 1500, 2500, 4000][attempt])); continue; }
+        const err = new Error(OFFLINE); err.offline = true; throw err;
+      }
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || r.statusText);
       return j;
-    });
+    }
+  };
 
   /* ---------- state ---------- */
   const S = {
-    mode: 'preview', tool: 'select', tab: 'design', side: 'design', device: 'desktop',
+    mode: 'edit', tool: 'select', through: false, space: false, tab: 'design', side: 'design', device: 'desktop',
     sel: null, hover: null, theme: null, project: null, scope: 'all',
     count: 0, corners: false, cpick: null, editing: null, changesOpen: false,
     chat: [], card: null, askOpen: false, shape: 'box', notes: [], noteDraft: null, amber: [],
-    versions: { versions: [], draft: [], peeking: null }, open: {}, multi: [], alt: false, handleDrag: null, path: '/', hintSeen: false, layersOpen: innerWidth >= 1180,
+    versions: { versions: [], draft: [], peeking: null }, open: {}, multi: [], alt: false, handleDrag: null, path: '/', hintSeen: false, layersOpen: innerWidth >= 900, left: (() => { try { return localStorage.getItem('kerf.left') || 'chat'; } catch { return 'chat'; } })(),
   };
   const $ = (id) => document.getElementById(id);
+  // What a click on the app does: Interact (or holding ⌘) passes it to the app; Select picks the element.
+  const appClicks = () => S.mode === 'preview' || S.tool === 'interact' || (S.tool === 'select' && S.through);
+  const picking = () => S.mode === 'edit' && S.tool === 'select' && !S.through;
+  // ⌘ (Ctrl on Windows) held during a click while selecting: the click goes to the app.
+  const thru = (e) => S.mode === 'edit' && S.tool === 'select' && !!(e.metaKey || e.ctrlKey);
   const frame = $('frame');
   let W = null, D = null; // the app's window and document
 
@@ -46,12 +68,42 @@
     shadow: { css: () => ({}) },
     mX: { min: -400, max: 400, css: (v) => ({ 'margin-left': v + 'px', 'margin-right': v + 'px' }) },
     mY: { min: -400, max: 400, css: (v) => ({ 'margin-top': v + 'px', 'margin-bottom': v + 'px' }) },
+    mT: { min: -400, max: 400, css: (v) => ({ 'margin-top': v + 'px' }) },
+    mB: { min: -400, max: 400, css: (v) => ({ 'margin-bottom': v + 'px' }) },
     w: { max: 4000, css: PX('width') },
     h: { max: 4000, css: PX('height') },
   };
+  // The app's scale for a property, as sorted numbers: font sizes, spacing, radius…
+  const SCALE_OF = { fontSize: 'fontSize', lineHeight: 'lineHeight', radius: 'radius', rTL: 'radius', rTR: 'radius', rBR: 'radius', rBL: 'radius', padX: 'spacing', padY: 'spacing', mX: 'spacing', mY: 'spacing', gap: 'spacing', w: 'spacing', h: 'spacing', borderW: 'borderWidth', opacity: 'opacity' };
+  function scaleSteps(p) {
+    const m = S.theme?.byKey?.[SCALE_OF[p]];
+    if (!m) return null;
+    const v = [...new Set(Object.values(m).filter((x) => typeof x === 'number' && isFinite(x) && x < 9999))].sort((a, b) => a - b);
+    return v.length > 2 ? v : null;
+  }
   const clamp = (p, v) => Math.max(PROPS[p].min ?? 0, Math.min(PROPS[p].max ?? 9999, v));
   // An element from a page that has since reloaded has no window: fall back to the current one.
   const cs = (el) => (el.ownerDocument?.defaultView || W || window).getComputedStyle(el);
+  // Colour picker maths: HSV for the square and hue slider, alpha 0–100.
+  const hex3 = (h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const hsvToHex = (h, s, v) => {
+    const f = (n) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+    return [f(5), f(3), f(1)].map((x) => ('0' + Math.round(x * 255).toString(16)).slice(-2)).join('').toUpperCase();
+  };
+  const hexToHsv = (hex) => {
+    const [r, g, b] = hex3(hex).map((x) => x / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return { h: (h * 60 + 360) % 360, s: mx ? d / mx : 0, v: mx };
+  };
+  const CSSPROP = { bg: 'backgroundColor', color: 'color', borderC: 'borderTopColor' };
+  // The element's colour for a property, with its transparency.
+  function colorNow(p) {
+    const m = S.sel?.el?.isConnected ? String(cs(S.sel.el)[CSSPROP[p]] || '').match(/[\d.]+/g) : null;
+    if (!m) return { hex: 'FFFFFF', a: 100 };
+    return { hex: m.slice(0, 3).map((x) => ('0' + Math.round(+x).toString(16)).slice(-2)).join('').toUpperCase(), a: m.length > 3 ? Math.round(+m[3] * 100) : 100 };
+  }
+  const cpOut = (c) => '#' + hsvToHex(c.h, c.s, c.v) + (c.a >= 100 ? '' : ('0' + Math.round(c.a * 2.55).toString(16)).slice(-2).toUpperCase());
   const rgbHex = (c) => {
     const m = String(c).match(/[\d.]+/g);
     if (!m) return '';
@@ -81,6 +133,8 @@
       case 'opacity': return Math.round(Number(c.opacity) * 100);
       case 'mX': return Math.round(parseFloat(c.marginLeft)) || 0;
       case 'mY': return Math.round(parseFloat(c.marginTop)) || 0;
+      case 'mT': return Math.round(parseFloat(c.marginTop)) || 0;
+      case 'mB': return Math.round(parseFloat(c.marginBottom)) || 0;
       case 'w': return Math.round(el.getBoundingClientRect().width);
       case 'h': return Math.round(el.getBoundingClientRect().height);
     }
@@ -106,6 +160,209 @@
     const cls = (info()?.classes || []).filter((c) => !c.includes(':') && c.startsWith(pre)).map((c) => c.slice(pre.length).split('/')[0]);
     return cls.find((c) => S.theme && c in S.theme.colors) || (cls.find((c) => /^\[#/.test(c)) || '').replace(/[[\]]/g, '');
   }
+  // The element's visible shadow (the first layer that shows), as Figma's fields: X, Y, blur, spread, colour, opacity.
+  function shadowNow() {
+    const el = S.sel?.el, out = { inset: false, x: 0, y: 4, blur: 4, spread: 0, hex: '000000', a: 25 };
+    if (!el?.isConnected) return out;
+    const layers = cs(el).boxShadow.split(/,(?![^(]*\))/).map((x) => x.trim()).filter((x) => x && x !== 'none');
+    for (const l of layers) {
+      const col = l.match(/rgba?\([^)]*\)/)?.[0] || 'rgb(0,0,0)', m = col.match(/[\d.]+/g).map(Number);
+      const a = m.length > 3 ? m[3] : 1, n = l.replace(col, '').match(/-?[\d.]+px/g)?.map(parseFloat) || [];
+      if (!a || (!n.some(Boolean))) continue;
+      return { inset: /inset/.test(l), x: n[0] || 0, y: n[1] || 0, blur: n[2] || 0, spread: n[3] || 0, hex: m.slice(0, 3).map((x) => ('0' + Math.round(x).toString(16)).slice(-2)).join('').toUpperCase(), a: Math.round(a * 100) };
+    }
+    return out;
+  }
+  const px = (n) => (n ? `${n}px` : '0');
+  const shadowValue = (o) => `[${o.inset ? 'inset_' : ''}${px(o.x)}_${px(o.y)}_${px(o.blur)}_${px(o.spread)}_#${o.hex}${o.a >= 100 ? '' : ('0' + Math.round(o.a * 2.55).toString(16)).slice(-2).toUpperCase()}]`;
+  function shadowBody() {
+    const o = shadowNow();
+    return `<div class="cr shRow"><button class="ib shIco${S.cpick === 'shadow' ? ' on' : ''}" data-act="cpick" data-v="shadow" title="Edit shadow" aria-label="Edit shadow"><i></i></button><label class="inp"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label></div>`;
+  }
+  function shadowFields(sh) {
+    const o = shadowNow(), keys = (S.theme?.shadow || []).filter((k) => k !== 'none' && k !== 'inner'), custom = !keys.includes(sh);
+    const f = (k, label, icon) => `<label class="inp" title="${label}">${icon ? `<span class="ic">${icon}</span>` : ''}<input type="text" inputmode="decimal" data-shv="${k}" value="${o[k]}" aria-label="${label}"></label>`;
+    return `<div class="shGrid">
+        <span class="shL">Style</span><label class="inp"><select data-sel="shadow" aria-label="Shadow style">${custom ? '<option selected>Custom</option>' : ''}${keys.map((k) => `<option value="${esc(k)}"${k === sh ? ' selected' : ''}>${k === 'DEFAULT' ? 'Default' : esc(k)}</option>`).join('')}</select>${ico('chev', 12)}</label>
+        <span class="shL">Position</span><div class="r2">${f('x', 'X', 'X')}${f('y', 'Y', 'Y')}</div>
+        <span class="shL">Blur</span>${f('blur', 'Blur')}
+        <span class="shL">Spread</span>${f('spread', 'Spread')}
+        <span class="shL">Color</span><label class="inp shC"><i class="sw1" style="background:#${o.hex}${('0' + Math.round(o.a * 2.55).toString(16)).slice(-2)}"></i><input data-shhex value="${o.hex}" maxlength="7" spellcheck="false" aria-label="Shadow colour"><input data-shv="a" value="${o.a}" inputmode="numeric" aria-label="Shadow opacity"><span class="u">%</span></label>
+      </div>`;
+  }
+
+  /* ---------- floating editor: colour, gradient and shadow, over the canvas beside the panel ---------- */
+  const NAMES = { bg: 'Fill', color: 'Text color', borderC: 'Stroke color' };
+  // Any CSS colour (a token's value, rgb(), hex) as hex + opacity, resolved in the app's page.
+  function toHexA(css) {
+    const doc = D || document, probe = doc.createElement('span');
+    probe.style.color = String(css || '#000').replace('<alpha-value>', '1');
+    doc.body.appendChild(probe);
+    const m = getComputedStyle(probe).color.match(/[\d.]+/g) || ['0', '0', '0'];
+    probe.remove();
+    return { hex: m.slice(0, 3).map((x) => ('0' + Math.round(+x).toString(16)).slice(-2)).join('').toUpperCase(), a: m.length > 3 ? Math.round(+m[3] * 100) : 100 };
+  }
+  function cpInit() {
+    if (S.cp && S.cp.p === S.cpick && S.cp.stop === S.gstop) return;
+    let n;
+    if (S.cpick === 'grad') { const g = gradOf() || {}; S.gstop = S.gstop && (S.gstop !== 'via' || g.via) ? S.gstop : 'from'; n = toHexA(tokenSwatch(g[S.gstop])); }
+    else n = colorNow(S.cpick);
+    S.cp = { p: S.cpick, stop: S.gstop, ...hexToHsv(n.hex), a: n.a };
+  }
+  const tabsHTML2 = () => { const tab = S.cpTab || 'custom'; return `<div class="cpTabs fpTabs"><button data-act="cpTab" data-v="custom" class="${tab === 'custom' ? 'on' : ''}">Custom</button><button data-act="cpTab" data-v="vars" class="${tab === 'vars' ? 'on' : ''}">Variables</button></div>`; };
+  function pickerHTML(p, tok) {
+    const c = S.cp, hx = hsvToHex(c.h, c.s, c.v);
+    if ((S.cpTab || 'custom') === 'vars') return `<div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('') || '<span class="note">This project has no colour variables yet.</span>'}</div>`;
+    return `<div class="cpSV" data-cpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
+      <div class="cpBar cpHue" data-cpdrag="hue"><i class="cpK" style="left:${c.h / 3.6}%;background:hsl(${c.h} 100% 50%)"></i></div>
+      <div class="cpBar cpAlpha" data-cpdrag="alpha" style="--c:#${hx}"><i class="cpK" style="left:${c.a}%"></i></div>
+      <div class="cpRow"><span class="cpMode">Hex</span><label class="cpVal"><input data-cphex="${p}" value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"><input data-cpa="${p}" value="${c.a}" inputmode="numeric" aria-label="Opacity"><span>%</span></label></div>`;
+  }
+  const ROT = ['t', 'tr', 'r', 'br', 'b', 'bl', 'l', 'tl'];
+  // Like Figma: a tall bar with a pin for each stop, then the stops as rows (position, colour, opacity).
+  function gradHTML(g) {
+    const stops = stopsOf(g), dirName = (DIRS.find(([v]) => v === g.dir) || [, '→ Right'])[1];
+    const pin = (st) => `<button class="gPin${S.gstop === st.k ? ' on' : ''}" data-act="gStop" data-v="${st.k}" data-gpin="${st.k}" style="left:${st.pos}%;--p:${st.pos};--c:${esc(tokenSwatch(st.col))}" aria-label="Stop at ${st.pos}%"><i></i></button>`;
+    const row = (st) => { const n = toHexA(tokenSwatch(st.col)); return `<div class="gRow2${S.gstop === st.k ? ' on' : ''}" data-act="gStop" data-v="${st.k}">
+        <label class="inp gPos"><input data-gpos="${st.k}" value="${st.pos}" inputmode="numeric" aria-label="Position"><span class="u">%</span></label>
+        <label class="inp gCol"><i class="sw1" style="background:${esc(tokenSwatch(st.col))}"></i><input data-ghex="${st.k}" value="${n.hex}" maxlength="7" spellcheck="false" aria-label="Stop colour"><input data-galpha="${st.k}" value="${n.a}" inputmode="numeric" aria-label="Stop opacity"><span class="u">%</span></label>
+        <button class="ib" data-act="gDel" data-v="${st.k}" title="Remove stop" aria-label="Remove stop"${stops.length < 3 ? ' disabled' : ''}>${ico('minus')}</button></div>`; };
+    return `<div class="gHead"><span class="gType">Linear</span><span class="gDir">${esc(dirName)}</span><button class="ib" data-act="gFlip" title="Flip the gradient" aria-label="Flip the gradient">${ico('swap')}</button><button class="ib" data-act="gRot" title="Rotate 45°" aria-label="Rotate 45 degrees">${ico('rotate')}</button></div>
+      <div class="gTrack"><div class="gPins" data-gbar>${stops.map(pin).join('')}</div><div class="gBar2" style="background:${esc(gradCss({ ...g, dir: 'r' }))}"></div></div>
+      <div class="gStopsH"><span>Stops</span><button class="ib" data-act="gAdd" title="${stops.length > 2 ? 'Tailwind gradients have up to three stops' : 'Add a stop'}" aria-label="Add a stop"${stops.length > 2 ? ' disabled' : ''}>${ico('plus')}</button></div>
+      ${stops.map(row).join('')}`;
+  }
+  function renderFpop() {
+    let f = $('fpop');
+    if (!f) { f = document.createElement('div'); f.id = 'fpop'; f.className = 'fpop'; f.setAttribute('role', 'dialog'); document.body.appendChild(f); }
+    const k = S.cpick;
+    if (!k || !S.sel?.el) { f.hidden = true; return; }
+    const close = `<button class="ib fpX" data-act="fpClose" aria-label="Close" title="Close · Esc">${ico('x')}</button>`;
+    let head = '', body = '';
+    if (k === 'font') {
+      f.innerHTML = `<div class="fpH"><span class="fpT">Font</span>${close}</div><div class="cpop fontPop"><label class="inp fontQ">${ico('search', 14)}<input id="fontQ" placeholder="Search fonts" autocomplete="off" spellcheck="false" aria-label="Search fonts" value="${esc(S.fontQ || '')}"></label><div class="fontList" id="fontList">${fontListHTML()}</div></div>`;
+      f.hidden = false;
+      const pr = $('panel').getBoundingClientRect(), h = f.offsetHeight;
+      f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
+      f.style.top = Math.max(56, Math.min(innerHeight - h - 8, (S.fpY ?? 120) - 14)) + 'px';
+      setTimeout(() => $('fontQ')?.focus(), 0);
+      return;
+    }
+    if (k === 'shadow') {
+      const o = shadowNow();
+      head = `<label class="inp fpSel"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label>`;
+      body = shadowFields(shadowOf());
+    } else {
+      cpInit();
+      head = tabsHTML2();
+      const fill = k === 'bg' || k === 'grad';
+      const types = fill ? `<div class="fpTypes"><button class="fpType${k === 'bg' ? ' on' : ''}" data-act="fpType" data-v="solid" title="Solid" aria-label="Solid"><i class="tSolid"></i></button><button class="fpType${k === 'grad' ? ' on' : ''}" data-act="fpType" data-v="gradient" title="Linear gradient" aria-label="Linear gradient"><i class="tGrad"></i></button></div>` : `<div class="fpName">${NAMES[k]}</div>`;
+      if (k === 'grad') { const g = gradOf() || { dir: 'r' }; body = types + gradHTML(g) + `<div class="gPick">${pickerHTML('grad', g[S.gstop])}</div>`; }
+      else body = types + pickerHTML(k, tokenOf(k));
+    }
+    f.innerHTML = `<div class="fpH">${head}${close}</div><div class="cpop" data-cpop="${k}">${body}</div>`;
+    f.hidden = false;
+    // Beside the panel, level with the row that opened it, kept on screen.
+    const pr = $('panel').getBoundingClientRect(), h = f.offsetHeight;
+    f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
+    f.style.top = Math.max(56, Math.min(innerHeight - h - 8, (S.fpY ?? 120) - 14)) + 'px';
+  }
+  // Popular Google Fonts, by role. Any other Google Font can be typed in.
+  const GFONTS = [
+    ['Inter', 'sans-serif'], ['Geist', 'sans-serif'], ['Manrope', 'sans-serif'], ['DM Sans', 'sans-serif'], ['Plus Jakarta Sans', 'sans-serif'], ['Outfit', 'sans-serif'], ['Figtree', 'sans-serif'], ['Space Grotesk', 'sans-serif'], ['Sora', 'sans-serif'], ['Work Sans', 'sans-serif'], ['Poppins', 'sans-serif'], ['Montserrat', 'sans-serif'], ['Lato', 'sans-serif'], ['Open Sans', 'sans-serif'], ['Roboto', 'sans-serif'], ['Nunito Sans', 'sans-serif'], ['Rubik', 'sans-serif'], ['Karla', 'sans-serif'], ['Urbanist', 'sans-serif'], ['Lexend', 'sans-serif'], ['Onest', 'sans-serif'], ['Hanken Grotesk', 'sans-serif'], ['Bricolage Grotesque', 'sans-serif'], ['Archivo', 'sans-serif'], ['IBM Plex Sans', 'sans-serif'],
+    ['Playfair Display', 'serif'], ['DM Serif Display', 'serif'], ['Fraunces', 'serif'], ['Lora', 'serif'], ['Cormorant Garamond', 'serif'], ['EB Garamond', 'serif'], ['Libre Baskerville', 'serif'], ['Source Serif 4', 'serif'], ['Crimson Pro', 'serif'], ['Instrument Serif', 'serif'], ['Bodoni Moda', 'serif'], ['Merriweather', 'serif'], ['Newsreader', 'serif'], ['Spectral', 'serif'],
+    ['Syne', 'display'], ['Unbounded', 'display'], ['Bebas Neue', 'display'], ['Abril Fatface', 'display'],
+    ['JetBrains Mono', 'monospace'], ['IBM Plex Mono', 'monospace'], ['Geist Mono', 'monospace'], ['Space Mono', 'monospace'], ['Caveat', 'handwriting'],
+  ];
+  const CAT = { 'sans-serif': 'Sans serif', serif: 'Serif', display: 'Display', monospace: 'Mono', handwriting: 'Handwriting' };
+  // Each font previews in its own face: Google serves just the letters of its name, so this stays tiny.
+  const fontsShown = new Set();
+  function previewFont(family) {
+    if (fontsShown.has(family) || /^ui-|system/i.test(family)) return;
+    fontsShown.add(family);
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = `https://fonts.googleapis.com/css2?family=${family.trim().replace(/\s+/g, '+')}&text=${encodeURIComponent(family)}&display=swap`;
+    document.head.appendChild(l);
+  }
+  function fontListHTML() {
+    const q = (S.fontQ || '').trim().toLowerCase();
+    const mine = Object.entries(S.theme?.fonts || {}).filter(([, f]) => !/^ui-/.test(f) && (!q || f.toLowerCase().includes(q)));
+    const have = new Set(mine.map(([, f]) => f.toLowerCase()));
+    const google = GFONTS.filter(([f]) => !have.has(f.toLowerCase()) && (!q || f.toLowerCase().includes(q)));
+    const cur = (info()?.classes || []).filter((c) => !c.includes(':')).map((c) => c.slice(5)).find((k) => (S.theme?.keys?.fontFamily || []).includes(k));
+    const row = (label, attrs, family, sub, on) => { previewFont(family); return `<button class="fontRow${on ? ' on' : ''}" ${attrs}><span class="fName" style="font-family:'${esc(family)}',system-ui">${esc(label)}</span><span class="fSub">${esc(sub)}</span></button>`; };
+    const typed = q && !mine.length && !google.length && /^[a-z0-9][a-z0-9 ]{1,48}$/i.test(S.fontQ.trim());
+    return `${mine.length ? `<div class="fHead">In this project</div>${mine.map(([k, f]) => row(f, `data-act="fontPick" data-v="${esc(k)}"`, f, k, k === cur)).join('')}` : ''}
+      ${google.length ? `<div class="fHead">Google Fonts</div>${google.map(([f, c]) => row(f, `data-act="fontPick" data-g="${esc(f)}" data-cat="${c}"`, f, CAT[c], false)).join('')}` : ''}
+      ${typed ? `<button class="fontRow use" data-act="fontPick" data-g="${esc(S.fontQ.trim())}" data-cat="sans-serif"><span class="fName">Use “${esc(S.fontQ.trim())}” from Google Fonts</span></button>` : ''}
+      ${!mine.length && !google.length && !typed ? '<span class="note">No fonts match.</span>' : ''}`;
+  }
+  // Pick a font: a project font applies at once; a Google Font is added to the project first (one undoable change).
+  async function pickFont(btn) {
+    const family = btn.dataset.g;
+    let key = btn.dataset.v;
+    if (family) {
+      btn.classList.add('busy');
+      btn.querySelector('.fSub')?.replaceChildren(document.createTextNode('Adding…'));
+      try {
+        const r = await api('/fonts', { family, category: btn.dataset.cat });
+        key = r.key;
+        S.theme = await api('/theme');
+        fontCss = null; // screenshots pick up the new font
+        if (r.added) toast(`Added ${family} to your fonts`);
+      } catch (e) { toast(e.message, '', true); renderFpop(); return; }
+    }
+    S.cpick = null; S.fontQ = '';
+    await commit({ ops: [{ prop: 'fontFamily', value: key }] });
+  }
+  document.addEventListener('input', (e) => { if (e.target.id !== 'fontQ') return; S.fontQ = e.target.value; $('fontList').innerHTML = fontListHTML(); });
+  function closeFpop() { if (!S.cpick) return; S.cpick = S.cp = null; renderPanel(); }
+  // Save the picker's colour: a property, or the chosen gradient stop.
+  function cpCommit(c) {
+    if (c.p !== 'grad') return commit({ ops: [{ prop: c.p, value: cpOut(c) }] });
+    const g = gradOf() || { dir: 'r' };
+    g[c.stop || 'from'] = cpOut(c);
+    return commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] });
+  }
+  function cpPreview(c) {
+    if (c.p !== 'grad') return preview(S.sel.el, c.p, cpOut(c));
+    const g = { ...(gradOf() || { dir: 'r' }) };
+    g[c.stop || 'from'] = cpOut(c);
+    previewGrad(g);
+    previewed = { el: S.sel.el, keys: ['background-image'] };
+    const pin = document.querySelector(`.gPin[data-v="${c.stop}"]`);
+    if (pin) pin.style.setProperty('--c', cpOut(c));
+  }
+  function previewGrad(g) {
+    S.sel.el.style.setProperty('background-image', gradCss(g), 'important');
+    previewed = { el: S.sel.el, keys: ['background-image'] };
+    const bar = document.querySelector('.gBar2');
+    if (bar) bar.style.background = gradCss({ ...g, dir: 'r' });
+  }
+  const commitGrad = (g) => commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] });
+  // Drag a stop's pin along the bar to move it (kept between its neighbours); saved on release.
+  document.addEventListener('pointerdown', (e) => {
+    const pin = e.target.closest?.('[data-gpin]');
+    if (!pin || !S.sel) return;
+    const k = pin.dataset.gpin, bar = pin.closest('[data-gbar]'), g = gradOf();
+    if (!g) return;
+    e.preventDefault();
+    if (S.gstop !== k) { S.gstop = k; S.cp = null; }
+    const stops = stopsOf(g), i = stops.findIndex((st) => st.k === k);
+    const lo = i > 0 ? stops[i - 1].pos : 0, hi = i < stops.length - 1 ? stops[i + 1].pos : 100;
+    let moved = false;
+    const at = (ev) => {
+      const r = bar.getBoundingClientRect(), n = Math.round(Math.max(lo, Math.min(hi, ((ev.clientX - r.left) / r.width) * 100)));
+      if (n === posOf(g, k) && !moved) return;
+      moved = true; g[k + 'Pos'] = n; pin.style.left = n + '%'; pin.style.setProperty('--p', n);
+      const inp = document.querySelector(`[data-gpos="${k}"]`); if (inp) inp.value = n;
+      previewGrad(g);
+    };
+    pin.setPointerCapture(e.pointerId);
+    const up = () => { pin.removeEventListener('pointermove', at); pin.removeEventListener('pointerup', up); pin.removeEventListener('pointercancel', up); if (moved) commitGrad(g); else renderFpop(); };
+    pin.addEventListener('pointermove', at); pin.addEventListener('pointerup', up); pin.addEventListener('pointercancel', up);
+  }, true);
   function shadowOf() {
     const c = (info()?.classes || []).find((x) => !x.includes(':') && (x === 'shadow' || x.startsWith('shadow-')));
     if (!c) return 'none';
@@ -156,27 +413,109 @@
     S.srcScope = 'key';
     S.iconQ = null;
     closeIconPop?.();
-    if (!el) { S.multi = []; S.sel = null; S.cpick = null; renderPanel(); renderLayers(); return; }
+    if (!el) { S.multi = []; S.sel = null; S.cpick = S.cp = null; renderPanel(); renderLayers(); chatCtx(); return; }
+    S.pageSel = false;
     const list = [...sameLoc(el)];
     S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null };
     if (!S.sel.def) S.scope = 'here';
     else if (!S.sel.use) S.scope = 'all';
-    S.cpick = null;
+    S.cpick = S.cp = null;
     let p = el.parentElement;
     while (p) { const t = pick(p); if (!t) break; S.open[keyOf(t)] = true; p = t.parentElement; }
     renderPanel();
     renderLayers();
-    await loadInfo();
+    chatCtx();
+    S.sel.ready = loadInfo();
+    await S.sel.ready;
+    if (S.pendingInsert && S.sel?.el === el) { S.pendingInsert = false; $('toast').hidden = true; S.insertPos = defaultPos(); openInsert(); }
+  }
+  // The chat box says what Tovi will look at: the selection, or the whole screen.
+  // What a request is about, in words: the element's name plus its first bit of text when the name alone is vague
+  // (Frame “Natural materials”), so the chat says what you were pointing at.
+  function ctxName(el) {
+    const n = dName(el);
+    if (/[“"]/.test(n)) return n;
+    const t = (el.innerText || '').split('\n').map((x) => x.trim()).find(Boolean);
+    return t ? `${n} “${t.length > 28 ? t.slice(0, 27) + '…' : t}”` : n;
+  }
+  function chatCtx() {
+    const c = document.querySelector('#lbody .kcCtx');
+    if (c) c.innerHTML = `${ico(S.sel ? 'frame' : 'desktop', 12)}${S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen'}`;
+  }
+  // Where this instance of a component is used. Components that don't pass their props through to the HTML
+  // leave no tag on the page, but React (in development) still knows each element's component and its props.
+  function usageOf(el, comp) {
+    for (let h = el; h; h = h.parentElement) if (h.getAttribute?.('data-kerf-use') && h.getAttribute('data-kerf-n') === comp) return h.getAttribute('data-kerf-use');
+    const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+    let f = key ? el[key] : null;
+    for (let i = 0; f && i < 300; i++, f = f.return) {
+      const p = f.memoizedProps;
+      if (p && p['data-kerf-n'] === comp && p['data-kerf-use']) return p['data-kerf-use'];
+    }
+    return null;
+  }
+  // Look-alikes: copies written separately in the code that look the same (four feature cards), and the
+  // matching parts inside them (each card's title). Style edits can go to all of them, like Figma's
+  // "select matching layers". Copies made by one piece of code are already "Repeated" and left out.
+  S.simScope = (() => { try { return localStorage.getItem('kerf.sim') || 'all'; } catch { return 'all'; } })();
+  S.scaleArrows = (() => { try { return localStorage.getItem('kerf.scale') !== 'off'; } catch { return true; } })();
+  const baseCls = (e) => new Set([...e.classList].filter((c) => !c.includes(':')));
+  function overlap(a, b) {
+    const A = baseCls(a), B = baseCls(b);
+    if (!A.size && !B.size) return 1;
+    let n = 0;
+    for (const c of A) if (B.has(c)) n++;
+    return n / (A.size + B.size - n);
+  }
+  const shape = (e) => e.tagName + '>' + [...e.children].map((c) => c.tagName).join(',');
+  const looksLike = (a, b) => a.tagName === b.tagName && shape(a) === shape(b) && overlap(a, b) >= 0.5;
+  const isTagged = (e) => e.matches?.('[data-kerf],[data-kerf-use]');
+  function similarOf(el) {
+    if (!el?.isConnected || !isTagged(el)) return [];
+    let unit = el;
+    const path = [];
+    for (let depth = 0; depth < 6 && unit.parentElement && unit.parentElement !== D.body; depth++) {
+      const sibs = [...unit.parentElement.children].filter((x) => x !== unit && looksLike(x, unit) && (defOf(x) || useOf(x)) !== (defOf(unit) || useOf(unit)));
+      if (sibs.length) {
+        const out = [];
+        for (const sb of sibs) {
+          let t = sb;
+          for (const i of path) { t = t?.children[i]; if (!t) break; }
+          if (t && t.tagName === el.tagName && isTagged(t) && overlap(t, el) >= 0.5 && (defOf(t) || useOf(t)) !== (defOf(el) || useOf(el))) out.push(t);
+        }
+        return out.slice(0, 40);
+      }
+      path.unshift([...unit.parentElement.children].indexOf(unit));
+      unit = unit.parentElement;
+    }
+    return [];
   }
   async function loadInfo() {
     const s = S.sel;
     if (!s) return;
     const dom = [...s.el.classList];
-    const get = (loc) => (loc ? api('/inspect', { loc, dom }).catch((e) => ({ error: e.message })) : null);
+    const get = (loc) => (loc ? api('/inspect', { loc, dom }).catch((e) => ({ error: e.message, offline: e.offline })) : null);
     const [d, u] = await Promise.all([get(s.def), get(s.use)]);
     if (S.sel !== s) return;
+    // Text that's a component prop ({title}, {children}): edit the string where the component is used.
+    for (const inf of [d, u]) {
+      const vp = inf?.text?.viaProp;
+      if (!vp || inf.text.editable) continue;
+      const useLoc = usageOf(s.el, vp.comp);
+      const ui = !useLoc ? null : useLoc === s.use ? u : await get(useLoc);
+      if (S.sel !== s) return;
+      const file = useLoc ? useLoc.replace(/:\d+:\d+$/, '').split('/').pop() : '';
+      const val = vp.prop === 'children' ? (ui?.text?.editable ? ui.text.value : null) : (ui?.props || []).find((x) => x.name === vp.prop && x.editable && x.kind === 'string')?.value;
+      if (val != null) inf.text = { editable: true, value: String(val), via: { loc: useLoc, prop: vp.prop, file } };
+      else if (useLoc) inf.text = { editable: false, reason: `This text is passed in from ${file}, where it’s set by code. Change it there, or ask a developer.` };
+    }
+    // A component that passes everything through (<button {...props} />) gets its label where it's used.
+    if (d && !d.error && !d.text?.editable && u?.text?.editable && !d.text?.via) {
+      d.text = { editable: true, value: u.text.value, via: { loc: s.use, prop: 'children', file: s.use.replace(/:\d+:\d+$/, '').split('/').pop() } };
+    }
     s.defInfo = d;
     s.useInfo = u;
+    s.similar = similarOf(s.el);
     renderPanel();
   }
   // After an edit the app re-renders and the element may be a new node: find it again.
@@ -200,13 +539,28 @@
     previewed = null;
   }
   async function commit(change) {
-    const loc = activeLoc();
+    // Component properties always belong to this use of the component.
+    const loc = change.props?.length && S.sel?.use ? S.sel.use : activeLoc();
     if (!loc) return;
+    const via = change.text != null && !S.multi.length ? info()?.text?.via : null;
+    if (via) {
+      // The text is a prop of a component: change the string where this one is used.
+      try {
+        const who = S.sel ? dName(S.sel.el) : '';
+        const r = await api('/edit', via.prop === 'children' ? { loc: via.loc, text: change.text, name: who } : { loc: via.loc, props: [{ name: via.prop, value: change.text }], propText: true, name: who });
+        if (r.changed) { S.count = r.n; toast(`${who} · Text “${change.text}”`, `Changed where it’s used, in ${via.file}`, false, true); }
+        afterEdit();
+      } catch (e) { toast(e.message, '', true); }
+      return;
+    }
     try {
-      if (S.multi.length) {
-        // Several selected: apply the same change to each one, in a safe order.
-        const edits = [{ loc, ...change, cva: cvaParam(), name: dName(S.sel.el), dom: [...S.sel.el.classList] }, ...S.multi.map((m) => ({ loc: locOf(m), ...change, name: dName(m.el), dom: [...m.el.classList] }))];
-        const r = await api('/ai/apply', { edits: edits.map((e) => ({ loc: e.loc, ops: e.ops || [], props: e.props || [], text: e.text, name: e.name, dom: e.dom, bp: bpParam() })) });
+      // Look-alikes follow style changes (never text or component properties, which are each their own).
+      const alike = !S.multi.length && S.simScope === 'all' && change.ops?.length && change.text == null && !change.props?.length ? (S.sel?.similar || []).filter((x) => x.isConnected) : [];
+      const group = S.multi.length ? S.multi : alike.map((el) => ({ el, def: defOf(el), use: useOf(el) }));
+      if (group.length) {
+        // Several at once: apply the same change to each one, in a safe order, as one undo step.
+        const edits = [{ loc, ...change, cva: cvaParam(), name: dName(S.sel.el), dom: [...S.sel.el.classList] }, ...group.map((m) => ({ loc: locOf(m), ...change, name: dName(m.el), dom: [...m.el.classList] }))];
+        const r = await api('/ai/apply', { batch: Date.now(), edits: edits.map((e) => ({ loc: e.loc, ops: e.ops || [], props: e.props || [], text: e.text, name: e.name, dom: e.dom, bp: bpParam() })) });
         S.count = r.n;
         const ok = r.results.filter((x) => x.ok && x.changed).length;
         toast(`${ok} element${ok === 1 ? '' : 's'} · ${(r.results.find((x) => x.summary)?.summary.labels || []).join(' · ')}`, r.results.some((x) => !x.ok) ? r.results.find((x) => !x.ok).error : '', false, true);
@@ -226,6 +580,14 @@
       clearPreview();
       toast(e.message, '', true);
     }
+  }
+  // Remove a style the way a developer would: delete the element's own class. Only if the style still shows
+  // (it comes from somewhere else, like a CSS class) add an override such as shadow-none or border-0.
+  async function clearStyle(ops, override, stillShows) {
+    await commit({ ops });
+    await new Promise((r) => setTimeout(r, 900));
+    refind();
+    if (S.sel?.el && stillShows(S.sel.el)) await commit({ ops: override });
   }
   function afterEdit() {
     // Give Vite and Tailwind a moment to reload, then show the real result.
@@ -248,13 +610,19 @@
   }
 
   /* ---------- text editing on the canvas ---------- */
-  function beginText() {
-    const s = S.sel, ti = info()?.text;
-    if (!s || !ti) return;
+  async function beginText() {
+    const s = S.sel;
+    if (!s || S.editing) return;
+    // Double-clicking right after selecting: the element's details may still be loading.
+    if (!info() && s.ready) await s.ready;
+    const ti = info()?.text;
+    if (S.sel !== s || !ti) return;
     if (!ti.editable) { toast(ti.reason, '', true); return; }
     const el = s.el, orig = el.textContent;
     S.editing = el;
-    el.contentEditable = 'true';
+    // Plain text only: pasting never brings in another page's fonts or colours.
+    try { el.contentEditable = 'plaintext-only'; } catch {}
+    if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';
     el.focus();
     const r = D.createRange();
     r.selectNodeContents(el);
@@ -264,12 +632,13 @@
       el.removeEventListener('blur', bl);
       el.contentEditable = 'false';
       S.editing = null;
-      const v = el.textContent.trim();
-      if (save && v && v !== orig.trim()) commit({ text: v });
+      const v = el.textContent.replace(/\s+/g, ' ').trim();
+      if (save && v && v !== orig.replace(/\s+/g, ' ').trim()) commit({ text: v });
       else el.textContent = orig;
     };
     const kd = (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); el.blur(); }
+      // Enter saves. Line breaks aren't written to code yet, so Shift+Enter does nothing rather than lose words.
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (!e.shiftKey) el.blur(); }
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); el.removeEventListener('blur', bl); done(false); }
     };
     const bl = () => done(true);
@@ -283,6 +652,9 @@
     play: '<path d="M5 3.2v9.6l7.5-4.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
     edit: '<rect x="2" y="2" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8.5 8.5l5.2 2-2.3.7-.7 2.3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
     undo: '<path d="M4 6h6a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M6.5 3.5L4 6l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+    cursor: '<path d="M4 2.5l8.5 5.2-3.7.9 2.1 4.1-1.5.8-2.1-4.2L4.6 12z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
+    tap: '<path d="M6.5 8.5V3.2a1.1 1.1 0 0 1 2.2 0v4.3m0-1.1a1.1 1.1 0 0 1 2.2 0v1.3m0-.4a1.1 1.1 0 0 1 2.1 0V10a4 4 0 0 1-4 4H8.6a3.6 3.6 0 0 1-2.9-1.5L3.4 9.4a1.1 1.1 0 0 1 1.7-1.3l1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
+    hand: '<path d="M5.2 8.6V4.4a1 1 0 0 1 2 0v3.4m0-4.6a1 1 0 0 1 2 0v4.4m0-3.4a1 1 0 0 1 2 0v3.6m0-2a1 1 0 0 1 2 0v3.4A4.6 4.6 0 0 1 8.6 14h-.4a4.4 4.4 0 0 1-3.6-1.9L2.9 9.6a1 1 0 0 1 1.5-1.3l.8.8" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
     task: '<rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.2 6h5.6M5.2 8.4h5.6M5.2 10.8h3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     list: '<path d="M5.5 4h8M5.5 8h8M5.5 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="2.8" cy="4" r=".9" fill="currentColor"/><circle cx="2.8" cy="8" r=".9" fill="currentColor"/><circle cx="2.8" cy="12" r=".9" fill="currentColor"/>',
     up: '<path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -319,9 +691,16 @@
     branch: '<circle cx="4.5" cy="3.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="4.5" cy="12.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="11.5" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M4.5 5.1v5.8M11.5 7.6c0 2.6-7 1.4-7 3.3" fill="none" stroke="currentColor" stroke-width="1.1"/>',
     check: '<path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
     eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>',
+    dots: '<circle cx="3.5" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="12.5" cy="8" r="1.2" fill="currentColor"/>',
+    gear: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g>',
+    markAI: '<path d="M4.2 13.6l.7-2.9 6.4-6.4a1.5 1.5 0 0 1 2.1 2.1l-6.4 6.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M10.3 5.3l2.1 2.1" stroke="currentColor" stroke-width="1.3"/><path d="M4.6 1.2c.2 1.3.6 1.7 1.9 1.9-1.3.2-1.7.6-1.9 1.9-.2-1.3-.6-1.7-1.9-1.9 1.3-.2 1.7-.6 1.9-1.9z" fill="currentColor"/>',
+    diag: '<path d="M2 5V3.5A1.5 1.5 0 0 1 3.5 2H5M11 2h1.5A1.5 1.5 0 0 1 14 3.5V5M14 11v1.5a1.5 1.5 0 0 1-1.5 1.5H11M5 14H3.5A1.5 1.5 0 0 1 2 12.5V11" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.4 9.4L11 11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+    comment: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></g>',
+    addEl: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></g>',
     sidebar: '<rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M6 3v10" stroke="currentColor" stroke-width="1.25"/>',
     trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
     dup: '<rect x="5" y="5" width="8.5" height="8.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M3 10.5V3.8c0-.4.4-.8.8-.8h6.7" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>',
+    rotate: '<path d="M12.5 8a4.5 4.5 0 1 1-1.3-3.2M11.5 2.3v2.8H8.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
     swap: '<path d="M3 5.5h9l-2.5-2.5M13 10.5H4l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
     image: '<rect x="2.5" y="3" width="11" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="6" cy="6.5" r="1.2" fill="currentColor"/><path d="M3 12l3.5-3.5 2.5 2.5 2-2 2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
     code: '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -360,17 +739,20 @@
   }
   function renderTop() {
     const p = S.project || {};
-    const n = S.versions.draft.length + S.versions.versions.reduce((a, v) => a + v.changes.length, 0);
+    // Changes not yet handed off. The button stays usable after a hand off so a failed push can be sent again.
+    const total = S.versions.draft.length + S.versions.versions.reduce((a, v) => a + v.changes.length, 0), n = Math.max(0, total - (S.versions.sent || 0));
     $('top').innerHTML = `<div class="tside">
-        <button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Layers" aria-label="Show or hide layers" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>
+        <button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Side panel: Chat and Layers" aria-label="Show or hide the side panel" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>
         <button class="logoBtn" data-act="kerfMenu" title="Tovi menu" aria-label="Tovi menu" aria-haspopup="menu">${ico('kerf', 16)}${ico('chev', 10)}</button>
         <span class="crumbs"><span class="proj" title="${esc(p.repo || p.name || '')}">${esc(String(p.name || 'Tovi').split('/').pop())}</span><span class="sep">/</span><button class="pageBtn" data-act="pagesMenu" title="Pages" aria-haspopup="menu">${esc(pageName(S.path))}${ico('chev', 10)}</button></span>
       </div>
       <div class="tmid"><div class="bps" role="radiogroup" aria-label="Screen size">${Object.keys(DEVICES).map((d) => `<button class="${S.device === d ? 'on' : ''}" data-act="device" data-v="${d}" role="radio" aria-checked="${S.device === d}" title="${DEV_LABEL[d]} · ${devRange(d)}">${ico(d, 14)}<span>${DEV_LABEL[d]}</span></button>`).join('')}</div></div>
       <div class="tside r">
         <button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
+        <button class="icon" data-act="present" title="Present: the app full screen" aria-label="Present">${ico('play', 16)}</button>
+        <button class="icon" data-act="settings" title="Settings (⌘,)" aria-label="Settings">${ico('gear', 16)}</button>
         <button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
-        <button class="primary" data-act="pr" ${n ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>
+        <button class="primary" data-act="pr" ${total ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>
       </div>`;
   }
 
@@ -411,12 +793,80 @@
     openMenu([
       { head: p.repo || p.name || 'This project' },
       ...(p.branch ? [{ label: `Branch: ${p.branch}`, disabled: true }] : []),
-      { label: 'Open another project…', run: () => window.open('http://localhost:4100', '_blank') },
+      { label: 'All projects', run: () => window.open('http://localhost:4100/#projects', '_blank') },
+      { label: 'Help', run: () => window.open('http://localhost:4100/#help', '_blank') },
       '-',
       { label: S.direction ? `Design direction: ${dirName()}` : 'Set a design direction…', run: () => openDirection() },
       { label: S.minUI ? 'Show panels' : 'Hide panels', kbd: '⇧\\', run: () => toggleMinUI() },
+      { label: 'Settings…', kbd: '⌘,', run: () => openSettings() },
+      '-',
+      { label: S.agentsOn ? 'Hide Tovi at work' : 'Show Tovi at work', run: () => { S.agentsOn = !S.agentsOn; try { localStorage.setItem('kerf.agents', S.agentsOn ? 'on' : 'off'); } catch {} toast(S.agentsOn ? 'Tovi and its helpers show on the canvas while they work' : 'Changes apply without the helpers on the canvas'); } },
       { label: 'Keyboard shortcuts', kbd: '?', run: () => shortcuts() },
     ], at);
+  }
+  /* ---------- Settings ---------- */
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  let aiCfg = { provider: 'anthropic', model: '', defaults: {} }, aiPick = null;
+  // Load the saved AI settings first, so the window shows the right provider and key states.
+  function openSettings() {
+    aiPick = null;
+    api('/keys').then((k) => { aiCfg = k; showSettings(); }).catch(() => showSettings());
+  }
+  function showSettings() {
+    const m = $('modal'), p = S.project || {};
+    // The provider being set up: a picked "Other … model" waits for its name before it's saved.
+    const pv = aiPick?.provider || aiCfg.provider || 'anthropic';
+    const tog = (id, on, label, sub) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span><button class="switch${on ? ' on' : ''}" data-act="setTog" data-v="${id}" role="switch" aria-checked="${on}" aria-label="${label}"><i></i></button></div>`;
+    const row = (label, sub, ctl) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span>${ctl}</div>`;
+    const startPage = 'http://localhost:4100/#settings';
+    m.hidden = false;
+    m.innerHTML = `<section class="dialog settings" role="dialog" aria-modal="true" aria-labelledby="setT"><div class="dh"><h2 id="setT">Settings</h2><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
+      <div class="setBody">
+        <div class="setSec"><h3>Tovi</h3>
+          <form class="setRow" data-form="person" autocomplete="off"><span class="setTx"><b>Your name</b><span class="note">Shown on the versions and changes you make.</span></span><span class="setName"><input id="setPerson" value="" maxlength="60" placeholder="Your name" aria-label="Your name"><button class="outline sm">Save</button></span></form>
+          ${row('Appearance', 'Dark unless you choose otherwise. System follows your Mac.', `<div class="seg setSeg">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([v, n]) => `<button data-act="setTheme" data-v="${v}" class="${theme === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
+          ${tog('agents', S.agentsOn, 'Show Tovi at work', 'See Tovi’s cursor select and change things as it works.')}
+          ${row('AI style', 'How far Tovi may go beyond your design system.', `<div class="seg setSeg">${[['system', 'On system'], ['improve', 'Improve'], ['explore', 'Explore']].map(([v, n]) => `<button data-act="setMode" data-v="${v}" class="${S.styleMode === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
+          ${row('Design direction', S.direction ? esc(dirName()) : 'Not set. Tovi follows your design system.', `<button class="outline sm" data-act="setDir">${S.direction ? 'Change' : 'Set'}</button>`)}
+        </div>
+        <div class="setSec"><h3>Editing</h3>
+          ${tog('sim', S.simScope === 'all', 'Look-alikes change together', 'When cards look the same, style changes go to all of them.')}
+          ${tog('scale', S.scaleArrows, 'Arrow keys follow your scale', 'Arrows step through your design system’s sizes. Shift+arrow nudges 1px.')}
+          ${row('Panels', 'Put the side panels back to their usual widths.', '<button class="outline sm" data-act="setPanels">Reset</button>')}
+        </div>
+        <div class="setSec"><h3>AI</h3>
+          <div class="setRow"><span class="setTx"><b>Provider</b><span class="note">In use: ${esc(aiCfg.defaults?.[aiCfg.provider]?.label || '')} · ${esc(aiCfg.model || '')}</span></span><select id="setProvSel" class="setSel" aria-label="Provider">${Object.keys(aiCfg.defaults || {}).map((k) => `<option value="${k}"${k === pv ? ' selected' : ''}>${esc(aiCfg.defaults[k].label)}</option>`).join('')}</select></div>
+          ${[pv].map((k) => `<form class="setRow" data-form="aikey" data-p="${k}" autocomplete="off"><span class="setTx"><b>${aiCfg.defaults?.[k]?.label || k} key</b><span class="note">${aiCfg[k] ? 'Saved. Paste a new one to replace it.' : 'Not set yet.'}</span></span><span class="setName"><input type="password" placeholder="Paste key" aria-label="${k} key" autocomplete="new-password" spellcheck="false"><button class="outline sm">Save</button></span></form>`).join('')}
+          <div class="setRow"><span class="setTx"><b>Model</b><span class="note" id="setModelNote">Loading models…</span></span><select id="setModelSel" class="setSel" aria-label="Model" disabled></select></div>
+          <form class="setRow" data-form="aimodel" id="setModelForm" autocomplete="off" hidden><span class="setTx"><b>Model name</b><span class="note">Copy it from your provider’s docs.</span></span><span class="setName"><input id="setModel" maxlength="80" spellcheck="false" aria-label="Model name"><button class="outline sm">Use</button></span></form>
+          ${row('Unsplash photos', '<span id="setKeyU">Checking…</span>', `<a class="outline sm" href="${startPage}" target="_blank" rel="noopener">Change</a>`)}
+          <span class="note">Keys stay on this Mac in a git-ignored file. Tovi never shows them.</span>
+        </div>
+        <div class="setSec"><h3>This project</h3>
+          ${row(esc(p.name || 'Project'), `${esc(p.repo || 'Not connected to GitHub yet')}${p.branch ? ` · branch ${esc(p.branch)}` : ''}`, '<a class="outline sm" href="http://localhost:4100" target="_blank" rel="noopener">All projects</a>')}
+          ${row('Keyboard shortcuts', 'Every key Tovi listens for.', '<button class="outline sm" data-act="keys">Show</button>')}
+        </div>
+      </div></section>`;
+    api('/person').then((p) => { const i = $('setPerson'); if (i && !i.value) i.value = p.name; }).catch(() => {});
+    const u = $('setKeyU');
+    if (u) u.textContent = aiCfg.unsplash ? 'Saved. Photo search is on.' : 'Optional. Add a free key to search photos.';
+    fillModels(pv);
+  }
+  // The chosen provider's models, from the provider itself once its key is saved. Picking one switches Tovi over.
+  async function fillModels(pv) {
+    const sel = $('setModelSel'), note = $('setModelNote');
+    if (!sel) return;
+    const label = aiCfg.defaults?.[pv]?.label || pv, cur = pv === aiCfg.provider;
+    let list = { models: [], live: false };
+    try { list = await api(`/models?provider=${pv}`); } catch {}
+    if ($('setModelSel') !== sel) return;
+    const known = cur && list.models.some((x) => x.id === aiCfg.model);
+    sel.innerHTML = (cur ? '' : '<option value="" disabled selected>Choose a model</option>') + list.models.map((x) => `<option value="${esc(x.id)}">${esc(x.label)}</option>`).join('') + '<option value="__other">Other model…</option>';
+    if (cur) sel.value = known ? aiCfg.model : '__other';
+    if (cur && !known) { $('setModelForm').hidden = false; $('setModel').value = aiCfg.model || ''; }
+    sel.disabled = false;
+    const has = pv === 'anthropic' ? aiCfg.anthropic : aiCfg[pv];
+    note.textContent = (list.live ? `Every model your ${label} key can use.` : has ? `Couldn’t reach ${label}. Showing the usual models.` : `Add your ${label} key above to see every model.`) + (cur ? '' : ` Choosing one switches Tovi to ${label}.`);
   }
   function pagesMenu(at) {
     const seen = [...new Set([S.path, ...S.pages])].slice(0, 12);
@@ -461,7 +911,7 @@
     ], at);
   }
   function shortcuts() {
-    const rows = [['Edit / Preview', 'E · P'], ['Annotate', 'A'], ['Ask Tovi', '⌘K'], ['Undo', '⌘Z'], ['Select parent', '⇧↵'], ['Duplicate', '⌘D'], ['Delete', '⌫'], ['Move up / down', '⌥↑ ⌥↓'], ['Group / ungroup', '⌥⌘G · ⇧⌘G'], ['Add element', 'I'], ['Measure spacing', 'hold ⌥'], ['Select several', '⇧ click'], ['Zoom in / out', '⌘+ · ⌘−'], ['Fit / 100%', '⇧1 · ⇧0'], ['Hide panels', '⇧\\']];
+    const rows = [['Select', 'V'], ['Interact with the app', 'P'], ['Click through while selecting', 'Hold ⌘'], ['Annotate', 'A'], ['Ask Tovi (chat)', '⌘K'], ['Undo', '⌘Z'], ['Select parent', '⇧↵'], ['Duplicate', '⌘D'], ['Delete', '⌫'], ['Move up / down', '⌥↑ ⌥↓'], ['Group / ungroup', '⌥⌘G · ⇧⌘G'], ['Add element', 'I'], ['Measure spacing', 'hold ⌥'], ['Select several', '⇧ click'], ['Zoom in / out', '⌘+ · ⌘−'], ['Fit / 100%', '⇧1 · ⇧0'], ['Hide panels', '⇧\\']];
     const m = $('modal');
     m.hidden = false;
     m.innerHTML = `<section class="dialog keys" role="dialog" aria-modal="true" aria-labelledby="kT"><div class="dh"><h2 id="kT">Keyboard shortcuts</h2><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div><div class="db"><div class="krows">${rows.map(([a, k]) => `<div class="kr"><span>${a}</span><span class="kk">${k}</span></div>`).join('')}</div></div></section>`;
@@ -525,8 +975,15 @@
     renderTop();
   }
   new ResizeObserver(() => applyDevice()).observe(document.getElementById('canvas'));
+  // When the app's width changes (window, screen size, panels), refresh the measured sizes in the panel,
+  // unless the designer is typing in it.
+  let panelSizeT;
+  new ResizeObserver(() => {
+    clearTimeout(panelSizeT);
+    panelSizeT = setTimeout(() => { if (S.mode === 'edit' && !$('panel').contains(document.activeElement)) renderPanel(); }, 300);
+  }).observe(frame);
   // Side panels: drag their inner edge to resize, double-click to reset. Widths are remembered in this browser.
-  const SIDE = { l: { el: 'layers', def: 212, min: 168, max: 420 }, r: { el: 'panel', def: 284, min: 248, max: 520 } };
+  const SIDE = { l: { el: 'layers', def: 300, min: 260, max: 520 }, r: { el: 'panel', def: 284, min: 248, max: 520 } };
   const setSide = (k, w) => { const c = SIDE[k]; w = Math.round(Math.max(c.min, Math.min(c.max, w))); document.getElementById(c.el).style.flexBasis = w + 'px'; return w; };
   for (const k of Object.keys(SIDE)) { let w = null; try { w = +localStorage.getItem(`kerf.side.${k}`); } catch {} setSide(k, w || SIDE[k].def); }
   let sideDrag = null;
@@ -566,23 +1023,23 @@
 
   /* ---------- toolbar ---------- */
   function renderBar() {
+    // Presenting: the app alone, with one way back.
+    if (S.mode === 'preview') { $('bar').innerHTML = `<button class="tb wide" data-act="mode" data-v="edit" aria-label="Stop presenting">${ico('x', 14)}<span>Stop presenting</span><span class="kbd">Esc</span></button>`; $('hint').hidden = true; return; }
+    const tool = (t, icon, name, key) => `<button class="tb${S.tool === t ? ' on' : ''}" data-act="tool" data-v="${t}" aria-label="${name}" aria-pressed="${S.tool === t}">${ico(icon, 20)}${tip(name, key)}</button>`;
     $('bar').innerHTML = `<div class="modes">
-        <button class="tb${S.mode === 'preview' ? ' on' : ''}" data-act="mode" data-v="preview" aria-label="Preview">${ico('play', 16)}${tip('Preview', 'P')}</button>
-        <button class="tb${S.mode === 'edit' ? ' on' : ''}" data-act="mode" data-v="edit" aria-label="Edit">${ico('edit', 16)}${tip('Edit', 'E')}</button>
+        ${tool('interact', 'tap', 'Interact with the app', 'P')}
+        ${tool('select', 'cursor', 'Select', 'V')}
       </div>
       <span class="div"></span>
-      ${S.mode === 'preview'
-        ? `<button class="tb${S.askOpen ? ' on' : ''}" data-act="ask" aria-label="Ask Tovi">${ico('spark', 16)}${tip('Ask Tovi', '⌘K')}</button>`
-        : `<button class="tb${S.tab === 'chat' ? ' on' : ''}" data-act="chatToggle" aria-label="Chat with Tovi">${ico('spark', 16)}${tip('Chat with Tovi', '⌘K')}</button>`}
-      ${S.mode === 'edit' ? `<button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip('Add element', 'I')}</button>` : ''}
-      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('pen', 16)}${tip('Annotate', 'A')}</button>
-      ${S.tool === 'annotate' ? `<div class="shapes">${['pin', 'box', 'circle', 'arrow'].map((k, i) => `<button class="tb sm${S.shape === k ? ' on' : ''}" data-act="shape" data-v="${k}" aria-label="${k}">${ico(k, 14)}${tip(k[0].toUpperCase() + k.slice(1), String(i + 1))}</button>`).join('')}</div>` : ''}
+      <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 20)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
+      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Mark for Tovi">${ico('markAI', 20)}${tip('Mark for Tovi', 'A')}</button>
+      <button class="tb${S.diagnosing ? ' busy' : ''}" data-act="diagnose" aria-label="Diagnose">${ico('diag', 20)}${S.notes.some((x) => x.by === 'tovi') ? '<i class="badgeDot tovi" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip(S.diagnosing ? 'Tovi is reviewing…' : 'Diagnose: find what to fix')}</button>
       <span class="div"></span>
-      <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 16)}${tip('Undo', '⌘Z')}</button>
-      <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 16)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>`;
+      <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 20)}${tip('Undo', '⌘Z')}</button>
+      <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 20)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>`;
     const h = $('hint');
     h.hidden = true;
-    if (!h.hidden) h.innerHTML = `Use your app normally. Press <span class="kbd">E</span> to edit a screen, <span class="kbd">A</span> to annotate, or <span class="kbd">⌘K</span> to ask Tovi.`;
+    if (!h.hidden) h.innerHTML = `Click anything to select it. Press <span class="kbd">P</span> to use your app, hold <span class="kbd">⌘</span> to click through, or <span class="kbd">⌘K</span> to ask Tovi.`;
   }
 
   /* ---------- layers ---------- */
@@ -603,10 +1060,28 @@
     };
     return walk(D.body);
   }
-  function renderLayers() {
+  // The left panel: Chat (the default) and Layers, as two tabs.
+  function renderLeft(focusChat) {
     const box = $('layers');
     box.hidden = S.mode !== 'edit' || !S.layersOpen;
     if (box.hidden) return;
+    if (!box.querySelector('.ltabs')) box.innerHTML = '<div class="ptabs ltabs"></div><div class="lbody" id="lbody"></div>';
+    box.querySelector('.ltabs').innerHTML = `<button data-act="left" data-v="chat" class="${S.left === 'chat' ? 'on' : ''}">Chat <span class="kbd">⌘K</span></button><button data-act="left" data-v="layers" class="${S.left === 'layers' ? 'on' : ''}">Layers</button>`;
+    box.dataset.left = S.left;
+    if (S.left === 'layers') renderLayers(); else renderChat(focusChat);
+  }
+  function renderChat(focusChat) {
+    const box = $('lbody');
+    if (!box || S.left !== 'chat' || $('layers').hidden) return;
+    const draft = $('chatIn')?.value || '';
+    const hadFocus = document.activeElement?.id === 'chatIn';
+    box.innerHTML = chatHTML();
+    const sc = $('chatScroll'); if (sc) sc.scrollTop = sc.scrollHeight;
+    const ci = $('chatIn'); if (ci) { ci.value = draft; syncKC('chatIn'); if (focusChat || hadFocus) ci.focus(); }
+  }
+  function renderLayers() {
+    const box = $('lbody');
+    if (!box || S.left !== 'layers' || $('layers').hidden) return;
     const rows = [];
     const add = (nodes, depth) => {
       for (const n of nodes) {
@@ -626,7 +1101,7 @@
     const tree = box.querySelector('.tree');
     const st = tree ? tree.scrollTop : 0;
     const changes = S.versions.draft;
-    box.innerHTML = `<div class="lhead"><span>Layers</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
+    box.innerHTML = `<div class="lhead"><span>Page</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
       <div class="tree">${rows.join('') || '<div class="empty">This page has no elements Tovi can edit yet.</div>'}</div>
       ${changes.length ? `<button class="lchanges" data-act="history" title="Open version history"><span class="dot"></span><span>${changes.length} unsaved change${changes.length === 1 ? '' : 's'}</span>${ico('chevR', 10)}</button>` : ''}`;
     box.querySelector('.tree').scrollTop = st;
@@ -643,11 +1118,7 @@
   const sec = (title, body, act = '') => `<div class="sec"><div class="secH"><span>${title}</span>${act}</div>${body}</div>`;
   function colorRow(p, title, removeAct) {
     const hex = val(p), tok = tokenOf(p), none = hex === 'transparent';
-    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label>${removeAct ? `<button class="ib" data-act="${removeAct}" title="Remove">${ico('minus')}</button>` : ''}</div>`;
-    if (S.cpick === p) {
-      h += `<div class="cpop"><div class="cpT">Project tokens</div><div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('')}</div>
-        <label class="cust"><input type="color" data-colorinput="${p}" value="${/^#[0-9A-F]{6}$/.test(hex) ? hex : '#FFFFFF'}"><span>Custom color</span><span class="u">off scale</span></label></div>`;
-    }
+    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label></div>`;
     return h;
   }
   const isText = (el) => el && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
@@ -655,25 +1126,26 @@
   /* fill: solid or gradient */
   const DIRS = [['r', '→ Right'], ['l', '← Left'], ['b', '↓ Down'], ['t', '↑ Up'], ['br', '↘ Down right'], ['bl', '↙ Down left'], ['tr', '↗ Up right'], ['tl', '↖ Up left']];
   const CSSDIR = { r: 'to right', l: 'to left', b: 'to bottom', t: 'to top', br: 'to bottom right', bl: 'to bottom left', tr: 'to top right', tl: 'to top left' };
+  // The gradient on the element: direction, up to three stops (from, via, to), each with a position.
+  const POS_RE = /^(from|via|to)-(?:(\d+(?:\.\d+)?)%|\[(\d+(?:\.\d+)?)%\])$/;
   function gradOf() {
     const cls = (info()?.classes || []).filter((c) => !c.includes(':'));
     const dir = cls.map((c) => c.match(/^bg-(?:gradient|linear)-to-(\w+)$/)).find(Boolean);
     if (!dir) return null;
-    const stop = (p) => (cls.find((c) => c.startsWith(p + '-')) || '').slice(p.length + 1).replace(/^\[|\]$/g, '') || null;
-    return { dir: dir[1], from: stop('from'), via: stop('via'), to: stop('to'), clip: cls.includes('bg-clip-text') };
+    const stop = (p) => (cls.find((c) => c.startsWith(p + '-') && !POS_RE.test(c)) || '').slice(p.length + 1).replace(/^\[|\]$/g, '') || null;
+    const pos = (p) => { const m = cls.map((c) => c.match(POS_RE)).find((x) => x && x[1] === p); return m ? Math.round(Number(m[2] ?? m[3])) : null; };
+    return { dir: dir[1], from: stop('from'), via: stop('via'), to: stop('to'), fromPos: pos('from'), viaPos: pos('via'), toPos: pos('to'), clip: cls.includes('bg-clip-text') };
   }
-  const gradValue = (g) => [g.dir, g.from, g.via, g.to].filter(Boolean).join(' ');
+  const STOP_DEF = { from: 0, via: 50, to: 100 };
+  const posOf = (g, k) => g[k + 'Pos'] ?? STOP_DEF[k];
+  const stopsOf = (g) => ['from', g.via ? 'via' : null, 'to'].filter(Boolean).map((k) => ({ k, col: g[k], pos: posOf(g, k) }));
+  const gradValue = (g) => [g.dir, ...stopsOf(g).map((st) => st.pos === STOP_DEF[st.k] ? st.col : `${st.col}@${st.pos}`)].filter(Boolean).join(' ');
   const tokenSwatch = (n) => { const t = tokens().find(([k]) => k === n); return t ? swatch(t[1]) : n?.startsWith('#') ? n : 'transparent'; };
   const stopSel = (key, cur, allowNone) => `<label class="inp"><i class="sw1" style="background:${esc(tokenSwatch(cur))}"></i><select data-gstop="${key}" aria-label="Gradient ${key}">${allowNone ? `<option value=""${cur ? '' : ' selected'}>No middle color</option>` : ''}${tokens().filter(([n]) => n !== 'transparent').map(([n]) => `<option${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
+  const gradCss = (g) => `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${stopsOf(g).filter((st) => st.col).map((st) => `${tokenSwatch(st.col)} ${st.pos}%`).join(', ')})`;
   function fillBody(g, el) {
-    const seg = `<div class="seg"><button data-act="fillType" data-v="solid" class="${g ? '' : 'on'}">Solid</button><button data-act="fillType" data-v="gradient" class="${g ? 'on' : ''}">Gradient</button></div>`;
-    if (!g) return seg + colorRow('bg', 'Fill', 'rmFill');
-    const prev = `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${[g.from, g.via, g.to].filter(Boolean).map(tokenSwatch).join(', ')})`;
-    return seg + `<div class="gprev" style="background:${esc(prev)}"></div>
-      <div class="cr"><label class="inp"><select data-gstop="dir" aria-label="Direction">${DIRS.map(([v, n]) => `<option value="${v}"${v === g.dir ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label><button class="ib" data-act="rmFill" title="Remove fill">${ico('minus')}</button></div>
-      <div class="kv"><span>From</span>${stopSel('from', g.from)}</div>
-      <div class="kv"><span>Middle</span>${stopSel('via', g.via, true)}</div>
-      <div class="kv"><span>To</span>${stopSel('to', g.to)}</div>
+    if (!g) return colorRow('bg', 'Fill', 'rmFill');
+    return `<div class="cr"><label class="inp" title="Fill"><button class="cchip" data-act="cpick" data-v="grad" style="background:${esc(gradCss(g))}" aria-label="Edit gradient"></button><span class="gName">Linear gradient</span></label></div>
       ${isText(el) ? `<div class="kv"><span>On text</span><div class="seg"><button data-act="clipText" data-v="off" class="${g.clip ? '' : 'on'}">Off</button><button data-act="clipText" data-v="on" class="${g.clip ? 'on' : ''}">On</button></div></div>` : ''}`;
   }
   document.addEventListener('change', (e) => {
@@ -683,6 +1155,21 @@
     g[k] = e.target.value || null;
     commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] });
   });
+  document.addEventListener('change', (e) => {
+    if (e.target.dataset?.fptype == null || !S.sel) return;
+    S.cpick = e.target.value === 'gradient' ? 'grad' : 'bg'; S.cp = null; S.gstop = 'from';
+    setFillType(e.target.value);
+  });
+  function setFillType(v) {
+    const g = gradOf();
+    const names = tokens().map(([n]) => n).filter((n) => !['transparent', 'black', 'white'].includes(n));
+    if (v === 'gradient' && !g) {
+      const from = tokenOf('bg') && !tokenOf('bg').startsWith('#') ? tokenOf('bg') : names.includes('primary') ? 'primary' : names[0];
+      const to = names.find((n) => n !== from && /positive|accent|secondary|primary/.test(n)) || names.find((n) => n !== from);
+      commit({ ops: [{ prop: 'gradient', value: `r ${from} ${to}` }] });
+    } else if (v === 'solid' && g) commit({ ops: [{ prop: 'bg', value: g.from || 'transparent' }, { prop: 'clipText', value: 'off' }] });
+    else renderPanel();
+  }
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-act="fillType"],[data-act="clipText"]');
     if (!a || !S.sel) return;
@@ -696,16 +1183,30 @@
     } else if (a.dataset.v === 'solid' && g) commit({ ops: [{ prop: 'bg', value: g.from || 'transparent' }, { prop: 'clipText', value: 'off' }] });
   });
 
-  function propsSection(inf) {
-    if (!inf?.component || !inf.props?.length) return '';
-    const rows = inf.props.map((p) => {
+  // Component properties, like Figma's: they belong to this use of the component, whatever the scope.
+  const ICON_DEFAULTS = { 'lucide-react': { size: 24, strokeWidth: 2 }, '@phosphor-icons/react': { weight: 'regular', size: '1em' } };
+  const humanize = (n) => String(n).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+  function propsSection(inf0) {
+    const inf = S.sel?.useInfo?.component ? S.sel.useInfo : inf0;
+    if (!inf?.component) return '';
+    // Variants the component offers (from its cva), even ones this use doesn't set yet.
+    const c = S.sel?.defInfo?.cva, props = (inf.props || []).slice();
+    if (c?.groups) for (const [g, opts] of Object.entries(c.groups)) {
+      const i = props.findIndex((p) => p.name === g), cur = i > -1 ? props[i] : null;
+      if (cur && !cur.editable) continue;
+      const row = { name: g, kind: 'option', options: opts, value: cur?.value ?? null, def: c.defaults?.[g], editable: true, cva: true };
+      if (i > -1) props[i] = row; else props.unshift(row);
+    }
+    if (!props.length) return '';
+    const dflt = ICON_DEFAULTS[inf.lib] || {};
+    const rows = props.map((p) => {
       let ctl;
       if (!p.editable) ctl = `<label class="inp lock" title="${esc(p.reason)}"><input value="set by code" disabled></label>`;
-      else if (p.kind === 'option') ctl = `<label class="inp"><select data-propsel="${esc(p.name)}">${p.value == null ? '<option value="" selected>Default</option>' : ''}${p.options.map((o) => `<option${o === p.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
+      else if (p.kind === 'option') ctl = `<label class="inp"><select data-propsel="${esc(p.name)}"${p.cva ? ` data-options="${esc(p.options.join('|'))}"` : ''}${p.value == null && (p.def ?? dflt[p.name]) != null ? ` data-def="${esc(p.def ?? dflt[p.name])}"` : ''} aria-label="${esc(humanize(p.name))}">${p.value == null ? `<option value="" selected>${p.def != null ? `${esc(p.def)} (default)` : dflt[p.name] != null ? `${esc(dflt[p.name])} (default)` : 'Default'}</option>` : ''}${p.options.filter((o) => !(p.value == null && o === (p.def ?? dflt[p.name]))).map((o) => `<option${o === p.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
       else if (p.kind === 'boolean') ctl = `<div class="seg"><button data-act="setProp" data-p="${esc(p.name)}" data-v="false" class="${p.value !== true ? 'on' : ''}">Off</button><button data-act="setProp" data-p="${esc(p.name)}" data-v="true" class="${p.value === true ? 'on' : ''}">On</button></div>`;
-      else if (p.kind === 'number') ctl = `<label class="inp"><input type="text" inputmode="decimal" data-propnum="${esc(p.name)}" value="${p.value ?? ''}" placeholder="Default"></label>`;
+      else if (p.kind === 'number') ctl = `<label class="inp"><input type="text" inputmode="decimal" data-propnum="${esc(p.name)}" value="${p.value ?? ''}" placeholder="${dflt[p.name] != null ? `${esc(dflt[p.name])} (default)` : 'Default'}" aria-label="${esc(humanize(p.name))}"></label>`;
       else ctl = `<label class="inp"><input type="text" data-proptext="${esc(p.name)}" value="${esc(p.value)}"></label>`;
-      return `<div class="kv"><span>${esc(p.name)}</span>${ctl}</div>`;
+      return `<div class="kv"><span>${esc(humanize(p.name))}</span>${ctl}</div>`;
     }).join('');
     return sec(`Properties${inf.lib ? ` <span class="note" style="font-weight:400">${esc(inf.lib.replace(/^@/, '').split('/')[0])}</span>` : ''}`, rows);
   }
@@ -766,32 +1267,37 @@
     const c = s.defInfo?.cva;
     if (c) {
       const av = activeVariant(), vname = av?.variant;
-      const opts = [...(s.use ? [['here', 'Only this one']] : []), ...(vname ? [['variant', `All “${vname}”`]] : []), ['all', `Every ${s.use ? (s.useInfo?.tag || name) : name}`]];
+      // Short labels that fit the panel; the full meaning is in each button's tooltip.
+      const comp = s.use ? (s.useInfo?.tag || name) : name;
+      const opts = [...(s.use ? [['here', 'This one', 'Only this one']] : []), ...(vname ? [['variant', `All “${vname}”`, `Every ${comp} with variant “${vname}”`]] : []), ['all', 'All', `Every ${comp}`]];
       if (!opts.some(([v]) => v === S.scope)) S.scope = vname ? 'variant' : 'all';
-      return `<div class="seg">${opts.map(([v, n]) => `<button data-act="scope" data-v="${v}" class="${S.scope === v ? 'on' : ''}">${esc(n)}</button>`).join('')}</div>`;
+      return `<div class="seg">${opts.map(([v, n, t]) => `<button data-act="scope" data-v="${v}" class="${S.scope === v ? 'on' : ''}" title="${esc(t)}">${esc(n)}</button>`).join('')}</div>`;
     }
     if (s.def && s.use) return `<div class="seg"><button data-act="scope" data-v="all" class="${S.scope === 'all' ? 'on' : ''}" title="Change the component itself, everywhere it's used">Everywhere</button><button data-act="scope" data-v="here" class="${S.scope === 'here' ? 'on' : ''}" title="Change only this use of the component">Only here</button></div>`;
     return '';
   }
-  function tabsHTML() {
-    return `<div class="ptabs"><button data-act="tab" data-v="design" class="${S.tab === 'design' ? 'on' : ''}">Design</button><button data-act="tab" data-v="chat" class="${S.tab === 'chat' ? 'on' : ''}">Chat <span class="kbd">⌘K</span></button></div>`;
-  }
+  const tabsHTML = () => '';
   function renderPanel(focusChat) {
     const p = $('panel');
-    p.hidden = !(S.mode === 'edit' || S.side === 'history');
+    // While interacting, the panel goes away and the app takes its space.
+    const was = p.hidden;
+    p.hidden = !(S.mode === 'edit' || S.side === 'history') || (S.tool === 'interact' && S.side !== 'history');
+    if (p.hidden !== was) setTimeout(applyDevice, 0);
+    $('devLabel')?.classList.toggle('on', !!S.pageSel && !S.sel);
     if (p.hidden) return;
     if (S.side === 'history') { p.innerHTML = historyHTML(); return; }
-    if (S.tab === 'chat') {
-      const draft = $('chatIn')?.value || '';
-      const hadFocus = document.activeElement?.id === 'chatIn';
-      p.innerHTML = tabsHTML() + chatHTML();
-      const sc = $('chatScroll'); if (sc) sc.scrollTop = sc.scrollHeight;
-      const ci = $('chatIn'); if (ci) { ci.value = draft; syncKC('chatIn'); if (focusChat || hadFocus) ci.focus(); }
-      return;
-    }
     const s = S.sel;
     if (!s) {
-      p.innerHTML = tabsHTML() + `<div class="scroll"><div class="empty"><b>Nothing selected</b><span>Click anything in your app, or pick a layer on the left. Double-click text to retype it. Every change here is written to your code.</span></div>${paletteHTML()}</div>`;
+      // Nothing selected: say how to start, then what applies to the whole page (like Figma's page panel).
+      const keys = [['Select the parent', '⇧ ↵'], ['Select several', '⇧ Click'], ['Click through to the app', '⌘ Click'], ['Measure spacing', 'Hold ⌥'], ['Add an element', 'I'], ['Mark something for Tovi', 'A'], ['Ask Tovi', '⌘K']];
+      p.innerHTML = tabsHTML() + `<div class="scroll">
+        ${S.pageSel ? '' : `<div class="selHint"><span class="shIc">${ico('cursor', 16)}</span><b>Select something to edit it</b><span>Click any element in your app, or pick it in Layers. Double-click text to retype it.</span></div>`}
+        <div class="sec"><div class="secH"><span class="nm">${ico('desktop')}Page</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
+          <div class="pgRow"><span>Screen</span><span>${DEV_LABEL[S.device]} · ${Math.round(W?.innerWidth || frame.clientWidth || 0)} px</span></div>
+          <div class="pgRow"><span>Changes</span>${S.versions.draft.length ? `<button class="linkBtn" data-act="history">${S.versions.draft.length} not saved yet</button>` : '<span>All saved</span>'}</div></div>
+        ${paletteHTML()}
+        <div class="sec"><div class="secH"><span>Shortcuts</span><button class="linkBtn" data-act="keys">All</button></div><div class="keyList">${keys.map(([a, k]) => `<div><span>${a}</span><span class="kbd">${k}</span></div>`).join('')}</div></div>
+      </div>`;
       return;
     }
     const el = s.el, inf = info();
@@ -799,12 +1305,14 @@
     const loc = activeLoc();
     let h = `<div class="sec head"><div class="secH"><span class="nm">${ico(layerIcon(el))}${esc(dName(el))}</span><span class="hbs">${hb('copyLoc', 'code', `Code: ${loc.replace(/:(\d+):\d+$/, ':$1')} (click to copy)`)}${hb('parent', 'up', 'Select parent')}</span></div>
       ${scopeHTML(s, name)}
+      ${s.similar?.length && !S.multi.length ? `<div class="simRow"><span class="note">${s.similar.length + 1} look alike</span><div class="seg"><button data-act="simScope" data-v="all" class="${S.simScope === 'all' ? 'on' : ''}" title="Style changes go to all ${s.similar.length + 1}">All ${s.similar.length + 1}</button><button data-act="simScope" data-v="one" class="${S.simScope === 'one' ? 'on' : ''}" title="Change only this one">This one</button></div></div>` : ''}
       ${sourceHTML(inf)}
       ${sizeHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}
       ${s.repeat > 1 ? `<span class="note">Repeated ×${s.repeat} by the same code: edits apply to all of them.</span>` : ''}
       ${actionsHTML()}</div>`;
     if (!inf) h += `<div class="sec"><span class="note">Reading code…</span></div>`;
+    else if (inf.offline) { h += `<div class="sec"><span class="note">Reconnecting to your app…</span></div>`; clearTimeout(S.infoRetry); S.infoRetry = setTimeout(() => { if (S.sel) loadInfo(); }, 2000); }
     else if (inf.error) h += `<div class="sec"><span class="note warn">${esc(inf.error)}</span></div>`;
     else if (!el.isConnected) h += `<div class="sec"><span class="note">This element isn’t on screen right now.</span></div>`;
     else {
@@ -812,13 +1320,18 @@
       if (el.tagName.toLowerCase() === 'svg') h += iconSection(el);
       else h += propsSection(inf);
       if (inf.classKind === 'dynamic') h += `<div class="sec"><span class="note warn">${esc(inf.classReason)}</span></div>`;
-      if (inf.text?.editable) h += sec('Content', `<label class="inp"><input type="text" data-text="1" value="${esc(inf.text.value)}" aria-label="Text"></label>`);
+      if (inf.text?.editable) h += sec('Content', `<label class="inp area"><textarea data-text="1" rows="1" aria-label="Text">${esc(inf.text.value)}</textarea></label>${inf.text.value.length > 60 ? '<span class="note">Double-click the text on the page to edit it in place.</span>' : ''}`);
       else if (isText(el)) h += sec('Content', `<span class="note">${esc(inf.text?.reason || '')}</span>`);
       if (isText(el) || inf.text?.editable) {
         // next/font names fonts like "__geistSans_1e4310": show "Geist Sans".
         const fam = camelWords(cs(el).fontFamily.split(',')[0].replace(/["']/g, '').replace(/^_+/, '').replace(/_[0-9a-f]{4,}$/i, '').replace(/_Fallback.*$/, '')).replace(/^./, (c) => c.toUpperCase());
         const fw = val('fontWeight');
-        h += sec('Typography', `<label class="inp lock"><input type="text" value="${esc(fam)}" disabled aria-label="Font"></label>
+        const c0 = (k) => (S.theme?.keys?.fontFamily || []).includes(k);
+        // The project's own fonts (Tailwind's ui-* fallbacks are left out); with no font class, the one in use.
+        const fams = Object.entries(S.theme?.fonts || {}).filter(([, f]) => !/^ui-/.test(f));
+        const famKey = (info()?.classes || []).filter((c) => !c.includes(':')).map((c) => c.slice(5)).find((k) => c0(k)) || (fams.find(([, f]) => f.toLowerCase() === fam.toLowerCase()) || [''])[0];
+        const famName = famKey ? (S.theme?.fonts?.[famKey] || famKey) : fam;
+        h += sec('Typography', `<button class="inp fontBtn${S.cpick === 'font' ? ' on' : ''}" data-act="cpick" data-v="font" title="Font" aria-label="Font: ${esc(famName)}"><span style="font-family:'${esc(famName)}',system-ui">${esc(famName)}</span>${ico('chev', 12)}</button>
           <div class="r2"><label class="inp"><select data-sel="fontWeight" aria-label="Weight">${[[100, 'Thin'], [200, 'Extra light'], [300, 'Light'], [400, 'Regular'], [500, 'Medium'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold'], [900, 'Black']].map(([v, n]) => `<option value="${v}"${v === fw ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label>${nf('fontSize', '<b class="tg">T</b>', 'Font size')}</div>
           <div class="r2">${nf('lineHeight', 'lh', 'Line height')}${nf('letterSpacing', 'ls', 'Letter spacing', '%')}</div>
           <div class="r2"><div class="ibs">${[['left', 'alL'], ['center', 'alC'], ['right', 'alR']].map(([v, i]) => `<button class="ib${val('align') === v ? ' on' : ''}" data-act="set" data-p="align" data-v="${v}" title="Align ${v}">${ico(i)}</button>`).join('')}</div><span></span></div>`);
@@ -838,16 +1351,31 @@
         ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}`);
       const g = gradOf();
       const hasFill = g || (val('bg') && val('bg') !== 'transparent');
-      h += sec('Fill', hasFill ? fillBody(g, el) : '', hasFill ? '' : hb('addFill', 'plus', 'Add fill'));
+      h += sec('Fill', hasFill ? fillBody(g, el) : '', hasFill ? hb('rmFill', 'minus', 'Remove fill') : hb('addFill', 'plus', 'Add fill'));
       const hasStroke = val('borderW') > 0;
-      h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${nf('borderW', 'sw', 'Stroke width')}<span></span></div>` : '', hasStroke ? '' : hb('addStroke', 'plus', 'Add stroke'));
-      const sh = shadowOf(), keys = (S.theme?.shadow || []).filter((k) => k !== 'none' && k !== 'inner');
-      h += sec('Effects', sh !== 'none' ? `<div class="cr"><label class="inp"><select data-sel="shadow" aria-label="Shadow">${keys.map((k) => `<option value="${esc(k)}"${k === sh ? ' selected' : ''}>Shadow · ${k === 'DEFAULT' ? 'default' : esc(k)}</option>`).join('')}</select>${ico('chev', 12)}</label><button class="ib" data-act="set" data-p="shadow" data-v="none" title="Remove">${ico('minus')}</button></div>` : '', sh !== 'none' ? '' : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
+      h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${nf('borderW', 'sw', 'Stroke width')}<span></span></div>` : '', hasStroke ? hb('rmStroke', 'minus', 'Remove stroke') : hb('addStroke', 'plus', 'Add stroke'));
+      const sh = shadowOf();
+      h += sec('Effects', sh !== 'none' ? shadowBody() : '', sh !== 'none' ? hb('rmShadow', 'minus', 'Remove shadow') : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
     }
     const st = p.querySelector('.scroll')?.scrollTop || 0;
     p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
+    p.querySelectorAll('textarea[data-text]').forEach(growText);
     p.querySelector('.scroll').scrollTop = st;
+    renderFpop();
   }
+  // The Content box grows with its text, up to about six lines, then scrolls.
+  function growText(t) {
+    t.style.height = 'auto';
+    t.style.height = Math.min(t.scrollHeight, 6 * 18 + 8) + 'px';
+  }
+  document.addEventListener('input', (e) => { if (e.target.matches?.('textarea[data-text]')) growText(e.target); });
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (!t.matches?.('textarea[data-text]') || e.isComposing) return;
+    // Enter saves (line breaks aren't written to code yet); Esc puts the text back.
+    if (e.key === 'Enter') { e.preventDefault(); if (!e.shiftKey) t.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); t.value = t.defaultValue; growText(t); t.blur(); }
+  }, true);
 
   /* ---------- history ---------- */
   async function refreshVersions() {
@@ -859,16 +1387,55 @@
   }
   const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const chLabel = (c) => `${c.name ? `<b>${esc(c.name)}</b> · ` : ''}${esc(c.label)}`;
+  // Version history like Figma's: a timeline with the current version at the top, named versions as
+  // milestones, and runs of autosaves folded into one "N autosave versions" row.
+  S.vGroups = new Set(); S.vSel = null; S.vOpen = null; S.vNaming = null;
+  const when = (t) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const initials = (n) => String(n || 'You').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  const who = (n) => `<span class="vWho"><i class="vAv">${esc(initials(n))}</i>${esc(n || 'You')}</span>`;
+  const RING = '<i class="vRing"></i>';
   function historyHTML() {
-    const { versions, draft, peeking } = S.versions;
+    const { versions, draft, peeking, by } = S.versions;
     const v = versions.slice().reverse();
+    // Fold runs of autosaves; named versions stand on their own.
+    const groups = [];
+    for (const x of v) {
+      const last = groups[groups.length - 1];
+      if (x.kind !== 'named' && last?.auto) last.items.push(x);
+      else groups.push({ auto: x.kind !== 'named', items: [x] });
+    }
+    const changesList = (list) => `<div class="vChanges">${list.slice(0, 8).map((c) => `<span class="ch">${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${chLabel(c)}</span>`).join('')}${list.length > 8 ? `<span class="note">and ${list.length - 8} more</span>` : ''}</div>`;
+    const item = (x, node) => {
+      const sel = S.vSel === x.n || peeking === x.n;
+      const naming = S.vNaming === x.n;
+      return `<div class="vRow">${node ? `<span class="vNode">${RING}</span>` : ''}
+        <div class="vItem${sel ? ' sel' : ''}" data-act="vSel" data-v="${x.n}">
+          ${naming ? `<form class="vName" data-form="vname" data-n="${x.n}"><input value="${esc(x.name || '')}" placeholder="Name this version" aria-label="Version name" maxlength="80"></form>` : `<div class="vTitle">${x.name ? esc(x.name) : when(x.at)}</div>`}
+          ${x.name && !naming ? `<span class="vSub">${when(x.at)}</span>` : ''}
+          ${who(x.by || by)}
+          ${peeking === x.n ? '<span class="vPeek">Showing the screen before this</span>' : ''}
+          ${S.vOpen === x.n ? changesList(x.changes) : ''}
+          <button class="vMore" data-act="vMenu" data-v="${x.n}" aria-label="Version actions" title="Actions">${ico('dots', 16)}</button>
+        </div></div>`;
+    };
+    const body = groups.map((g) => {
+      if (!g.auto || g.items.length === 1) return g.items.map((x) => item(x, x.kind === 'named')).join('');
+      const key = g.items[0].n, open = S.vGroups.has(key) || g.items.some((x) => x.n === S.vSel || x.n === peeking);
+      return `<div class="vRow"><span class="vNode sm">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="vGroup" data-act="vGroup" data-v="${key}">${g.items.length} autosave versions</button></div>${open ? g.items.map((x) => item(x, false)).join('') : ''}`;
+    }).join('');
     return `<div class="ptabs"><button class="on">Version history</button><button class="x" data-act="history" aria-label="Close">${ico('x')}</button></div>
-      <div class="scroll" style="padding:8px;display:flex;flex-direction:column;gap:4px">
-      ${draft.length ? `<div class="ver"><div class="vh"><span>Current</span><span>${draft.length} unsaved change${draft.length === 1 ? '' : 's'}</span></div>${draft.slice(-4).reverse().map((c) => `<span class="ch">${chLabel(c)}</span>`).join('')}${draft.length > 4 ? `<span class="note">and ${draft.length - 4} more</span>` : ''}<div class="acts"><button class="outline" data-act="saveVersion">Save as a version</button><span class="note">Also saved when you go back to Preview.</span></div></div>` : ''}
-      ${v.map((x) => `<div class="ver${peeking === x.n ? ' on' : ''}"><div class="vh"><span>Version ${x.n}</span><span>${time(x.at)}</span></div>
-        ${x.changes.slice(0, 5).map((c) => `<span class="ch">${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${chLabel(c)}</span>`).join('')}${x.changes.length > 5 ? `<span class="note">and ${x.changes.length - 5} more</span>` : ''}
-        <div class="acts"><button class="outline" data-act="peek" data-v="${x.n}">${peeking === x.n ? 'Back to now' : 'Show before'}</button><button class="ghostBtn" data-act="restore" data-v="${x.n - 1}" title="Undo this version and everything after it">Undo from here</button></div></div>`).join('')}
-      ${!v.length && !draft.length ? `<div class="empty"><b>No versions yet</b><span>Each time you go from Edit back to Preview, Tovi saves your changes as a version. Here you can see the screen before a version or undo back to it.</span></div>` : ''}
+      <div class="scroll vScroll">
+        <p class="vIntro">Tovi saves a version every few minutes, when you change page and when you present. Name a version to keep it as a milestone.</p>
+        <div class="vTimeline">
+          <div class="vRow"><span class="vNode">${RING}</span><div class="vItem cur${S.vSel == null && peeking == null ? ' sel' : ''}">
+            <div class="vTitle">Current version</div>
+            ${draft.length ? `<span class="vSub">${draft.length} change${draft.length === 1 ? '' : 's'} not in a version yet</span>${changesList(draft.slice().reverse())}
+              <form class="vSave" data-form="vsave"><input placeholder="Name it (optional)" aria-label="Version name" maxlength="80"><button class="primary sm">Save version</button></form>` : `<span class="vSub">Everything is saved</span>`}
+            ${who(by)}
+          </div></div>
+          ${body}
+          ${v.length ? '' : '<div class="vRow"><div class="vItem empty"><span class="vSub">No versions yet. They appear here as you work.</span></div></div>'}
+        </div>
       </div>`;
   }
   function renderPeek() {
@@ -904,17 +1471,31 @@
     S.mode = m;
     S.hintSeen = true;
     if (m === 'preview') {
-      S.sel = null; S.hover = null; S.changesOpen = false; S.tab = 'design';
+      S.hover = null; S.changesOpen = false; S.noteDraft = null; S.tool = S.tool === 'annotate' ? 'select' : S.tool;
       if (S.editing) S.editing.blur();
-      api('/version', {}).then((v) => { S.versions = v; renderTop(); }).catch(() => {});
+      saveVersion();
       renderChanges();
     } else { S.askOpen = false; if (S.side === 'history') S.side = 'design'; }
+    syncTool();
     renderAll();
     // Panels open or close with the mode, so the presentation re-fits.
     setTimeout(applyDevice, 0);
   }
+  // Versions save themselves: after a few minutes of edits, when you move to another page, or when you present.
+  S.verAt = 0;
+  function saveVersion() {
+    if (!S.count || S.count === S.verAt || S.versions.peeking) return;
+    S.verAt = S.count;
+    api('/version', { kind: 'auto' }).then((v) => { S.versions = v; renderTop(); if (S.side === 'history') renderPanel(); }).catch(() => {});
+  }
+  setInterval(saveVersion, 3 * 60 * 1000);
+  // Cursors and capture layers follow the tool: arrow to select, the app's own cursors to interact, a hand to move.
+  function syncTool() {
+    document.body.dataset.tool = S.mode === 'preview' ? 'present' : S.tool;
+    D?.documentElement?.classList.toggle('kerf-pick', picking() || (S.mode === 'edit' && S.tool === 'annotate'));
+  }
   function renderAll() {
-    renderTop(); renderBar(); renderLayers(); renderPanel(); renderAsk(); renderMarks();
+    renderTop(); renderBar(); renderLeft(); renderPanel(); renderAsk(); renderMarks();
   }
 
   /* ---------- outlines follow the page ---------- */
@@ -927,9 +1508,52 @@
     box.style.width = r.width + 'px';
     box.style.height = r.height + 'px';
     const t = box.querySelector('.tag');
-    if (label != null && t) { t.textContent = label; t.classList.toggle('in', r.top < 22); }
+    if (label != null && t) {
+      const tt = t.querySelector('.tagT');
+      if (tt) { if (tt.textContent !== label) tt.textContent = label; t.classList.toggle('canDrag', canReorder(el)); } else t.textContent = label;
+      t.classList.toggle('in', r.top < 22);
+    }
   }
   const labelOf = (el) => dName(el);
+  // What Tovi is working on, shown like a selection in Tovi's pink: an outline per element (a card, a heading, a
+  // section) with a tag naming it and what Tovi is doing ("Pricing · Reviewing"). States: scan (Diagnose reviewing
+  // it, a slow light sweep), look (thinking about it, outline only), edit (changing it now, a pulse), done (a check).
+  S.working = [];
+  const locOfEl = (el) => el?.getAttribute?.('data-kerf-use') || el?.getAttribute?.('data-kerf') || null;
+  function workOn(locs, label, state = 'look') {
+    const now = Date.now();
+    for (const loc of locs.filter(Boolean)) {
+      const w = S.working.find((x) => x.loc === loc);
+      if (w) Object.assign(w, { label, state, t: now }); else S.working.push({ loc, label, state, t: now });
+    }
+    S.working = S.working.slice(-16);
+  }
+  const workClear = () => { S.working = S.working.filter((w) => w.state !== 'look' && w.state !== 'scan'); };
+  function workDone(locs) { const now = Date.now(); for (const w of S.working) if (!locs || locs.includes(w.loc)) { w.state = 'done'; w.t = now; } }
+  // Elements in scope for a request: the selection (and anything selected with it), or the visible sections.
+  const scopeLocs = () => (S.sel ? uniq([S.sel.el, ...(S.multi || []).map((x) => x.el || x)].map(locOfEl)) : pageBlocks().filter(onScreen).map(locOfEl)).filter(Boolean).slice(0, 12);
+  function drawWork() {
+    let host = $('work');
+    if (!host) { host = document.createElement('div'); host.id = 'work'; $('ov').appendChild(host); }
+    const now = Date.now();
+    S.working = S.working.filter((w) => w.state !== 'done' || now - w.t < 4000);
+    // Every area Tovi works on gets a pink outline and tag. Only Diagnose's sections (scan) add a fill and a sweep.
+    const items = S.agentsOn && D ? S.working.map((w) => ({ w, el: elOf(w.loc) })).filter((x) => x.el?.isConnected) : [];
+    while (host.children.length < items.length) { const d = document.createElement('div'); d.className = 'box work'; d.innerHTML = `<span class="tag"><img class="wAv" src="${TOVI_PIC}" alt=""><span class="tagT"></span></span><i class="wCheck"></i>`; host.appendChild(d); }
+    [...host.children].forEach((b, i) => {
+      const x = items[i];
+      const nm = x && /^(section|header|footer|nav)$/i.test(x.el.tagName) ? blockName(x.el) : x ? dName(x.el) : '';
+      place(b, x?.el || null, x ? `${nm}${x.w.label ? ` · ${x.w.label}` : ''}` : null);
+      if (x && b.dataset.state !== x.w.state) b.dataset.state = x.w.state;
+      if (x) b.classList.toggle('fading', x.w.state === 'done' && now - x.w.t > 3300);
+    });
+  }
+  // The grip on the selection tag shows only when the element has siblings it can trade places with.
+  const reorderSibs = (el) => [...(el.parentElement?.children || [])].filter((c) => c.matches('[data-kerf],[data-kerf-use]'));
+  // Items repeated from one template (a list of products) can't trade places in code, so they get no grip.
+  const domLoc = (el) => el.getAttribute('data-kerf-use') || el.getAttribute('data-kerf');
+  const repeated = (el) => reorderSibs(el).filter((c) => domLoc(c) === domLoc(el)).length > 1;
+  const canReorder = (el) => picking() && !S.editing && reorderSibs(el).length > 1 && !repeated(el);
   function pool(container, n, cls) {
     while (container.children.length < n) { const d = document.createElement('div'); d.className = 'box ' + cls; d.innerHTML = '<span class="tag"></span>'; container.appendChild(d); }
     return [...container.children];
@@ -941,7 +1565,7 @@
   function frameStep() {
     refind();
     const edit = S.mode === 'edit';
-    place($('hov'), edit && S.tool !== 'annotate' && S.hover !== S.sel?.el ? S.hover : null, S.hover ? labelOf(S.hover) : '');
+    place($('hov'), picking() && S.hover !== S.sel?.el ? S.hover : null, S.hover ? labelOf(S.hover) : '');
     place($('sel'), edit ? S.sel?.el : null, S.sel ? labelOf(S.sel.el) : '');
     if (edit && S.sel?.el?.isConnected) {
       const r = S.sel.el.getBoundingClientRect(), dim = $('sel').querySelector('.dim');
@@ -949,15 +1573,25 @@
       if (dim.textContent !== t) dim.textContent = t;
       $('sel').classList.toggle('comp', !!(useOf(S.sel.el) && /^[A-Z]/.test(S.sel.el.getAttribute('data-kerf-n') || '')));
     }
-    const sib = edit && S.sel && S.sel.repeat > 1 ? [...sameLoc(S.sel.el)].filter((x) => x !== S.sel.el).slice(0, 60) : [];
+    const sib = edit && S.sel ? [...(S.sel.repeat > 1 ? [...sameLoc(S.sel.el)].filter((x) => x !== S.sel.el) : []), ...(S.simScope === 'all' && picking() ? (S.sel.similar || []) : [])].slice(0, 60) : [];
     pool($('sibs'), sib.length, 'sib').forEach((b, i) => place(b, sib[i] || null, null));
     const aEls = D ? (S.amber || []).flatMap((loc) => [...D.querySelectorAll(q(loc))]).slice(0, 60) : [];
     pool($('amb'), aEls.length, 'amber').forEach((b, i) => place(b, aEls[i] || null, null));
+    drawWork();
     if (W) $('marksG').setAttribute('transform', `translate(${-W.scrollX} ${-W.scrollY})`);
     placeHandles(); placeMulti(); measureLines();
     if (W && W.location.pathname + W.location.search !== S.path) {
-      S.path = W.location.pathname + W.location.search;
+      // Notes are drawn on a page's own layout, so each page keeps its own: stash the old page's, bring back the new one's.
+      const next = W.location.pathname + W.location.search;
+      S.pageNotes ||= {};
+      if (S.path != null) { if (S.notes.length) S.pageNotes[S.path] = S.notes; else delete S.pageNotes[S.path]; }
+      S.notes = S.pageNotes[next] || [];
+      delete S.pageNotes[next];
+      S.openTask = [];
+      if (S.path != null) setTimeout(() => { refreshTasks(); renderBar(); }, 0);
+      S.path = next;
       S.pages = [S.path, ...S.pages.filter((x) => x !== S.path)].slice(0, 20);
+      saveVersion();
       if (document.activeElement?.id !== 'pathIn') { const pi = $('pathIn'); if (pi) pi.value = S.path; }
       layersSoon();
     }
@@ -972,8 +1606,20 @@
     let touched = false;
     W.addEventListener('pointerdown', () => { touched = true; }, true);
     [0, 300, 1200].forEach((ms) => setTimeout(() => { const a = D.activeElement; if (!touched && a && a !== D.body && /^(input|textarea|select)$/i.test(a.tagName)) a.blur(); }, ms));
+    // Selecting shows a plain arrow over the app; interacting keeps the app's own cursors.
+    const st = D.createElement('style');
+    st.textContent = 'html.kerf-pick, html.kerf-pick *{cursor:default!important}';
+    (D.head || D.documentElement).appendChild(st);
+    syncTool();
+    // ⌘-clicking a link would open a new browser tab: follow it in place instead.
+    let passing = false;
+    W.addEventListener('click', (e) => {
+      if (!thru(e) || !e.isTrusted) return;
+      const a = e.target.closest?.('a[href]');
+      if (a) { e.preventDefault(); e.stopImmediatePropagation(); passing = true; try { a.click(); } finally { passing = false; } }
+    }, true);
     const block = (e) => {
-      if (S.mode !== 'edit' && S.tool !== 'annotate') return;
+      if (passing || appClicks() || thru(e)) return;
       if (S.editing && S.editing.contains(e.target)) return;
       e.preventDefault(); e.stopPropagation();
     };
@@ -981,19 +1627,20 @@
     W.addEventListener('pointerdown', () => { closeMenu(); closeIconPop(); }, true);
     W.addEventListener('scroll', () => closeMenu(), true);
     W.addEventListener('contextmenu', (e) => {
-      if (S.mode !== 'edit' || S.tool === 'annotate' || S.editing) return;
+      if (!picking() || S.editing) return;
       const hit = pick(e.target);
       if (!hit) return;
-      if (S.sel?.el !== hit) { S.multi = []; select(hit); }
-      const fr = frame.getBoundingClientRect();
-      setTimeout(() => contextMenu({ x: fr.left + e.clientX * S.z, y: fr.top + e.clientY * S.z }), 0);
+      // Wait for the element's code to be read, so the menu offers everything it can do (like Edit text).
+      const ready = S.sel?.el !== hit ? (S.multi = [], select(hit)) : null;
+      const fr = frame.getBoundingClientRect(), at = { x: fr.left + e.clientX * S.z, y: fr.top + e.clientY * S.z };
+      Promise.resolve(ready).catch(() => {}).then(() => { if (S.sel?.el === hit) contextMenu(at); });
     }, true);
     let lastClick = null;
     // Browsers send no click to a disabled button or input, only pointer events: select those on release.
-    W.addEventListener('pointerup', (e) => { if (S.mode === 'edit' && e.button === 0 && e.target.closest?.(':disabled')) onCanvasClick(e); }, true);
+    W.addEventListener('pointerup', (e) => { if (picking() && !thru(e) && e.button === 0 && e.target.closest?.(':disabled')) onCanvasClick(e); }, true);
     W.addEventListener('click', onCanvasClick, true);
     function onCanvasClick(e) {
-      if (S.mode !== 'edit') { closeFloating(); return; }
+      if (passing || !picking() || thru(e)) { closeFloating(); return; }
       if (S.editing && S.editing.contains(e.target)) return;
       block(e);
       closeFloating();
@@ -1010,24 +1657,27 @@
         renderPanel();
         return;
       }
+      if (hit && S.sel?.el === hit && !S.multi.length) return;
       S.multi = [];
       select(hit);
     }
     W.addEventListener('dblclick', (e) => {
-      if (S.mode !== 'edit') return;
+      if (!picking() || thru(e)) return;
       block(e);
       if (S.sel && S.sel.el.contains(e.target)) beginText();
     }, true);
-    W.addEventListener('pointermove', (e) => { S.hover = S.mode === 'edit' ? pick(e.target) : null; }, true);
+    W.addEventListener('pointermove', (e) => { S.hover = picking() && !thru(e) ? pick(e.target) : null; }, true);
     W.addEventListener('pointerleave', () => { S.hover = null; });
     W.addEventListener('keydown', onKey, true);
+    ['keydown', 'keyup'].forEach((k) => W.addEventListener(k, holdKeys, true));
     W.addEventListener('wheel', pinch, { passive: false });
     // Re-read layers when the app's DOM changes (navigation, data loading, hot reload).
     new W.MutationObserver(() => layersSoon()).observe(D.body, { childList: true, subtree: true });
     renderAll();
   }
   frame.addEventListener('load', bindApp);
-  addEventListener('resize', () => { if (innerWidth < 1000 && S.layersOpen) { S.layersOpen = false; renderLayers(); renderTop(); } });
+  $('devLabel').addEventListener('click', () => { if (S.mode !== 'edit') return; if (S.tool !== 'select') setTool('select'); S.multi = []; select(null); S.pageSel = true; renderPanel(); });
+  addEventListener('resize', () => { if (innerWidth < 900 && S.layersOpen) { S.layersOpen = false; renderLeft(); renderTop(); } });
 
   // Clicking outside a floating card closes it.
   function closeFloating() {
@@ -1035,7 +1685,7 @@
     if (S.askOpen && !S.card?.busy) { S.askOpen = false; changed = true; }
     if (S.card && !S.card.busy && S.card.where === 'notes') { S.card = null; changed = true; }
     if (S.changesOpen) { S.changesOpen = false; renderChanges(); }
-    if (S.cpick) { S.cpick = null; renderPanel(); }
+    if (S.cpick) { S.cpick = S.cp = null; renderPanel(); }
     if (changed) { S.amber = []; renderAsk(); renderMarks(); renderBar(); }
   }
 
@@ -1045,6 +1695,7 @@
     const typing = t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleAI(true); return; }
+    if (mod && e.key === ',') { e.preventDefault(); openSettings(); return; }
     if (!typing && !mod && e.key === '?') { e.preventDefault(); shortcuts(); return; }
     if (!typing && !mod && e.shiftKey && (e.key === '|' || e.code === 'Backslash')) { e.preventDefault(); toggleMinUI(); return; }
     if (e.key === 'Escape' && !$('menu').hidden) { closeMenu(); return; }
@@ -1052,39 +1703,51 @@
     if (mod && (e.key === '-' || e.key === '_')) { e.preventDefault(); setZoom('out'); return; }
     if (e.shiftKey && !mod && !typing && (e.code === 'Digit1' || e.code === 'Digit0')) { e.preventDefault(); setZoom(e.code === 'Digit1' ? 'fit' : 1); return; }
     if (e.key === 'Escape') {
-      if (S.editing) return;
+      if (S.editing || t?.matches?.('textarea[data-text]')) return;
+      // While interacting, Escape belongs to the app (closing its menus and dialogs).
+      if (S.mode === 'edit' && S.tool === 'interact' && t?.ownerDocument === D) return;
       e.preventDefault();
       if (!$('modal').hidden) { $('modal').hidden = true; }
-      else if (S.cpick) { S.cpick = null; renderPanel(); }
+      else if (S.cpick) { S.cpick = S.cp = null; renderPanel(); }
       else if (S.noteDraft) { S.noteDraft = null; renderMarks(); }
+      else if (S.pendingInsert) { S.pendingInsert = false; $('toast').hidden = true; }
       else if (S.card && !S.card.busy && S.card.where !== 'chat') { S.card = null; S.amber = []; renderAll(); }
       else if (S.askOpen) { S.askOpen = false; S.amber = []; renderAsk(); renderBar(); }
       else if (S.changesOpen) { S.changesOpen = false; renderChanges(); }
       else if (S.tool === 'annotate') setTool('select');
-      else if (S.mode === 'edit' && S.tab === 'chat') { S.tab = 'design'; renderPanel(); renderBar(); }
       else if (S.side === 'history') { S.side = 'design'; renderAll(); }
       else if (S.mode === 'edit' && S.multi.length) { S.multi = []; renderPanel(); }
       else if (S.mode === 'edit' && S.sel) select(null);
-      else if (S.mode === 'edit') setMode('preview');
+      else if (S.pageSel) { S.pageSel = false; renderPanel(); }
+      else if (S.mode === 'preview') setMode('edit');
+      else if (S.tool !== 'select') setTool('select');
       return;
     }
     if (typing) return;
     if (mod && e.key.toLowerCase() === 'z' && S.mode === 'edit') { e.preventDefault(); undo(); return; }
     if (mod || e.altKey) return;
     const k = e.key.toLowerCase();
-    if (k === 'e') setMode('edit');
-    else if (k === 'p') setMode('preview');
-    else if (k === 'a') setTool(S.tool === 'annotate' ? 'select' : 'annotate');
-    else if (S.tool === 'annotate' && ['1', '2', '3', '4'].includes(k)) { S.shape = ['pin', 'box', 'circle', 'arrow'][+k - 1]; renderBar(); }
+    if (k === 'v' || k === 'e') { if (S.mode === 'preview') setMode('edit'); setTool('select'); }
+    else if (k === 'p') { if (S.mode === 'preview') setMode('edit'); setTool('interact'); }
+    else if (k === 'i' && (!picking() || !S.sel)) startInsert();
+    else if (k === 'a' && S.mode === 'edit') setTool(S.tool === 'annotate' ? 'select' : 'annotate');
     else if (S.mode === 'edit' && k === 'enter' && S.sel) beginText();
     else return;
     e.preventDefault();
   }
   window.addEventListener('keydown', onKey, true);
-  function toggleAI(fromKey) {
-    if (S.mode === 'edit') { S.tab = fromKey ? 'chat' : S.tab === 'chat' ? 'design' : 'chat'; renderPanel(S.tab === 'chat'); }
-    else { S.askOpen = fromKey ? true : !S.askOpen; if (!S.askOpen) S.amber = []; renderAsk(); }
-    renderBar();
+  function holdKeys(e) {
+    const through = (e.metaKey || e.ctrlKey) && e.type === 'keydown';
+    if (through !== S.through && (e.key === 'Meta' || e.key === 'Control' || !through)) { S.through = through; S.hover = null; syncTool(); }
+  }
+  ['keydown', 'keyup'].forEach((k) => window.addEventListener(k, holdKeys, true));
+  window.addEventListener('blur', () => { if (S.through) { S.through = false; syncTool(); } });
+  function toggleAI() {
+    if (S.mode === 'preview') setMode('edit');
+    S.left = 'chat';
+    if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); }
+    renderLeft(true);
+    $('chatIn')?.focus();
   }
 
   /* ---------- editor clicks ---------- */
@@ -1099,35 +1762,78 @@
       return;
     }
     if (!a) {
-      if (S.cpick && !e.target.closest('.cpop')) { S.cpick = null; renderPanel(); }
-      if (!e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal')) closeFloating();
+      if (S.cpick && !downInFpop && !e.target.closest('#fpop')) closeFpop();
+      if (!downInFpop && !e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal,#fpop')) closeFloating();
       return;
     }
     const act = a.dataset.act, v = a.dataset.v;
     switch (act) {
       case 'mode': setMode(v); break;
+      case 'present': setMode('preview'); break;
+      case 'settings': openSettings(); break;
+      case 'setTog':
+        if (v === 'agents') { S.agentsOn = !S.agentsOn; save('kerf.agents', S.agentsOn ? 'on' : 'off'); }
+        if (v === 'sim') { S.simScope = S.simScope === 'all' ? 'one' : 'all'; save('kerf.sim', S.simScope); renderPanel(); }
+        if (v === 'scale') { S.scaleArrows = !S.scaleArrows; save('kerf.scale', S.scaleArrows ? 'on' : 'off'); }
+        openSettings(); break;
+      case 'setMode': setStyleMode(v); openSettings(); break;
+      case 'setTheme': applyTheme(v); showSettings(); api('/prefs', { theme: v }).catch((err) => toast(err.message, '', true)); break;
+      case 'setDir': $('modal').hidden = true; openDirection(); break;
+      case 'setPanels': for (const k of Object.keys(SIDE)) { try { localStorage.removeItem(`kerf.side.${k}`); } catch {} setSide(k, SIDE[k].def); } applyDevice(); toast('Panels are back to their usual widths'); break;
+      case 'simScope': S.simScope = v; renderPanel(); break;
+      case 'keys': shortcuts(); break;
       case 'undo': undo(); break;
       case 'changes': S.changesOpen = !S.changesOpen; renderChanges(); break;
+      case 'diagnose': { if (S.diagnosing) break; const r = a.getBoundingClientRect(); openMenu([{ head: 'Diagnose with Tovi' }, { label: 'This page', sub: 'Every section, top to bottom · about a minute', run: () => runDiagnose('page') }, { label: 'This selection', sub: S.sel ? ctxName(S.sel.el) : 'Select something first', disabled: !S.sel, run: () => runDiagnose('selection') }, { label: 'Whole product', sub: 'Every page it can reach, up to 10 · a few minutes', run: () => runDiagnoseProduct() }], { x: r.left - 90, y: r.top - 200 }); break; }
       case 'toastClose': $('toast').hidden = true; break;
-      case 'scope': S.scope = v; S.cpick = null; renderPanel(); break;
+      case 'scope': S.scope = v; S.cpick = S.cp = null; renderPanel(); break;
       case 'srcScope': S.srcScope = v; renderPanel(); break;
       case 'sizeOnly': S.sizeOnly[S.device] = v === 'true'; renderPanel(); break;
       case 'reveal': S.reveal = { el: S.sel?.el, ...(S.reveal?.el === S.sel?.el ? S.reveal : {}), [v]: true }; renderPanel(); break;
+      case 'vSel': if (!e.target.closest('.vMore,.vName')) { S.vSel = S.vSel === +v ? null : +v; renderPanel(); } break;
+      case 'vGroup': S.vGroups.has(+v) ? S.vGroups.delete(+v) : S.vGroups.add(+v); renderPanel(); break;
+      case 'vMenu': {
+        const n = +v, x = S.versions.versions.find((y) => y.n === n);
+        const r = a.getBoundingClientRect();
+        S.vSel = n; renderPanel();
+        openMenu([
+          { label: S.vOpen === n ? 'Hide what changed' : `What changed (${x?.changes.length || 0})`, run: () => { S.vOpen = S.vOpen === n ? null : n; renderPanel(); } },
+          { label: S.versions.peeking === n ? 'Back to the current screen' : 'Show the screen before this', run: () => peek(n) },
+          { label: x?.name ? 'Rename…' : 'Name this version…', run: () => { S.vNaming = n; renderPanel(); setTimeout(() => document.querySelector('.vName input')?.focus(), 0); } },
+          '-',
+          { label: 'Restore this version', sub: 'Undo every change after it', danger: true, run: () => restore(n) },
+        ], { x: r.left - 180, y: r.bottom + 4 });
+        break;
+      }
       case 'saveVersion': api('/version', {}).then((v) => { S.versions = v; renderPanel(); renderTop(); toast(`Saved version ${v.versions.length}`); }).catch((e) => toast(e.message, '', true)); break;
       case 'copyLoc': navigator.clipboard?.writeText(activeLoc() || '').then(() => toast('Copied the code location', activeLoc() || '')).catch(() => {}); break;
       case 'parent': { const p = S.sel && pick(S.sel.el.parentElement); if (p) select(p); break; }
       case 'corners': S.corners = !S.corners; renderPanel(); break;
-      case 'cpick': S.cpick = S.cpick === v ? null : v; renderPanel(); break;
-      case 'token': case 'set': commit({ ops: [{ prop: a.dataset.p, value: v }] }); break;
+      case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; S.fpY = a.getBoundingClientRect().top; if (v === 'grad') S.gstop = 'from'; renderPanel(); break;
+      case 'fpClose': closeFpop(); break;
+      case 'diagStop': S.diagStop = true; if (S.card?.progress) { S.card.progress = 'Stopping after this page…'; renderChat(); } break;
+      case 'goPage': if (v !== S.path) goTo(v); break;
+      case 'fontPick': pickFont(a); break;
+      case 'gStop': if (e.target.closest('input')) { if (S.gstop !== v) { S.gstop = v; S.cp = null; } break; } S.gstop = v; S.cp = null; renderFpop(); break;
+      case 'fpType': { const want = v === 'gradient' ? 'grad' : 'bg'; if (S.cpick !== want) { S.cpick = want; S.cp = null; S.gstop = 'from'; setFillType(v); } break; }
+      case 'gFlip': { const g = gradOf(); if (!g) break; const st = stopsOf(g); const r = st.map((x) => ({ col: x.col, pos: 100 - x.pos })).reverse(); ['from', g.via ? 'via' : null, 'to'].filter(Boolean).forEach((kk, n) => { g[kk] = r[n].col; g[kk + 'Pos'] = r[n].pos; }); S.cp = null; commitGrad(g); break; }
+      case 'gRot': { const g = gradOf(); if (!g) break; g.dir = ROT[(ROT.indexOf(g.dir) + 1) % ROT.length]; commitGrad(g); break; }
+      case 'gAdd': { const g = gradOf(); if (!g || g.via) break; g.via = g.from; g.viaPos = Math.round((posOf(g, 'from') + posOf(g, 'to')) / 2); S.gstop = 'via'; S.cp = null; commitGrad(g); break; }
+      case 'gDel': { const g = gradOf(); if (!g || !g.via) break; if (v === 'from') { g.from = g.via; g.fromPos = g.viaPos; } else if (v === 'to') { g.to = g.via; g.toPos = g.viaPos; } g.via = null; g.viaPos = null; S.gstop = 'from'; S.cp = null; commitGrad(g); break; }
+      case 'cpTab': S.cpTab = v; renderFpop(); break;
+      case 'token': case 'set': if (a.dataset.p === 'grad') { const g = gradOf() || { dir: 'r' }; g[S.gstop || 'from'] = v; S.cp = null; commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] }); } else if (a.dataset.p === 'layout' && v === 'none') {
+          // Auto layout off: gap and alignment do nothing without it, so they go too.
+          commit({ ops: [{ prop: 'layout', value: 'none' }, { prop: 'gap', value: null }, { prop: 'justify', value: null }, { prop: 'alignItems', value: null }] });
+        } else { if (a.dataset.act === 'token') S.cp = null; commit({ ops: [{ prop: a.dataset.p, value: v }] }); } break;
       case 'addFill': commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }); break;
-      case 'rmFill': S.cpick = null; commit({ ops: gradOf() ? [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] : [{ prop: 'bg', value: 'transparent' }] }); break;
+      case 'rmFill': S.cpick = S.cp = null; if (gradOf()) commit({ ops: [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] }); else clearStyle([{ prop: 'bg', value: null }], [{ prop: 'bg', value: 'transparent' }], (el) => !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs(el).backgroundColor)); break;
+      case 'rmShadow': clearStyle([{ prop: 'shadow', value: null }], [{ prop: 'shadow', value: 'none' }], (el) => cs(el).boxShadow.split(/,(?![^(]*\))/).some((x) => !/rgba\([^)]*,\s*0\)/.test(x) && /[1-9]\d*(\.\d+)?px/.test(x))); break;
       case 'addStroke': commit({ ops: [{ prop: 'borderW', value: 1 }, { prop: 'borderC', value: tokens().find(([n]) => n === 'border')?.[0] || 'black' }] }); break;
-      case 'rmStroke': S.cpick = null; commit({ ops: [{ prop: 'borderW', value: 0 }] }); break;
+      case 'rmStroke': S.cpick = S.cp = null; clearStyle([{ prop: 'borderW', value: null }, { prop: 'borderC', value: null }], [{ prop: 'borderW', value: 0 }], (el) => parseFloat(cs(el).borderTopWidth) > 0); break;
       case 'setProp': commit({ props: [{ name: a.dataset.p, value: v }] }); break;
-      case 'tab': S.tab = v; renderPanel(v === 'chat'); renderBar(); break;
-      case 'chatToggle': toggleAI(false); break;
       case 'ask': toggleAI(false); break;
-      case 'layersToggle': S.layersOpen = !S.layersOpen; renderLayers(); renderTop(); break;
+      case 'layersToggle': S.layersOpen = !S.layersOpen; renderLeft(); renderTop(); setTimeout(applyDevice, 0); break;
+      case 'left': S.left = v; try { localStorage.setItem('kerf.left', v); } catch {} renderLeft(v === 'chat'); break;
       case 'device': S.device = v; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); break;
       case 'zoom': setZoom(v); break;
       case 'kerfMenu': kerfMenu(below(a)); break;
@@ -1145,12 +1851,38 @@
   });
   document.addEventListener('change', (e) => {
     const t = e.target;
-    if (t.dataset.propsel) return t.value && commit({ props: [{ name: t.dataset.propsel, value: t.value }] });
+    if (t.dataset.propsel) return t.value && commit({ props: [{ name: t.dataset.propsel, value: t.value, ...(t.dataset.options ? { options: t.dataset.options.split('|') } : {}), ...(t.dataset.def ? { def: t.dataset.def } : {}) }] });
     if (t.dataset.propnum) { const n = parseFloat(t.value); return isFinite(n) && commit({ props: [{ name: t.dataset.propnum, value: n }] }); }
     if (t.dataset.proptext) return commit({ props: [{ name: t.dataset.proptext, value: t.value }] });
     if (t.dataset.sel) return commit({ ops: [{ prop: t.dataset.sel, value: /^\d+$/.test(t.value) ? +t.value : t.value }] });
-    if (t.dataset.text) return t.value.trim() && commit({ text: t.value.trim() });
-    if (t.dataset.colorinput) return commit({ ops: [{ prop: t.dataset.colorinput, value: t.value.toUpperCase() }] });
+    if (t.dataset.text) { const v = t.value.replace(/\s+/g, ' ').trim(); return v && v !== t.defaultValue.replace(/\s+/g, ' ').trim() && commit({ text: v }); }
+    if (t.dataset.shv != null || t.dataset.shhex != null || t.dataset.shtype != null) {
+      const o = shadowNow();
+      if (t.dataset.shtype != null) o.inset = t.value === 'inner';
+      else if (t.dataset.shhex != null) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderPanel(); o.hex = hx.toUpperCase(); }
+      else { const n = parseFloat(t.value); if (!isFinite(n)) return renderPanel(); const k = t.dataset.shv; o[k] = k === 'a' ? Math.max(0, Math.min(100, Math.round(n))) : k === 'blur' ? Math.max(0, Math.round(n)) : Math.round(n); }
+      return commit({ ops: [{ prop: 'shadow', value: shadowValue(o) }] });
+    }
+    if (t.dataset.gpos || t.dataset.ghex || t.dataset.galpha) {
+      const g = gradOf(); if (!g) return;
+      const k = t.dataset.gpos || t.dataset.ghex || t.dataset.galpha;
+      if (t.dataset.gpos) { const n = parseFloat(t.value); if (!isFinite(n)) return renderFpop(); g[k + 'Pos'] = Math.max(0, Math.min(100, Math.round(n))); }
+      else {
+        const cur = toHexA(tokenSwatch(g[k]));
+        if (t.dataset.ghex) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderFpop(); cur.hex = hx.toUpperCase(); }
+        else { const n = parseFloat(t.value); if (!isFinite(n)) return renderFpop(); cur.a = Math.max(0, Math.min(100, Math.round(n))); }
+        g[k] = '#' + cur.hex + (cur.a >= 100 ? '' : ('0' + Math.round(cur.a * 2.55).toString(16)).slice(-2).toUpperCase());
+      }
+      S.gstop = k; S.cp = null;
+      return commitGrad(g);
+    }
+    if (t.dataset.cphex || t.dataset.cpa) {
+      const p = t.dataset.cphex || t.dataset.cpa, c = S.cp;
+      if (!c) return;
+      if (t.dataset.cphex) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderPanel(); Object.assign(c, hexToHsv(hx.toUpperCase())); }
+      else { const n = parseFloat(t.value); if (!isFinite(n)) return renderPanel(); c.a = Math.max(0, Math.min(100, Math.round(n))); }
+      return cpCommit(c);
+    }
     const p = t.dataset.prop;
     if (!p) return;
     if (t.dataset.color) {
@@ -1161,7 +1893,17 @@
     }
     const n = parseFloat(t.value);
     if (isNaN(n)) return renderPanel();
-    commit({ ops: [{ prop: p, value: clamp(p, Math.round(n * 10) / 10) }] });
+    const v = clamp(p, Math.round(n * 10) / 10);
+    // Zero padding, margin or gap: remove the class (like a developer would) rather than write px-0,
+    // unless something else (a component's own classes) still sets it.
+    if (v === 0 && ['padX', 'padY', 'mX', 'mY', 'mT', 'mB', 'gap'].includes(p)) return clearStyle([{ prop: p, value: null }], [{ prop: p, value: 0 }], (el) => (+read(p, el) || 0) !== 0);
+    if (v === 100 && p === 'opacity') return clearStyle([{ prop: p, value: null }], [{ prop: p, value: 100 }], (el) => +read(p, el) !== 100);
+    // Icons keep their proportions when resized, like Figma.
+    if ((p === 'w' || p === 'h') && S.sel?.el?.tagName.toLowerCase() === 'svg') {
+      const r = S.sel.el.getBoundingClientRect(), k = p === 'w' ? r.height / (r.width || 1) : r.width / (r.height || 1);
+      return commit({ ops: [{ prop: p, value: v }, { prop: p === 'w' ? 'h' : 'w', value: Math.round(v * k) }] });
+    }
+    commit({ ops: [{ prop: p, value: v }] });
   });
   document.addEventListener('input', (e) => {
     const t = e.target;
@@ -1172,11 +1914,60 @@
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && t.closest && t.closest('.kc')) { e.preventDefault(); t.form.requestSubmit(); return; }
     if (!p || t.dataset.color || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !S.sel) return;
     e.preventDefault();
-    const n = clamp(p, (parseFloat(t.value) || 0) + (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1));
+    // Arrows step through the app's own scale (so values stay on the design system); Shift is a precise 1px nudge.
+    const up = e.key === 'ArrowUp', cur = parseFloat(t.value) || 0, steps = S.scaleArrows ? scaleSteps(p) : null;
+    const n = clamp(p, steps && !e.shiftKey ? (up ? steps.find((x) => x > cur + 0.01) : [...steps].reverse().find((x) => x < cur - 0.01)) ?? cur + (up ? 1 : -1) : cur + (up ? 1 : -1) * (steps || !e.shiftKey ? 1 : 10));
     t.value = n;
     preview(S.sel.el, p, n);
     commitSoon(p, n);
   });
+  // Settings → AI: the provider picks which key and models to show; choosing a model switches Tovi over.
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'setProvSel') { aiPick = { provider: e.target.value }; showSettings(); return; }
+    if (e.target.id !== 'setModelSel') return;
+    const provider = aiPick?.provider || aiCfg.provider, model = e.target.value;
+    if (model !== '__other') { api('/ai-config', { provider, model }).then(() => { toast('Model saved'); openSettings(); }).catch((err) => toast(err.message, '', true)); return; }
+    $('setModelForm').hidden = false;
+    $('setModel').value = '';
+    $('setModel').focus();
+  });
+  // Colour picker: drag the square, hue or opacity. The element previews live; the change is written once on release.
+  document.addEventListener('pointerdown', (e) => {
+    const area = e.target.closest?.('[data-cpdrag]');
+    if (!area || !S.cp || !S.sel) return;
+    e.preventDefault();
+    const kind = area.dataset.cpdrag, c = S.cp, pop = area.closest('.cpop');
+    const paint = () => {
+      const hx = hsvToHex(c.h, c.s, c.v);
+      pop.querySelector('.cpSV').style.setProperty('--hue', `hsl(${c.h} 100% 50%)`);
+      const [sv, hue, al] = pop.querySelectorAll('.cpK');
+      sv.style.left = c.s * 100 + '%'; sv.style.top = (1 - c.v) * 100 + '%';
+      hue.style.left = c.h / 3.6 + '%'; hue.style.background = `hsl(${c.h} 100% 50%)`;
+      al.style.left = c.a + '%';
+      pop.querySelector('.cpAlpha').style.setProperty('--c', '#' + hx);
+      pop.querySelector('[data-cphex]').value = hx;
+      pop.querySelector('[data-cpa]').value = c.a;
+      const chip = c.p !== 'grad' && document.querySelector(`#panel [data-act="cpick"][data-v="${c.p}"]`);
+      if (chip) chip.style.background = cpOut(c);
+      cpPreview(c);
+    };
+    const at = (ev) => {
+      const r = area.getBoundingClientRect(), x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+      if (kind === 'sv') { c.s = x; c.v = 1 - y; } else if (kind === 'hue') c.h = Math.min(359.9, x * 360); else c.a = Math.round(x * 100);
+      paint();
+    };
+    at(e);
+    area.setPointerCapture(e.pointerId);
+    const up = () => { area.removeEventListener('pointermove', at); area.removeEventListener('pointerup', up); area.removeEventListener('pointercancel', up); cpCommit(c); };
+    area.addEventListener('pointermove', at); area.addEventListener('pointerup', up); area.addEventListener('pointercancel', up);
+  }, true);
+  // Where did this click start? Picking a colour redraws the floating panel under the pointer, so the click that
+  // follows can land on an element that's gone; a click that started inside the panel never closes it.
+  let downInFpop = false;
+  document.addEventListener('pointerdown', (e) => { downInFpop = !!e.target.closest?.('#fpop'); }, true);
+  // Naming a version: Escape or clicking away cancels.
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest?.('.vName')) { e.stopPropagation(); S.vNaming = null; renderPanel(); } }, true);
+  document.addEventListener('focusout', (e) => { if (e.target.closest?.('.vName') && S.vNaming != null) setTimeout(() => { if (!document.activeElement?.closest('.vName')) { S.vNaming = null; renderPanel(); } }, 120); });
   document.addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target.dataset.form;
@@ -1185,6 +1976,11 @@
     if (f === 'chat') sendChat();
     if (f === 'pick' && S.pick) { S.pick.prompt = $('pickQ').value; if (S.pick.kind === 'photo') S.pick.photos = null; else S.pick.drawings = null; runPicker(); }
     if (f === 'note') addNote();
+    if (f === 'aimodel') { api('/ai-config', { provider: aiPick?.provider || aiCfg.provider, model: $('setModel').value.trim() }).then(() => { toast('Model saved'); openSettings(); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'aikey') { const inp = e.target.querySelector('input'), key = inp.value.trim(), provider = e.target.dataset.p; if (!key) return; api('/keys', { provider, key }).then(() => { toast(`${aiCfg.defaults?.[provider]?.label || 'Key'} saved`); openSettings(); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'person') { const name = $('setPerson').value.trim(); if (!name) return; api('/person', { name }).then((p) => { $('setPerson').value = p.name; toast(`Versions will show ${p.name}`); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'vsave') { const name = e.target.querySelector('input').value.trim(); api('/version', { kind: 'named', name: name || null }).then((v) => { S.versions = v; S.verAt = S.count; renderPanel(); renderTop(); toast(name ? `Saved “${name}”` : 'Saved a version'); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'vname') { const n = +e.target.dataset.n, name = e.target.querySelector('input').value.trim(); api('/rename', { n, name }).then((v) => { S.versions = v; S.vNaming = null; renderPanel(); }).catch((err) => toast(err.message, '', true)); }
     if (f === 'reply') {
       const where = e.target.dataset.where, prev = S.card;
       take('replyIn', (v, atts) => runAI(v, where === 'notes' && prev?.targets ? prev.targets : visibleTargets(), where, v, true, atts));
@@ -1225,12 +2021,13 @@
     afterEdit();
   }
   async function restore(n) {
-    if (!confirm(n === 0 ? 'Undo every change from this session?' : `Undo everything after version ${n}?`)) return;
+    if (!confirm(n === 0 ? 'Undo every change from this session?' : 'Restore this version? Every change after it is undone.')) return;
     try {
       S.versions = await api('/restore', { n });
       const c = await api('/changes');
       S.count = c.length;
-      toast(n === 0 ? 'Back to how the screen started' : `Restored version ${n}`);
+      toast(n === 0 ? 'Back to how the screen started' : 'Restored that version');
+      S.vSel = null;
     } catch (e) { toast(e.message, '', true); }
     afterEdit();
   }
@@ -1239,22 +2036,28 @@
   async function openPR() {
     await api('/version', {}).then((v) => (S.versions = v)).catch(() => {});
     const p = await api('/project').catch(() => ({}));
-    const all = [...S.versions.versions.flatMap((v) => v.changes), ...S.versions.draft];
+    // A dry run says what will happen (new PR or update, which branch, any problem) before anything is sent.
+    const plan = p.repo ? await api('/pr', { dryRun: true }).catch((e) => ({ error: e.message })) : null;
+    const every = [...S.versions.versions.flatMap((v) => v.changes), ...S.versions.draft];
+    const all = every.slice(S.versions.sent || 0); // only what hasn't been handed off yet
     const files = [...new Set(all.map((c) => c.file))];
-    const title = all.length === 1 ? `Design: ${all[0].name ? all[0].name + ' · ' : ''}${all[0].label}`.slice(0, 72) : `Design updates: ${all.length} changes${S.path === '/' ? '' : ` on ${S.path}`}`;
+    const nm = (c) => (c.name || '').replace(/\s*“[^”]*…”/, ''); // no cut-off quotes in a PR title
+    const title = !all.length ? 'Design updates from Tovi' : all.length === 1 ? `Design: ${nm(all[0]) ? nm(all[0]) + ' · ' : ''}${all[0].label}`.slice(0, 72) : `Design updates: ${all.length} changes${S.path === '/' ? '' : ` on ${S.path}`}`;
+    const retry = plan && !plan.error && !all.length && plan.unpushed;
+    const ok = p.repo && plan && !plan.error;
     S.prAll = all;
     const m = $('modal');
     m.hidden = false;
     m.innerHTML = `<section class="dialog" role="dialog" aria-modal="true" aria-labelledby="prT">
-      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="prT">Hand off to developers</h2><span class="note">Tovi sends your changes as one pull request on GitHub. Developers review it before anything goes live.</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
+      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="prT">${plan?.reuse ? 'Update your pull request' : 'Hand off to developers'}</h2><span class="note">${plan?.reuse ? 'These changes go into the pull request you already opened, with a comment saying what’s new.' : 'Tovi sends your changes as one pull request on GitHub. Developers review it before anything goes live.'}</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
       <div class="db">
-        ${!p.repo ? `<span class="note warn">This project isn’t connected to a GitHub repository, so Tovi can’t open a pull request for it.</span>` : ''}
-        <label><span class="secT">Title</span><input class="fld" id="prTitle" value="${esc(title)}"></label>
+        ${!p.repo ? `<span class="note warn">This project isn’t connected to a GitHub repository, so Tovi can’t open a pull request for it.</span>` : plan?.error ? `<span class="note warn">${esc(plan.error)}</span>` : retry ? `<span class="note warn">Your last hand off didn’t reach GitHub. Send it again to finish.</span>` : ''}
+        <label><span class="secT">Title</span><input class="fld" id="prTitle" value="${esc(retry ? 'Design updates from Tovi' : title)}"${plan?.reuse ? ' disabled title="The pull request keeps its title"' : ''}></label>
         <label><span class="secT">Note for your developers <span class="note" style="font-weight:400">(optional)</span></span><textarea class="fld" id="prBody" rows="3" placeholder="Anything they should know, e.g. why you made these changes"></textarea></label>
-        <div style="display:flex;align-items:center;gap:8px;color:var(--ink2)"><span class="chip mono" style="color:var(--ink)">${p.branch?.startsWith('kerf/') ? esc(p.branch) : 'kerf/…'}</span>→<span class="chip mono" style="color:var(--ink)">${esc(p.branch?.startsWith('kerf/') ? 'its pull request' : p.branch || 'main')}</span>${p.repo ? `<span class="note">${esc(p.repo)}</span>` : ''}</div>
-        <div class="files"><div class="fh"><span>What changed · ${all.length}</span><span class="note" title="${esc(files.join('\n'))}">${files.length} code file${files.length === 1 ? '' : 's'}</span></div><div class="frs">${all.map((c) => `<div class="fr"><span class="dot" style="margin:0"></span><span>${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${c.name ? `<b>${esc(c.name)}</b> · ` : ''}${esc(c.label)}</span></div>`).join('')}</div></div>
+        ${ok ? `<div style="display:flex;align-items:center;gap:8px;color:var(--ink2);flex-wrap:wrap"><span class="chip mono" style="color:var(--ink)">${esc(plan?.branch && plan.reuse ? plan.branch : 'kerf/…')}</span>→<span class="chip mono" style="color:var(--ink)">${esc(plan?.base || (plan?.reuse ? 'its pull request' : p.branch || 'main'))}</span><span class="note">${esc(p.repo)}</span></div>` : ''}
+        <div class="files"><div class="fh"><span>What changed · ${all.length}</span><span class="note" title="${esc(files.join('\n'))}">${files.length} code file${files.length === 1 ? '' : 's'}</span></div><div class="frs">${all.map((c) => `<div class="fr"><span class="dot" style="margin:0"></span><span>${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${c.name ? `<b>${esc(c.name)}</b> · ` : ''}${esc(c.label)}</span></div>`).join('') || `<span class="note" style="padding:8px 10px">${retry ? 'Already committed, waiting to be pushed.' : 'Nothing new since your last hand off.'}</span>`}</div></div>
       </div>
-      <div class="df"><button class="outline" data-act="closeModal">Cancel</button><button class="primary solo" data-act="createPR" ${p.repo && files.length ? '' : 'disabled'}>Create pull request</button></div></section>`;
+      <div class="df"><button class="outline" data-act="closeModal">Cancel</button><button class="primary solo" data-act="createPR" ${ok ? '' : 'disabled'}>${plan?.reuse ? 'Update pull request' : 'Create pull request'}</button></div></section>`;
   }
   async function createPR() {
     const btn = document.querySelector('[data-act="createPR"]');
@@ -1262,15 +2065,16 @@
     btn.innerHTML = '<i class="spin"></i>Sending to GitHub…';
     try {
       const all = S.prAll || [], note = $('prBody').value.trim();
-      const body = `${note ? note + '\n\n' : ''}### What changed\n${all.map((c) => `- ${c.source === 'ai' ? '(AI) ' : ''}${c.name ? `**${c.name}**: ` : ''}${c.label}`).join('\n')}\n\n<details><summary>Code changes</summary>\n\n${all.map((c) => `- \`${c.file}\`: ${c.code || c.label}`).join('\n')}\n</details>\n\nMade with Tovi.`;
+      const body = `${note ? note + '\n\n' : ''}### What changed\n${all.map((c) => `- ${c.source === 'ai' ? '(AI) ' : ''}${c.name ? `**${c.name}**: ` : ''}${c.label}`).join('\n') || '- (see commits)'}\n\n<details><summary>Code changes</summary>\n\n${all.map((c) => `- \`${c.file}\`: ${c.code || c.label}`).join('\n')}\n</details>\n\nMade with Tovi.`;
       const r = await api('/pr', { title: $('prTitle').value, body });
       $('modal').innerHTML = `<section class="dialog" role="dialog" aria-modal="true"><div class="db" style="padding:20px;gap:10px">
         <span style="display:grid;place-items:center;width:32px;height:32px;border-radius:8px;background:var(--raised)">${ico('check', 16)}</span>
         <h2 style="margin:0;font-size:18px">${r.updated ? 'Pull request updated' : r.needsGitHubStep ? 'Branch pushed' : 'Pull request ready'}</h2>
-        <span class="note">${r.files.length} file${r.files.length === 1 ? '' : 's'} on <span class="mono">${esc(r.branch)}</span>.${r.needsGitHubStep ? ' Open the link to finish creating the pull request on GitHub.' : ''}</span>
+        <span class="note">${r.files.length ? `${r.files.length} file${r.files.length === 1 ? '' : 's'}` : 'Your changes'} on <span class="mono">${esc(r.branch)}</span>${r.base ? ` → <span class="mono">${esc(r.base)}</span>` : ''}.${r.needsGitHubStep ? ' Open the link to finish creating the pull request on GitHub.' : ''}</span>
         ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>` : ''}</div>
         <div class="df"><button class="primary solo" data-act="closeModal">Done</button></div></section>`;
       S.project = await api('/project').catch(() => S.project);
+      S.versions = await api('/versions').catch(() => S.versions);
       renderTop();
     } catch (e) {
       btn.disabled = false;
@@ -1280,12 +2084,14 @@
   }
 
   /* ---------- AI: Ask bar, chat, annotations ---------- */
-  const PROP_NAMES = { gradient: 'Gradient', clipText: 'Gradient text', fit: 'Image fit', bg: 'Fill', color: 'Text color', borderC: 'Stroke color', fontSize: 'Size', fontWeight: 'Weight', lineHeight: 'Line height', letterSpacing: 'Letter spacing', align: 'Align', radius: 'Radius', rTL: 'Top-left corner', rTR: 'Top-right corner', rBR: 'Bottom-right corner', rBL: 'Bottom-left corner', padX: 'Padding X', padY: 'Padding Y', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', w: 'Width', h: 'Height', mX: 'Margin X', mY: 'Margin Y', layout: 'Layout', alignItems: 'Align', justify: 'Distribute', wrap: 'Wrap' };
+  const PROP_NAMES = { gradient: 'Gradient', clipText: 'Gradient text', fit: 'Image fit', bg: 'Fill', color: 'Text color', borderC: 'Stroke color', fontSize: 'Size', fontWeight: 'Weight', lineHeight: 'Line height', letterSpacing: 'Letter spacing', align: 'Align', radius: 'Radius', rTL: 'Top-left corner', rTR: 'Top-right corner', rBR: 'Bottom-right corner', rBL: 'Bottom-left corner', padX: 'Padding X', padY: 'Padding Y', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', w: 'Width', h: 'Height', mX: 'Margin X', mY: 'Margin Y', mT: 'Top margin', mB: 'Bottom margin', fontFamily: 'Font', layout: 'Layout', alignItems: 'Align', justify: 'Distribute', wrap: 'Wrap' };
   const UNIT = { w: 'px', h: 'px', mX: 'px', mY: 'px', fontSize: 'px', lineHeight: 'px', radius: 'px', rTL: 'px', rTR: 'px', rBR: 'px', rBL: 'px', padX: 'px', padY: 'px', gap: 'px', borderW: 'px', opacity: '%', letterSpacing: '%' };
   const WORDS = { fill: 'Fill', grow: 'Fill', hug: 'Hug', auto: 'Auto', row: 'Horizontal', col: 'Vertical', none: 'Off', true: 'On', false: 'Off' };
-  const opLabel = (o) => { const v = String(o.value); if (o.prop === 'fontWeight') return `Weight ${({ 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold', 800: 'Extra bold' })[v] || v}`; return `${PROP_NAMES[o.prop] || o.prop} ${WORDS[v] || v}${/^-?[\d.]+$/.test(v) ? UNIT[o.prop] || '' : ''}`; };
-  const structLabel = (st) => ({ token: `Colour “${st.name}”${st.which && st.which !== 'both' ? ` (${st.which})` : ''} → ${st.hex}`, code: `Code change in ${String(st.file || '').split('/').pop()}`, group: `Group into a frame (${st.className || ''})`, ungroup: 'Ungroup', replace: `Replace with: ${(st.jsx || '').slice(0, 60)}`, delete: 'Delete', duplicate: 'Duplicate', move: `Move ${st.dir || 'to ' + st.index}`, swap: `Swap → ${st.to}`, insert: `Add ${st.position}: ${(st.jsx || '').slice(0, 60)}`, image: [st.src && `Image → ${st.src}`, st.alt != null && `Alt “${st.alt}”`].filter(Boolean).join(' · ') })[st.type];
-  const editLabel = (e) => e.structure ? structLabel(e.structure) : [...e.ops.map(opLabel), ...(e.props || []).map((p) => `${p.name}: ${p.value}`), ...(e.text ? [`“${e.text}”`] : [])].join(' · ');
+  const opLabel = (o) => { const v = String(o.value); if (o.prop === 'fontFamily') return `Font ${S.theme?.fonts?.[v] || v}`; if (o.prop === 'fontWeight') return `Weight ${({ 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold', 800: 'Extra bold' })[v] || v}`; return `${PROP_NAMES[o.prop] || o.prop} ${WORDS[v] || v}${/^-?[\d.]+$/.test(v) ? UNIT[o.prop] || '' : ''}`; };
+  // New elements in words: their text (“New”) or what they are, never their code.
+  const jsxWords = (j) => { const t = String(j || '').replace(/<[^>]*>/g, ' ').replace(/\{[^}]*\}/g, ' ').replace(/\s+/g, ' ').trim(); const tag = (String(j || '').match(/^\s*<\s*([\w.]+)/) || [])[1]; return t ? `“${t.length > 30 ? t.slice(0, 29) + '…' : t}”` : tag && /^[A-Z]/.test(tag) ? tag : 'an element'; };
+  const structLabel = (st) => ({ token: `Colour “${st.name}”${st.which && st.which !== 'both' ? ` (${st.which})` : ''} → ${st.hex}`, code: `Code change in ${String(st.file || '').split('/').pop()}`, group: 'Group into a frame', ungroup: 'Ungroup', replace: `Replace with ${jsxWords(st.jsx)}`, delete: 'Delete', duplicate: 'Duplicate', move: `Move ${st.dir || 'to ' + st.index}`, swap: `Swap → ${st.to}`, insert: `Add ${jsxWords(st.jsx)} ${st.position === 'inside' ? 'inside' : st.position}`, image: [st.src && `Image → ${st.src}`, st.alt != null && `Alt “${st.alt}”`].filter(Boolean).join(' · ') })[st.type];
+  const editLabel = (e) => e.structure ? structLabel(e.structure) : [...e.ops.map(opLabel), ...(e.props || []).map((p) => `${humanize(p.name)} ${p.value}`), ...(e.text ? [`“${e.text}”`] : [])].join(' · ');
   function measure(el) {
     const c = cs(el);
     return { fontSize: c.fontSize, color: rgbHex(c.color), fill: rgbHex(c.backgroundColor), radius: c.borderTopLeftRadius, padding: c.padding, display: c.display };
@@ -1322,6 +2128,8 @@
     return uniq(out);
   }
   function noteTargets(n, i) {
+    // Tovi's notes name their elements; the person's notes find them under the mark.
+    if (n.locs?.length) { const own = n.locs.map(elOf).filter(Boolean); if (own.length) return uniq(own.flatMap((el) => targetsOf(el, i + 1))).slice(0, 24); }
     const pts = n.shape === 'pin' ? [[n.x, n.y]] : n.shape === 'arrow' ? [[n.x2, n.y2]] : [[n.x + n.w / 2, n.y + n.h / 2]];
     const els = [];
     for (const [px, py] of pts) D.elementsFromPoint(px - W.scrollX, py - W.scrollY).map(pick).filter(Boolean).slice(0, 3).forEach((e) => els.push(e));
@@ -1332,6 +2140,177 @@
       });
     }
     return uniq(els.flatMap((el) => targetsOf(el, i + 1))).slice(0, 24);
+  }
+
+  // The page's sections, top to bottom: the header, each <section>, the footer (outermost ones only, and only
+  // real blocks). Pages without such tags get none, and are reviewed a screen at a time instead.
+  function pageBlocks() {
+    if (!D) return [];
+    const all = [...D.querySelectorAll('header, nav, section, footer, [role="banner"], [role="contentinfo"]')].filter((el) => { const r = el.getBoundingClientRect(); return r.height >= 60 && r.width >= 200 && tagged(el).length + (el.matches('[data-kerf],[data-kerf-use]') ? 1 : 0) > 0; });
+    return all.filter((el) => !all.some((o) => o !== el && o.contains(el))).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top).slice(0, 14);
+  }
+  // A picture of one element, whole (even the parts off screen), sharp enough to judge detail.
+  async function captureEl(el) {
+    if (!el?.isConnected || !D) return null;
+    try {
+      const lib = await loadH2i();
+      const css = await fontsFor(lib);
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return null;
+      const k = Math.min(1.5, 1400 / r.width, 3000 / r.height);
+      const shot = lib.toJpeg(el, { pixelRatio: k, quality: 0.8, backgroundColor: cs(D.body).backgroundColor, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
+      const url = await Promise.race([shot, new Promise((res) => setTimeout(() => res(null), 6000))]);
+      return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
+    } catch { return null; }
+  }
+  const blockName = (el) => { const h = el.querySelector('h1, h2, h3'); const t = (h?.innerText || '').trim().split('\n')[0]; return /^(header|nav)$/i.test(el.tagName) ? 'Header' : /^footer$/i.test(el.tagName) ? 'Footer' : t ? (t.length > 28 ? t.slice(0, 27) + '…' : t) : 'Section'; };
+  // Review the whole current page: every section on its own (three at a time), or a screen at a time down the
+  // page when it has no sections. Returns the findings (as notes) and a summary.
+  async function reviewPage(m, label) {
+    const ctx = aiContext();
+    let jobs = [];
+    const blocks = pageBlocks();
+    if (blocks.length >= 2) {
+      m.progress = `${label} · taking screenshots`;
+      workOn(blocks.map(locOfEl), 'Reading', 'scan');
+      renderChat();
+      const real = await realShots({ locs: blocks.map(locOfEl).filter(Boolean) });
+      S.working = S.working.filter((w) => w.state !== 'scan');
+      jobs = blocks.map((b) => ({ name: blockName(b), loc: locOfEl(b), make: async () => ({ targets: uniq(tagged(b).concat(b.matches('[data-kerf],[data-kerf-use]') ? [b] : []).flatMap((el) => targetsOf(el))).slice(0, 70), screen: jpeg(real?.sections?.[locOfEl(b)]) || await captureEl(b), scope: 'section' }) }));
+    } else {
+      const parts = Math.max(1, Math.min(8, Math.ceil(D.documentElement.scrollHeight / W.innerHeight)));
+      for (let k = 0; k < parts; k++) jobs.push({ name: `screen ${k + 1}`, make: async () => { W.scrollTo(0, k * W.innerHeight); await wait(600); return { targets: visibleTargets(), screen: await captureScreen(), scope: 'page' }; } });
+    }
+    const results = new Array(jobs.length);
+    let next = 0, finished = 0;
+    // Pictures are taken one at a time (scrolling must not overlap); reviews run three at a time.
+    const prepared = [];
+    for (const j of jobs) { if (S.diagStop) break; prepared.push(await j.make()); }
+    W.scrollTo(0, 0);
+    m.lookedN = (m.lookedN || 0) + prepared.reduce((a, x) => a + x.targets.length, 0);
+    await Promise.all(Array.from({ length: Math.min(3, prepared.length) }, async () => {
+      while (next < prepared.length && !S.diagStop) {
+        const k = next++, x = prepared[k];
+        m.progress = `${label}${jobs.length > 1 ? ` · ${jobs[k].name} (${k + 1} of ${jobs.length})` : ''}`;
+        const bl = jobs[k].loc;
+        if (bl) workOn([bl], 'Reviewing', 'scan');
+        renderChat();
+        results[k] = x.targets.length ? await api('/diagnose', { targets: x.targets, screen: x.screen, context: ctx, scope: x.scope }).catch((e) => ({ error: e.message, findings: [] })) : { findings: [] };
+        if (bl) S.working = S.working.filter((w) => w.loc !== bl);
+        finished++;
+      }
+    }));
+    const titles = new Set();
+    const found = results.filter(Boolean).flatMap((r) => r.findings || []).filter((f) => { const key = `${f.title.toLowerCase()}|${f.locs.join(',')}`; if (titles.has(key)) return false; titles.add(key); return true; });
+    const sum = results.find((r) => r?.summary)?.summary || '';
+    return { notes: notesFrom(found), summary: sum, failed: results.filter((r) => r?.error).length, reviewed: finished, sections: jobs.length };
+  }
+  // Findings become Tovi's notes: a box around the elements each one is about, in page coordinates.
+  function notesFrom(findings) {
+    const out = [];
+    for (const f of findings) {
+      const boxes = f.locs.map(elOf).filter((el) => el?.isConnected).map((el) => el.getBoundingClientRect()).filter((b) => b.width || b.height);
+      if (!boxes.length) continue;
+      const x0 = Math.min(...boxes.map((b) => b.left)), y0 = Math.min(...boxes.map((b) => b.top)), x1 = Math.max(...boxes.map((b) => b.right)), y1 = Math.max(...boxes.map((b) => b.bottom));
+      out.push({ shape: 'box', x: x0 + W.scrollX - 4, y: y0 + W.scrollY - 4, w: x1 - x0 + 8, h: y1 - y0 + 8, text: f.fix, title: f.title, problem: f.problem, sev: f.severity, locs: f.locs, by: 'tovi' });
+    }
+    return out;
+  }
+  const loaded = () => new Promise((res) => { const done = () => { clearTimeout(t); frame.removeEventListener('load', done); setTimeout(res, 1400); }; const t = setTimeout(done, 12000); frame.addEventListener('load', done); });
+  // Whole product: start where the designer is, follow the app's own links (same site, up to 10 pages), and
+  // review each page top to bottom a screen at a time (up to 3 screens, reviewed side by side). Notes land on
+  // their page as each one finishes; the summary links to every page with notes. Stop ends it at any point.
+  async function runDiagnoseProduct() {
+    if (S.diagnosing || S.card?.busy || !D) return;
+    S.diagnosing = true; S.diagStop = false;
+    renderBar();
+    S.chat.push({ role: 'user', text: 'Diagnose the whole product', shown: 'Diagnose the whole product', ctx: 'Whole product', where: 'chat', atts: [] });
+    const m = { role: 'kerf', busy: true, status: 'pending', where: 'chat', targets: [], skip: [], started: Date.now(), looked: [], lookedN: 0, pages: [], progress: 'Finding your pages…' };
+    S.chat.push(m);
+    S.card = m;
+    if (S.mode === 'edit') { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
+    renderAI();
+    const start = S.path, seen = new Set([start]), queue = [start];
+    const sums = [];
+    try {
+      while (queue.length && !S.diagStop) {
+        const p = queue.shift();
+        if (S.path !== p) { const l = loaded(); frame.src = p; await l; }
+        if (!D || S.diagStop) break;
+        // More pages: links to this same app.
+        for (const a of D.querySelectorAll('a[href]')) {
+          let u; try { u = new URL(a.getAttribute('href'), W.location.href); } catch { continue; }
+          const k = u.pathname + u.search;
+          if (u.origin === W.location.origin && !u.pathname.startsWith('/__kerf') && !/\.[a-z0-9]{2,5}$/i.test(u.pathname) && !seen.has(k) && seen.size < 10) { seen.add(k); queue.push(k); }
+        }
+        const no = m.pages.length + 1, name = pageName(p);
+        const r = await reviewPage(m, `Page ${no} of ${seen.size} · ${name}`);
+        if (S.path !== p) break; // the designer went somewhere else
+        S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...r.notes];
+        const n = S.notes.filter((x) => x.by === 'tovi').length;
+        m.pages.push({ path: p, name, n, ...(r.failed && r.failed === r.sections ? { error: 'Couldn’t review' } : {}) });
+        if (r.summary) sums.push(r.summary);
+        refreshTasks();
+        renderBar();
+      }
+    } catch (e) { m.error = e.message; }
+    // Back to where the designer started.
+    if (S.path !== start && !m.error) { const l = loaded(); frame.src = start; await l; }
+    const total = m.pages.reduce((a, x) => a + x.n, 0), withNotes = m.pages.filter((x) => x.n).length;
+    m.proposal = { message: m.pages.length ? `${S.diagStop ? 'Stopped. ' : ''}I reviewed ${m.pages.length} page${m.pages.length === 1 ? '' : 's'} and left ${total} note${total === 1 ? '' : 's'}${withNotes > 1 ? ` across ${withNotes} pages` : ''}. ${sums[0] || ''} Open a page to see its notes, keep the ones you agree with, then Apply.`.trim() : 'I couldn’t review any pages.', edits: [] };
+    m.status = total ? 'diag' : 'info';
+    m.progress = null;
+    m.busy = false;
+    m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
+    S.diagnosing = false;
+    renderBar();
+    renderAI();
+    saveChat();
+  }
+
+  // Diagnose: Tovi reviews the page (or the selection) like a design lead and leaves notes on the spots that need
+  // work, each saying what's wrong and what it would change. The person keeps, edits or removes them, then Apply
+  // fixes the rest through Tasks, as one undoable batch.
+  async function runDiagnose(scope) {
+    if (S.diagnosing || S.card?.busy || !D) return;
+    const targets = scope === 'selection' && S.sel ? selectionTargets() : visibleTargets();
+    if (!targets.length) { toast('Nothing on screen to review yet.', '', true); return; }
+    S.diagnosing = true;
+    renderBar();
+    const label = scope === 'selection' ? `Diagnose ${ctxName(S.sel.el)}` : 'Diagnose this page';
+    S.chat.push({ role: 'user', text: label, shown: label, ctx: scope === 'selection' ? ctxName(S.sel.el) : 'Whole screen', where: 'chat', atts: [] });
+    const m = { role: 'kerf', busy: true, status: 'pending', where: 'chat', targets, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).slice(0, 40), lookedN: targets.length };
+    S.chat.push(m);
+    S.card = m;
+    if (S.mode === 'edit') { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
+    renderAI();
+    try {
+      let r;
+      if (scope === 'selection') {
+        workOn(scopeLocs(), 'Reviewing', 'scan');
+        const [screen, focus] = await Promise.all([captureScreen(), captureFocus()]);
+        r = await api('/diagnose', { targets, screen, focus, context: aiContext(), scope });
+        r.notes = notesFrom(r.findings);
+      } else {
+        S.diagStop = false;
+        r = await reviewPage(m, 'Reviewing this page');
+        m.progress = null;
+      }
+      // Fresh notes replace Tovi's earlier ones; the person's own notes stay.
+      S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...r.notes];
+      const n = S.notes.filter((x) => x.by === 'tovi').length;
+      const what = scope === 'selection' ? r.summary : `I reviewed ${r.sections > 1 ? `all ${r.sections} sections of this page` : 'this page'}${S.diagStop ? ' until you stopped me' : ''}.`;
+      m.proposal = { message: `${what}${n ? ` I left ${n} note${n === 1 ? '' : 's'} on it. Keep the ones you agree with, change or remove the rest, then Apply, and I’ll check the result.` : ' Nothing stood out that needs fixing.'}`, edits: [] };
+      m.status = n ? 'diag' : 'info';
+    } catch (e) { m.error = e.message; }
+    m.busy = false;
+    m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
+    S.diagnosing = false;
+    workClear();
+    S.openTask = [];
+    renderBar();
+    renderAI();
+    saveChat();
   }
 
   // One conversation shared by the Ask bar, notes and chat.
@@ -1407,33 +2386,272 @@
   }
   // A screenshot of exactly what's on screen (viewport), small and quick; skipped if it takes too long.
   let h2i = null;
-  async function captureScreen() {
+  // The app's web fonts, embedded once per page load so screenshots show the real type (not a fallback font).
+  let fontCss = null;
+  async function fontsFor(lib) {
+    if (!fontCss) fontCss = Promise.race([buildFontCss(lib), wait(8000).then(() => '')]);
+    return fontCss;
+  }
+  // The page's own fonts, plus its Google Fonts: the browser won't let a page copy fonts from another site, but
+  // Google serves them openly, so Tovi fetches the stylesheet and the font files (Latin only, to stay small) itself.
+  const asDataUrl = (u) => fetch(u).then((r) => r.blob()).then((b) => new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(b); })).catch(() => null);
+  async function buildFontCss(lib) {
+    const own = await lib.getFontEmbedCSS(D.documentElement).catch(() => '');
+    const links = [...D.querySelectorAll('link[href*="fonts.googleapis.com"]')].filter((l) => /stylesheet/i.test(l.rel)).map((l) => l.href);
+    const parts = await Promise.all(links.map(async (href) => {
+      const css = await fetch(href).then((r) => (r.ok ? r.text() : '')).catch(() => '');
+      if (!css) return '';
+      const blocks = css.split(/(?=\/\* [\w-]+ \*\/)/);
+      const latin = blocks.filter((b) => /^\/\* latin \*\//.test(b));
+      const keep = latin.length ? latin : [css];
+      return (await Promise.all(keep.map(async (b) => {
+        let out = b;
+        for (const [, u] of [...b.matchAll(/url\((https:[^)]+)\)/g)]) { const d = await asDataUrl(u); if (d) out = out.replace(u, d); }
+        return out;
+      }))).join('');
+    }));
+    return own + parts.join('');
+  }
+  const loadH2i = () => (h2i ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js'; sc.onload = () => res(window.htmlToImage); sc.onerror = rej; document.head.appendChild(sc); }));
+  async function captureScreen(full = false) {
     if (!D || !W) return null;
     try {
-      h2i ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js'; sc.onload = () => res(window.htmlToImage); sc.onerror = rej; document.head.appendChild(sc); });
-      const lib = await h2i;
-      const w = W.innerWidth, h = W.innerHeight, k = Math.min(1, 1280 / w);
-      const shot = lib.toJpeg(D.documentElement, { width: w, height: h, canvasWidth: Math.round(w * k), canvasHeight: Math.round(h * k), pixelRatio: 1, quality: 0.72, skipFonts: true, cacheBust: false, style: { transform: `translate(${-W.scrollX}px, ${-W.scrollY}px)`, transformOrigin: '0 0' } });
-      const url = await Promise.race([shot, new Promise((r) => setTimeout(() => r(null), 2500))]);
+      const lib = await loadH2i();
+      const css = await fontsFor(lib);
+      // full: the whole page top to bottom (capped), for checking changes that may be off screen.
+      const w = W.innerWidth, h = full ? Math.min(D.documentElement.scrollHeight, 6000) : W.innerHeight, k = Math.min(1, 1280 / w, full ? 7000 / h : 1);
+      const shot = lib.toJpeg(D.documentElement, { width: w, height: h, canvasWidth: Math.round(w * k), canvasHeight: Math.round(h * k), pixelRatio: 1, quality: 0.72, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
+      const url = await Promise.race([shot, new Promise((r) => setTimeout(() => r(null), full ? 9000 : 4000))]);
       return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
     } catch { h2i = null; return null; }
   }
-  async function runAI(text, targets, where, shown, followUp, atts = []) {
+  // Real screenshots from Tovi's hidden Chrome (exact pixels, as visitors see the page). null when unavailable,
+  // and callers fall back to the redraw.
+  async function realShots(opts) {
+    if (!W) return null;
+    const r = await api('/shots', { path: S.path, width: W.innerWidth, height: W.innerHeight, theme: aiContext().theme, ...opts }).catch(() => null);
+    return r?.available ? r : null;
+  }
+  const jpeg = (data) => (data ? { media_type: 'image/jpeg', data } : null);
+  async function realFull() { const r = await realShots({ full: true }); return jpeg(r?.full); }
+  // A sharp close-up of the selected element (twice the size, at most 1600px wide), for judging detail.
+  async function captureFocus() {
+    const el = S.sel?.el;
+    if (!el?.isConnected || !D) return null;
+    try {
+      const lib = await loadH2i();
+      const css = await fontsFor(lib);
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return null;
+      const k = Math.min(2, 1600 / r.width, 2400 / r.height);
+      const shot = lib.toJpeg(el, { pixelRatio: k, quality: 0.8, backgroundColor: cs(D.body).backgroundColor, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
+      const url = await Promise.race([shot, new Promise((res) => setTimeout(() => res(null), 4000))]);
+      return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
+    } catch { return null; }
+  }
+  /* ---------- Tovi and its helpers, visible on the canvas ---------- */
+  // Tovi (amber) answers the chat. Tasks go to helpers that work in parallel, each with a name and colour.
+  // Blue stays the designer's selection and red stays for errors.
+  const AGENTS = [{ name: 'Tovi', color: '#FCBDDD' }, { name: 'Milo', color: '#2DB3A6' }, { name: 'Juno', color: '#E36BA8' }, { name: 'Remi', color: '#5BBF6A' }, { name: 'Nova', color: '#9B7BEA' }];
+  const helperFor = (n) => AGENTS[1 + ((Math.max(1, n) - 1) % 4)];
+  const agentNamed = (name) => AGENTS.find((a) => a.name === name) || AGENTS[0];
+  const agentOf = () => AGENTS[0]; // one agent on screen: Tovi
+  // Tovi's own picture; helpers keep their letter.
+  const TOVI_PIC = 'data:image/png;base64,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';
+  const avatar = (a, cls = '') => a.name === 'Tovi'
+    ? `<i class="agAv pic ${cls}" title="Tovi"><img src="${TOVI_PIC}" alt=""></i>`
+    : `<i class="agAv ${cls}" style="--ac:${a.color}" title="${a.name}">${a.name[0]}</i>`;
+  const calm = matchMedia('(prefers-reduced-motion: reduce)');
+  S.agentsOn = (() => { try { return localStorage.getItem('kerf.agents') !== 'off'; } catch { return true; } })();
+  const live = () => S.agentsOn && !calm.matches && !!D && S.mode === 'edit';
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Each agent is drawn like another person in a Figma file: a cursor with its name, a box in its colour
+  // around what it's looking at (thin) or editing (solid, with its name), and a tag for the change it makes.
+  // Positions are in the app's own pixels; labels counter-scale with the zoom (--iz).
+  const crew = new Map();
+  const elOf = (loc) => (D && loc ? D.querySelector(q(loc)) : null);
+  function agentDom(a) {
+    let g = crew.get(a.name);
+    if (g && g.cur.isConnected) { clearTimeout(g.hideT); return g; }
+    const mk = (cls, html = '') => { const d = document.createElement('div'); d.className = cls; d.style.setProperty('--ac', a.color); d.innerHTML = html; $('ov').appendChild(d); return d; };
+    const box = mk('agBox', `<span class="agBoxTag">${a.name}</span>`);
+    const chip = mk('agChip');
+    const cur = mk('agent', `<svg width="26" height="26" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.5 2.5l12.5 5.2-5.4 1.7-1.8 5.3z" fill="var(--ac)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="agLbl">${avatar(a)}<span class="agTag">${a.name}</span></span><span class="agSay" hidden></span>`);
+    g = { a, cur, box, chip, x: null, y: null, el: null, mode: null, sayT: null, hideT: null, run: 0 };
+    crew.set(a.name, g);
+    return g;
+  }
+  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  function placeCur(g) {
+    g.cur.style.transform = `translate(${g.x}px, ${g.y}px) scale(var(--iz, 1))`;
+    // Near the right edge the name tag and bubble sit to the left of the cursor, so they're never cut off.
+    g.cur.classList.toggle('flip', !!W && g.x > W.innerWidth - 240 * (S.z ? 1 / S.z : 1));
+  }
+  // Glide along a gentle curve, faster over long distances, like a hand on a mouse.
+  function glide(g, x, y, ms) {
+    if (g.x == null) { g.x = x; g.y = y; placeCur(g); g.cur.classList.add('on'); return Promise.resolve(); }
+    const x0 = g.x, y0 = g.y, dx = x - x0, dy = y - y0, dist = Math.hypot(dx, dy);
+    const dur = ms ?? Math.min(900, 260 + dist * 0.9);
+    const bend = Math.min(60, dist * 0.18) * (Math.random() < 0.5 ? -1 : 1);
+    const cx = x0 + dx / 2 - (dy / (dist || 1)) * bend, cy = y0 + dy / 2 + (dx / (dist || 1)) * bend;
+    const run = ++g.run, t0 = performance.now();
+    g.cur.classList.add('on');
+    return new Promise((res) => {
+      const step = (now) => {
+        if (run !== g.run) return res();
+        const t = Math.min(1, (now - t0) / dur), k = ease(t), u = 1 - k;
+        g.x = u * u * x0 + 2 * u * k * cx + k * k * x; g.y = u * u * y0 + 2 * u * k * cy + k * k * y;
+        placeCur(g);
+        if (t < 1) requestAnimationFrame(step); else res();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  // The box follows its element every frame (it moves and resizes as the page changes).
+  function trackBoxes() {
+    let any = false;
+    for (const g of crew.values()) {
+      if (!g.el || !g.mode) { g.box.classList.remove('on', 'edit'); continue; }
+      if (!g.el.isConnected) { const fresh = g.loc ? elOf(g.loc) : null; if (fresh) g.el = fresh; else continue; }
+      const r = g.el.getBoundingClientRect();
+      Object.assign(g.box.style, { transform: `translate(${r.left}px, ${r.top}px)`, width: r.width + 'px', height: r.height + 'px' });
+      g.box.classList.add('on');
+      g.box.classList.toggle('edit', g.mode === 'edit');
+      if (g.chip.classList.contains('on')) g.chip.style.transform = `translate(${r.left}px, ${r.bottom + 6}px) scale(var(--iz, 1))`;
+      any = true;
+    }
+    if (any) requestAnimationFrame(trackBoxes); else trackBoxes.on = false;
+  }
+  function track(g, el, mode, loc) {
+    g.el = el; g.mode = mode; g.loc = loc || null;
+    if (!trackBoxes.on) { trackBoxes.on = true; requestAnimationFrame(trackBoxes); }
+  }
+  function agentSay(a, text) {
+    if (!text || !S.agentsOn) return;
+    const g = agentDom(a), b = g.cur.querySelector('.agSay');
+    b.textContent = String(text).split(/\s+/).slice(0, 7).join(' ');
+    b.hidden = false;
+    clearTimeout(g.sayT);
+    g.sayT = setTimeout(() => { b.hidden = true; }, 2400);
+  }
+  const pointIn = (r, fx, fy) => [r.left + r.width * fx, r.top + Math.min(r.height * fy, r.height - 4)];
+  async function inView(el) {
+    if (!el?.isConnected || !W) return false;
+    const r = el.getBoundingClientRect();
+    if (r.bottom < 40 || r.top > W.innerHeight - 40) {
+      W.scrollTo({ top: Math.max(0, W.scrollY + r.top - W.innerHeight / 3), behavior: calm.matches ? 'auto' : 'smooth' });
+      await wait(450);
+    }
+    return true;
+  }
+  // Look an element over the way a designer does: hover it, then read across it.
+  async function lookAt(a, el, say, loc) {
+    if (!el?.isConnected) return;
+    const g = agentDom(a);
+    track(g, el, 'look', loc);
+    let r = el.getBoundingClientRect();
+    await glide(g, ...pointIn(r, 0.12 + Math.random() * 0.15, 0.3));
+    if (say) agentSay(a, say);
+    r = el.getBoundingClientRect();
+    await glide(g, ...pointIn(r, 0.55 + Math.random() * 0.3, 0.45 + Math.random() * 0.2), 520 + Math.random() * 300);
+    await wait(120 + Math.random() * 200);
+  }
+  // Make one change like a person would: select the element, go to the right spot (an edge for spacing
+  // and size, the middle for colour), click, show what's changing, and drag a little as it lands.
+  async function editOn(a, el, e, apply) {
+    const g = agentDom(a);
+    if (!(await inView(el))) return apply();
+    track(g, el, 'edit', e.loc);
+    const props = (e.ops || []).map((o) => o.prop);
+    const edge = props.some((p) => /^(padX|w|mX|gap)$/.test(p)) ? 'right' : props.some((p) => /^(padY|h|mY)$/.test(p)) ? 'bottom' : props.some((p) => /^(fontSize|fontWeight|lineHeight|letterSpacing|align)$/.test(p)) || e.text ? 'text' : 'center';
+    let r = el.getBoundingClientRect();
+    const at = edge === 'right' ? [r.right - 2, r.top + r.height / 2] : edge === 'bottom' ? [r.left + r.width / 2, r.bottom - 2] : edge === 'text' ? [r.left + Math.min(14, r.width / 4), r.top + Math.min(r.height / 2, 14)] : [r.left + r.width / 2, r.top + r.height / 2];
+    await glide(g, ...at);
+    g.cur.classList.add('press');
+    setTimeout(() => g.cur.classList.remove('press'), 160);
+    g.chip.textContent = editLabel(e) || e.why || 'Updating';
+    g.chip.classList.add('on');
+    await wait(260);
+    const nudge = edge === 'right' ? [14, 0] : edge === 'bottom' ? [0, 12] : [0, 0];
+    const drag = glide(g, g.x + nudge[0], g.y + nudge[1], 420);
+    const res = await apply();
+    await drag;
+    await wait(380);
+    g.chip.classList.remove('on');
+    return res;
+  }
+  function release(names) {
+    for (const n of names) {
+      const g = crew.get(n);
+      if (!g) continue;
+      g.mode = null; g.el = null;
+      g.chip.classList.remove('on');
+      clearTimeout(g.hideT);
+      g.hideT = setTimeout(() => { g.cur.classList.remove('on'); g.x = g.y = null; }, 1400);
+    }
+  }
+  // While thinking, the agents split the elements they're reading and look them over (only ones in view).
+  // While thinking, Tovi looks over a few of the elements it's reading, once, then rests there: "Thinking…".
+  // Apply so you can watch it: style changes are shared out to lanes (one per agent), each lane makes its
+  // changes one by one as its agent gets there; structure, code and colour-token changes follow together
+  // (their order matters). One batch = one undo. A click or key press finishes at once.
+  // Apply everything in one go (one save, one reload of the app), with Tovi's cursor touring a few of the changed
+  // elements on screen at the same time. The tour never holds up the work: it stops as soon as the save is done
+  // (plus a moment to finish its current move), or at once on a click or key press. One batch = one undo.
+  async function applyLive(m, edits, batch = Date.now()) {
+    m.batch = batch;
+    const styles = edits.filter((e) => !e.structure), rest = edits.filter((e) => e.structure);
+    const all = [...styles, ...rest];
+    let skip = !live();
+    const onSkip = () => { skip = true; };
+    if (!skip) { window.addEventListener('pointerdown', onSkip, true); window.addEventListener('keydown', onSkip, true); W?.addEventListener('pointerdown', onSkip, true); }
+    const a = AGENTS[0], used = new Set();
+    const onScreen = (el) => { if (!el?.isConnected || !W) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < W.innerHeight; };
+    const seen = new Set();
+    const tour = (async () => {
+      for (const e of all) {
+        if (skip || seen.size >= 5) return;
+        const el = elOf(e.loc);
+        if (!onScreen(el) || seen.has(el)) continue;
+        seen.add(el); used.add(a.name);
+        await editOn(a, el, e, async () => {});
+      }
+    })().catch(() => {});
+    // Short tags: the first change, and how many more ("Top margin 0 +3").
+    const short = (t) => { const p = String(t || '').split(' · '); return p.length > 1 ? `${p[0]} +${p.length - 1}` : p[0]; };
+    for (const e of all) workOn([e.loc], short(editLabel(e)) || e.why || 'Changing', 'edit');
+    // The cursor tour is only an effect: the save never waits for it. It finishes its current move on its own.
+    const endTour = () => { skip = true; window.removeEventListener('pointerdown', onSkip, true); window.removeEventListener('keydown', onSkip, true); W?.removeEventListener('pointerdown', onSkip, true); release([...used]); };
+    try {
+      const r = await api('/ai/apply', { batch, edits: all });
+      workDone(r.results.filter((x) => x.ok).map((x) => x.loc));
+      return { results: r.results, n: r.n };
+    } catch (err) {
+      return { error: err.message };
+    } finally {
+      skip = true;
+      tour.finally(endTour);
+    }
+  }
+
+  async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = where !== 'notes', opts = {}) {
     text = String(text || '').trim() || (atts.length ? 'Use the attached image.' : '');
-    if (!text || S.card?.busy) return;
+    if (!text || (S.card?.busy && !opts.review)) return;
     if (!targets.length) { toast('Nothing on screen to work with yet. Wait for the page to load, or select something.', '', true); return; }
     const history = historyFor();
-    const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? dName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
-    S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
-    const m = { role: 'kerf', busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
+    const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? ctxName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
+    if (!opts.review) S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
+    const m = { role: 'kerf', second: !!opts.review, checkLabel: opts.notes ? (opts.round > 1 ? 'Final check' : 'Checking the fixes') : opts.round > 1 ? 'Final check' : null, busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
     S.chat.push(m);
     S.card = m;
+    workOn(opts.notes ? uniq(opts.notes.flatMap((n) => n.locs || [])) : scopeLocs(), opts.review ? 'Checking' : 'Looking');
     renderAI();
     try {
-      const screen = await captureScreen();
+      const [screen, focus] = await Promise.all([opts.full ? realFull().then((x) => x || captureScreen(true)) : captureScreen(), !opts.full && (where === 'chat' || where === 'ask') ? captureFocus() : null]);
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
-      m.proposal = await api('/ai', { request: text, targets, history, screen, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
+      // Tovi shows up on the canvas only when it applies edits (applyLive), not while it thinks or answers.
+      m.proposal = await api('/ai', { request: opts.review ? opts.review : text, light: !!opts.review, fast: !opts.review, targets, history, screen, focus, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
       if (!m.proposal.edits.length) m.status = 'info';
@@ -1441,8 +2659,32 @@
     m.busy = false;
     m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
     renderAI();
+    // Tasks: Apply means apply. Every change is undoable, and the answer has its own Undo.
+    if (autoApply && m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
+    workClear();
     saveChat();
+    // Tovi checks its own work like a designer stepping back: after a look-and-feel change it screenshots the
+    // result, judges it against the request, fixes what's still off, and checks once more if it changed anything.
+    if (m.status === 'applied' && where === 'chat' && !opts.notes && (opts.review ? (opts.round || 1) < 2 && chosen(m).length : isLookAndFeel(text))) {
+      await checkAndFix({ request: text, done: chosen(m), round: (opts.round || 0) + 1, notes: opts.notes, full: opts.full });
+    } else if (m.status === 'applied' && opts.notes && (opts.round || 1) < 2 && chosen(m).length) {
+      await checkAndFix({ request: text, done: chosen(m), round: (opts.round || 1) + 1, notes: opts.notes, full: true });
+    }
   }
+  // One check: a fresh screenshot, the request (or each note) as a checklist, and what was applied so far.
+  async function checkAndFix({ request, done, round, notes, full }) {
+    await wait(1800);
+    refind();
+    const applied = done.map((e) => `${e.name || e.tag}: ${editLabel(e)}`).join('; ');
+    const list = notes ? notes.map((n, k) => `${k + 1}. ${n.title ? `${n.title}: ` : ''}${n.text}`).join('\n') : '';
+    const ask = notes
+      ? `Check the result${round > 1 ? ' once more' : ''}. The designer asked Tovi to fix these notes:\n${list}\nYou applied: ${applied}. The screenshot shows the whole page now. Go through the notes one by one and check on screen that each is really fixed, fully and everywhere it applies, not just in one place. Then look at those same areas for anything still conspicuous, or anything these changes made worse. Fix all of it now with edits. In the message, give a short verdict for each note (e.g. "1 fixed. 2 two labels were still grey, fixed now."). Return no edits only if every note is fully fixed and the areas look right, and then say why.`
+      : `${round > 1 ? 'Final check' : 'Second look'}. The designer asked: "${request}". You${round > 1 ? ' have now' : ' already'} applied: ${applied}. The screenshots now show the result. Step back and judge the whole selection the way a demanding design lead at a top product company would in a design review, using the designer moves for this kind of request. Common misses to check: buttons or controls left at their old size or weight when the request is about feel ("premium", "modern"); items that should line up but don't, or alignment faked with fixed margins; spacing between groups not clearly larger than spacing inside a group; secondary text not quiet enough, or the focal point not strong enough; siblings with the same role styled differently (sizes, weights, radii, colours); nested or fussy frames; anything your earlier passes made worse. Fix every miss you find with edits. Return no edits only if it would pass that review as it is, and then say in one short sentence why it works.`;
+    const own = notes ? uniq(notes.flatMap((n) => (n.locs || []).map(elOf).filter(Boolean).flatMap((el) => targetsOf(el)))) : [];
+    const targets = uniq([...own, ...(S.sel && !notes ? selectionTargets() : visibleTargets())]).slice(0, 80);
+    await runAI(request, targets, 'chat', null, true, [], true, { review: ask, round, notes, full });
+  }
+  const isLookAndFeel = (t) => /premium|polish|better|clean|modern|nice|improv|refin|elegant|beautif|pop|feel|look|tidy|balance|hierarch|design|luxur|minimal|professional|fresh|sleek|ugly|messy|cluttered/i.test(t) && !/\d\s*(px|%|pt)?\b/.test(t);
   async function decide(m, v) {
     if (!m || m.status !== 'pending') return;
     if (m.previewing) { m.previewing = false; previewTokens(m, false); }
@@ -1451,7 +2693,7 @@
       const hadError = !!D?.querySelector('vite-error-overlay');
       m.applying = true;
       renderAI();
-      const r = await api('/ai/apply', { edits: chosen(m).map((e) => (e.structure ? e : { ...e, bp: bpParam() })) }).catch((e) => ({ error: e.message }));
+      const r = await applyLive(m, chosen(m).map((e) => (e.structure ? e : { ...e, bp: bpParam() }))).catch((e) => ({ error: e.message }));
       m.applying = false;
       if (!r.error && chosen(m).some((e) => e.structure?.type === 'code')) guard(hadError);
       if (r.error) { toast(r.error, '', true); renderAI(); return; }
@@ -1468,17 +2710,18 @@
     renderAI();
     saveChat();
   }
-  const STATUS = { applied: 'Applied', discarded: 'Discarded', failed: 'Couldn’t apply', info: 'No changes to your app' };
+  const STATUS = { applied: 'Applied', undone: 'Undone', discarded: 'Discarded', failed: 'Couldn’t apply', info: 'No changes to your app', diag: 'Notes added to your screen' };
   // Status is shown by Tovi, not written into the reply: drop a leading "Nothing changed yet." if the model adds one.
   const cleanMsg = (t) => { const x = String(t || '').replace(/^\s*(nothing (has )?changed( yet)?|no changes( were)?( made)?( yet)?|i (haven[’']t|have not) changed anything( yet)?)\s*[.:;,—–-]*\s*/i, ''); return x ? x[0].toUpperCase() + x.slice(1) : String(t || ''); };
   const chosen = (m) => m.proposal.edits.filter((e, k) => !(m.off || []).includes(k) && !(m.skip || []).includes(e.note ?? 0) && e.structure?.type !== 'imageAsk');
   // Each proposed change shows where it stands: to do, applying, done, failed or left out.
   function rowState(m, e) {
+    if (e.structure?.type === 'imageAsk') return m.status === 'pending' ? 'todo' : 'skip';
     const inPlan = chosen(m).includes(e);
     if (m.applying) return inPlan ? 'run' : 'skip';
     if (m.status === 'applied') return !inPlan ? 'skip' : (m.failed || []).includes(e.loc) ? 'bad' : 'ok';
     if (m.status === 'failed') return 'bad';
-    if (m.status === 'discarded') return 'skip';
+    if (m.status === 'discarded' || m.status === 'undone') return 'skip';
     return inPlan ? 'pick' : 'unpick';
   }
   const CHECK = '<svg width="10" height="10" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1486,7 +2729,7 @@
   const rowFor = (m) => (e) => editRow(e, m ? rowState(m, e) : 'todo', m ? `data-act2="edPick" data-i="${S.chat.indexOf(m)}" data-e="${m.proposal.edits.indexOf(e)}"` : '');
   // While pending, each row is a checkbox: ticked changes are applied, unticked ones left out.
   document.addEventListener('keydown', (e) => { const r = e.target.closest?.('[data-act2="edPick"]') || (e.target.matches?.('[data-act2="tkOpen"],[data-act2="ngOpen"]') ? e.target : null); if (r && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); r.click(); } });
-  const editRow = (e, st = 'todo', pick = '') => `<div class="ed ${st}"${st === 'pick' || st === 'unpick' ? ` ${pick} role="checkbox" aria-checked="${st === 'pick'}" tabindex="0" title="${st === 'pick' ? 'Leave this change out' : 'Include this change'}"` : ''}>${MARK[st] || ''}<div class="edB"><div class="edT"><b>${esc(e.name || e.tag)}</b>${e.structure?.type === 'imageAsk' ? `<span class="mono">${e.structure.kind === 'photo' ? 'New photo' : 'New illustration'}: “${esc(e.structure.prompt)}”</span>` : e.structure?.type === 'image' && e.structure.preview ? `<span class="imgPick"><img src="${esc(e.structure.preview)}" alt=""><span class="mono">${esc(e.structure.alt || 'New image')}</span></span>` : e.structure?.type === 'token' ? tokenChange(e.structure) : `<span class="mono">${esc(editLabel(e))}</span>`}${e.offSystem ? '<i class="offSys">Off-system</i>' : ''}</div>${(e.structure?.type === 'imageAsk' || e.structure?.preview) && pick ? `<button class="outline sm imgOpt" ${pick.replace('data-act2="edPick"', 'data-act2="imgOptions"')}>${e.structure.type === 'imageAsk' ? (e.structure.kind === 'photo' ? 'Show photos' : 'Draw options') : 'Choose another'}</button>` : ''}${e.where ? `<span class="reach">Changes ${esc(e.where)}</span>` : ''}${e.why ? `<span>${esc(e.why)}</span>` : ''}${e.structure?.type === 'code' ? `<details class="code"><summary>Code change in ${esc(e.structure.file)}</summary><pre class="diff"><span class="del">${esc(e.structure.find)}</span><span class="add">${esc(e.structure.replace)}</span></pre></details>` : ''}</div></div>`;
+  const editRow = (e, st = 'todo', pick = '') => `<div class="ed ${st}"${st === 'pick' || st === 'unpick' ? ` ${pick} role="checkbox" aria-checked="${st === 'pick'}" tabindex="0" title="${st === 'pick' ? 'Leave this change out' : 'Include this change'}"` : ''}>${MARK[st] || ''}<div class="edB"><div class="edT"><b>${esc(e.name || e.tag)}</b>${e.structure?.type === 'imageAsk' ? `<span class="mono">${e.structure.kind === 'photo' ? 'New photo' : 'New illustration'}: “${esc(e.structure.prompt)}”</span>` : e.structure?.type === 'image' && e.structure.preview ? `<span class="imgPick"><img src="${esc(e.structure.preview)}" alt=""><span class="mono">${esc(e.structure.alt || 'New image')}</span></span>` : e.structure?.type === 'token' ? tokenChange(e.structure) : `<span class="mono">${esc(editLabel(e))}</span>`}${e.offSystem ? '<i class="offSys">Off-system</i>' : ''}</div>${(e.structure?.type === 'imageAsk' || e.structure?.preview) && pick ? `<button class="outline sm imgOpt" ${pick.replace('data-act2="edPick"', 'data-act2="imgOptions"')}>${e.structure.type === 'imageAsk' ? (e.structure.kind === 'photo' ? 'Show photos' : 'Draw options') : 'Choose another'}</button>` : ''}${e.where ? `<span class="reach">Changes ${esc(e.where)}</span>` : ''}${e.why ? `<span>${esc(e.why)}</span>` : ''}${e.structure?.type === 'code' ? `<details class="code"><summary>See the code</summary><pre class="diff"><span class="del">${esc(e.structure.find)}</span><span class="add">${esc(e.structure.replace)}</span></pre></details>` : ''}</div></div>`;
   function tokenChange(st) {
     const t = (S.tokens || []).find((x) => x.name === st.name);
     const cur = t ? (t.values.find((v) => v.theme === st.which) || t.values.find((v) => v.theme === (aiContext().theme || 'light')) || t.values[0])?.hex : null;
@@ -1524,7 +2767,8 @@
     const loose = p.edits.filter((e) => !e.note || e.note > count);
     if (loose.length) groups.push({ n: 0, info: null, eds: loose, text: null });
     const pending = m.status === 'pending';
-    return groups.map((g) => {
+    const more = groups.length > 3 && !m.allRows ? groups.length - 3 : 0;
+    return groups.slice(0, more ? 3 : groups.length).map((g) => {
       const st = NSTAT[g.info?.status] || (g.eds.length ? NSTAT.done : NSTAT.not_possible);
       const idx = g.eds.map((e) => p.edits.indexOf(e)), offN = idx.filter((k) => (m.off || []).includes(k)).length;
       const off = (m.skip || []).includes(g.n) || (idx.length > 0 && offN === idx.length);
@@ -1534,10 +2778,11 @@
       return `<div class="ng tk${off ? ' off' : ''}${open ? ' open' : ''}" data-ng="${g.n}" data-i="${i}">
         <div class="tkH" data-act2="ngOpen" data-i="${i}" data-n="${g.n}" role="button" tabindex="0" aria-expanded="${open}">${box}<b>${g.n ? `Task ${g.n}` : 'Also'}</b><span class="tkT">${g.text ? esc(g.text) : g.n ? '' : 'changed alongside'}</span>${(g.info || g.n) && st[1] !== 'ok' ? `<span class="nSt ${st[1]}">${st[0]}</span>` : ''}<span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span></div>
         ${open ? `<div class="tkB">${g.info?.summary ? `<p>${esc(g.info.summary)}</p>` : ''}${g.eds.length ? `<div class="ngE">${g.eds.map(rowFor(m)).join('')}</div>` : ''}</div>` : ''}</div>`;
-    }).join('');
+    }).join('') + (groups.length > 3 ? `<button class="tkMore" data-act2="ngMore" data-i="${i}">${m.allRows ? 'Show fewer' : `${more} more task${more === 1 ? '' : 's'}`}${ico(m.allRows ? 'chev' : 'chevR', 10)}</button>` : '');
   }
   function kerfHTML(m, i) {
-    if (m.busy) return `<div class="prop">${stepsHTML(m, true)}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
+    if (m.busy && m.helpers) return `<div class="prop"><div class="crewRow">${avatar(AGENTS[0])}<span>Tovi is working on ${m.helpers.length === 1 ? 'the task' : `${m.helpers.length} tasks`}</span></div><div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
+    if (m.busy) return `<div class="prop">${stepsHTML(m, true)}${live() ? `<div class="crewRow">${avatar(AGENTS[0])}<span>Tovi is looking it over</span></div>` : ''}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
     if (m.error) return `<div class="prop err">${stepsHTML(m)}<span class="note warn">${esc(m.error)}</span></div>`;
     const p = m.proposal;
     const badge = { partial: 'Partly possible', not_yet: 'Not possible in Tovi yet', needs_developer: 'For developers' }[p.scope];
@@ -1550,9 +2795,12 @@
     const keep = p.mode === 'explore' && m.status === 'applied' ? (m.kept ? `<div class="kSuggest"><span>Kept. Want it everywhere?</span><button data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>` : `<div class="tryOn"><span>Trying this look on your screen.</span><div class="acts"><button class="ghostBtn" data-act2="tryUndo" data-i="${i}">Undo</button><button class="primary applyBtn" data-act2="tryKeep" data-i="${i}">Keep it</button></div><button class="linkBtn" data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>`) : '';
     const head = m.applying ? `Applying ${n} change${n === 1 ? '' : 's'}…` : m.status === 'applied' ? `Applied ${m.appliedN ?? n} of ${p.edits.length}` : `${p.edits.length} proposed change${p.edits.length === 1 ? '' : 's'}`;
     return `<div class="prop${byNote ? ' byNote' : ''}">${stepsHTML(m)}${badge ? `<span class="badge">${badge}</span>` : ''}<p class="kText">${esc(cleanMsg(p.message))}</p>
-      ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
+      ${m.talk?.length ? `<div class="talk">${m.talk.map((t) => `<div>${avatar(agentNamed(t.agent))}<b>${esc(t.agent)}</b><span>${esc(t.text)}</span></div>`).join('')}</div>` : ''}
+      ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' && m.where === 'notes' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
       ${suggest}${keep}
-      ${m.status === 'pending' && p.edits.length ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : status}</div>`;
+      ${m.status === 'applied' && !p.mode?.startsWith('explore') ? `<div class="kDone">${status}<button class="ghostBtn sm" data-act2="tryUndo" data-i="${i}">Undo</button></div>` : ''}
+      ${(() => { const need = m.status === 'pending' && !m.applying ? p.edits.filter((e) => e.structure?.type === 'imageAsk').length : 0; if (!need) return ''; const kind = p.edits.find((e) => e.structure?.type === 'imageAsk').structure.kind === 'photo' ? 'photo' : 'illustration'; return `<div class="pickBar"><span>${ico('image', 14)}Choose ${need === 1 ? `the ${kind}` : `${need} ${kind}s`} to finish</span><button class="primary applyBtn" data-act2="pickAll" data-i="${i}">Choose ${need === 1 ? kind : `${kind}s`}</button></div>`; })()}
+      ${m.status === 'pending' && p.edits.length && !m.applying && !p.edits.some((e) => e.structure?.type === 'imageAsk') ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.status === 'applied' && !p.mode?.startsWith('explore') ? '' : status}</div>`;
   }
   // "Looked at 14 elements · Thought for 9s", which opens to show what Tovi read.
   function stepsHTML(m, live) {
@@ -1622,9 +2870,9 @@
     }
   }
   function chatHTML() {
-    const ctx = S.sel ? esc(dName(S.sel.el)) : 'Whole screen';
-    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${kerfHTML(m, i)}</div>`)).join('');
-    return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><span class="ceMark">${ico('spark', 20)}</span><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
+    const ctx = S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen';
+    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}${m.checkLabel || 'Second look'}</div>` : ''}${kerfHTML(m, i)}${m.progress ? `<div class="diagProg"><span>${esc(m.progress)}</span>${m.noStop ? '' : '<button class="ghostBtn" data-act="diagStop">Stop</button>'}</div>` : ''}${!m.busy && m.pages?.length ? `<div class="diagPages">${m.pages.map((x) => `<button data-act="goPage" data-v="${esc(x.path)}"${x.path === S.path ? ' class="on"' : ''}><span>${esc(x.name)}</span><b>${x.error ? 'Couldn’t review' : x.n ? `${x.n} note${x.n === 1 ? '' : 's'}` : 'Looks good'}</b></button>`).join('')}</div>` : ''}</div>`)).join('');
+    return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><img class="ceAvatar" src="${TOVI_PIC}" alt=""><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
       <div class="comp">${tasksShown() ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
   }
   function sendChat() {
@@ -1642,10 +2890,10 @@
     const rec = mic?.id === id, has = (S.drafts[id] || '').trim() || atts.length;
     return `<form class="kc${o.big ? ' big' : ''}${o.bar ? ' slim' : ''}" data-form="${o.form}" data-where="${o.where || ''}" data-kc="${id}">
       ${atts.length ? `<div class="kcAtt">${atts.map((a, i) => `<span class="kcThumb" title="${esc(a.name)}"><img src="${a.thumb}" alt="${esc(a.name)}"><button type="button" data-act2="attX" data-id="${id}" data-i="${i}" aria-label="Remove ${esc(a.name)}">${ico('x', 10)}</button></span>`).join('')}</div>` : ''}
+      ${o.ctx ? `<div class="kcTop"><span class="kcCtx" title="What Tovi will look at">${ico(S.sel ? 'frame' : 'desktop', 12)}${o.ctx}</span></div>` : ''}
       <div class="kcRow">${o.lead || ''}<textarea id="${id}" rows="1" placeholder="${esc(o.placeholder)}" aria-label="${esc(o.placeholder)}">${esc(S.drafts[id] || '')}</textarea></div>
       <div class="kcBar">
         <button type="button" class="kcB" data-act2="attach" data-id="${id}" title="Attach images · or paste / drop them here" aria-label="Attach images">${ico(o.bar ? 'plus' : 'clip', 15)}</button>
-        ${o.ctx ? `<span class="kcCtx" title="What Tovi will look at">${ico(S.sel ? 'frame' : 'desktop', 12)}${o.ctx}</span>` : ''}
         ${o.form !== 'note' ? modePill() : ''}
         <span class="sp"></span>
         ${SR ? `<button type="button" class="kcB mic${rec ? ' rec' : ''}" data-act2="mic" data-id="${id}" title="${rec ? 'Stop dictation' : 'Dictate, in any language'}" aria-label="${rec ? 'Stop dictation' : 'Dictate'}">${ico('mic', 15)}</button>` : ''}
@@ -1754,13 +3002,17 @@
 
   /* annotations */
   function shapeSVG(n, i, draft, hl) {
-    const st = `stroke="#2B66D9" stroke-width="${hl ? 3 : 2}" fill="${draft ? 'none' : 'rgba(43,102,217,.06)'}"`;
+    const pink = n.by === 'tovi', col = pink ? '#D9468F' : '#2B66D9';
+    const st = `stroke="${col}" stroke-width="${2 / (S.z || 1)}" stroke-dasharray="${6 / (S.z || 1)} ${4 / (S.z || 1)}" fill="${pink ? 'rgba(217,70,143,.07)' : 'rgba(43,102,217,.06)'}"`;
     let s = '';
+    // A written note shows only its number; its area comes back while its task is hovered.
+    const o = n;
+    if (i != null && !hl) n = { ...n, shape: n.shape === 'pin' ? 'pin' : 'none' };
     if (n.shape === 'box') s = `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6" ${st}/>`;
     else if (n.shape === 'circle') s = `<ellipse cx="${n.x + n.w / 2}" cy="${n.y + n.h / 2}" rx="${n.w / 2}" ry="${n.h / 2}" ${st}/>`;
     else if (n.shape === 'arrow') { const a = Math.atan2(n.y2 - n.y, n.x2 - n.x), L = 12; s = `<path d="M${n.x} ${n.y}L${n.x2} ${n.y2}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a - 0.5)} ${n.y2 - L * Math.sin(a - 0.5)}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a + 0.5)} ${n.y2 - L * Math.sin(a + 0.5)}" stroke="#2B66D9" stroke-width="2.5" fill="none" stroke-linecap="round"/>`; }
-    const [bx, by] = n.shape === 'pin' || n.shape === 'arrow' ? [n.x, n.y] : [n.x + n.w, n.y];
-    if (i != null) s += `<g transform="translate(${bx} ${by}) scale(${1 / (S.z || 1)})" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${hl ? '<circle r="16" fill="rgba(43,102,217,.28)"/>' : ''}<circle r="11" fill="#2B66D9" stroke="#fff" stroke-width="2"/><text y="4" fill="#fff" font-size="11" font-weight="600" font-family="Geist,system-ui,sans-serif" text-anchor="middle">${i + 1}</text></g>`;
+    const [bx, by] = o.shape === 'pin' || o.shape === 'arrow' ? [o.x, o.y] : [o.x + o.w, o.y];
+    if (i != null) s += `<g transform="translate(${bx} ${by}) scale(${1 / (S.z || 1)})" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${hl ? `<circle r="16" fill="${pink ? 'rgba(217,70,143,.28)' : 'rgba(43,102,217,.28)'}"/>` : ''}<circle r="11" fill="${col}" stroke="#fff" stroke-width="2"/><text y="4" fill="#fff" font-size="11" font-weight="600" font-family="Geist,system-ui,sans-serif" text-anchor="middle">${i + 1}</text></g>`;
     else if (n.shape === 'pin') s += `<circle cx="${n.x}" cy="${n.y}" r="6" fill="#2B66D9"/>`;
     return s;
   }
@@ -1783,16 +3035,18 @@
   function tasksHTML(busy) {
     const n = S.notes.length;
     return `<div class="tasks">
-      <div class="tkList">${S.notes.map((x, i) => { const open = S.openTask.includes(i); return `<div class="tk ntRow${open ? ' open' : ''}" data-note="${i + 1}">
-        <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${ico('task', 15)}<b>Task ${i + 1}</b><span class="tkT">${esc(x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
-        ${open ? `<div class="tkB"><p>${esc(x.text)}</p>${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
-      </div>`; }).join('')}</div>
-      <div class="tkFoot">${busy ? `<span class="tkN"><i class="kSpin"><b></b><b></b><b></b><b></b></i>Tovi is reading ${n === 1 ? 'the task' : `${n} tasks`}…</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Send to Tovi</button>`}</div>
+      <div class="tkList">${S.notes.map((x, i) => { if (i >= 3 && !S.tasksAll) return ''; const open = S.openTask.includes(i); return `<div class="tk ntRow${open ? ' open' : ''}" data-note="${i + 1}">
+        <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${x.by === 'tovi' ? avatar(AGENTS[0]) : ico('task', 15)}<b>${x.by === 'tovi' ? `${i + 1} · ${esc(x.title || 'Tovi')}` : `Task ${i + 1}`}</b><span class="tkT">${esc(x.by === 'tovi' ? x.problem || x.text : x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
+        ${open ? `<div class="tkB">${x.by === 'tovi' ? `<p>${esc(x.problem || '')}</p><label class="tkFix"><span>Tovi will</span><textarea data-tkedit="${i}" rows="3" aria-label="What Tovi will change">${esc(x.text)}</textarea></label>` : `<p>${esc(x.text)}</p>`}${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
+      </div>`; }).join('')}${S.notes.length > 3 ? `<button class="tkMore" data-act2="tasksAll">${S.tasksAll ? 'Show fewer' : `${S.notes.length - 3} more task${S.notes.length - 3 === 1 ? '' : 's'}`}${ico(S.tasksAll ? 'chev' : 'chevR', 10)}</button>` : ''}</div>
+      <div class="tkFoot">${busy ? `<span class="tkN">${avatar(AGENTS[0])}Tovi is on it…</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Apply</button>`}</div>
     </div>`;
   }
+  // Editing what Tovi will do for one of its notes.
+  document.addEventListener('input', (e) => { const i = e.target.dataset?.tkedit; if (i == null || !S.notes[+i]) return; S.notes[+i].text = e.target.value; });
   function refreshTasks() {
     renderMarks();
-    if (S.mode === 'edit' && S.tab === 'chat') renderPanel();
+    renderChat();
   }
   function renderMarks() {
     drawMarks();
@@ -1829,22 +3083,110 @@
   function renderAI() {
     renderAsk();
     renderMarks();
-    if (S.mode === 'edit' && S.tab === 'chat') renderPanel();
+    renderChat();
   }
-  function applyNotes() {
-    if (!S.notes.length) return;
-    const targets = uniq(S.notes.flatMap((n, i) => noteTargets(n, i)));
-    const request = S.notes.map((n, i) => `Note ${i + 1}: ${n.text}`).join('\n') + '\nEach element is tagged with the note it sits under.';
-    const atts = [], tagged = [];
-    S.notes.forEach((n, i) => (n.atts || []).forEach((a) => { if (atts.length < 4) { atts.push(a); tagged.push(`Attachment ${atts.length} belongs to note ${i + 1}.`); } }));
-    runAI(request + (tagged.length ? '\n' + tagged.join(' ') : ''), targets, 'notes', S.notes.map((n, i) => `${i + 1}. ${n.text}`).join('\n'), false, atts);
+  // Each task goes to its own helper (Milo, Juno, Remi, Nova), at most four at once, all working in parallel.
+  // Tovi then puts their answers together, says where two of them meet, and applies the lot.
+  async function applyNotes() {
+    if (!S.notes.length || S.card?.busy) return;
+    const notes = S.notes.slice();
+    const per = notes.map((n, i) => noteTargets(n, i));
+    const all = uniq(per.flat());
+    if (!all.length) { toast('Nothing on screen to work with yet. Wait for the page to load.', '', true); return; }
+    const history = historyFor();
+    S.chat.push({ role: 'user', text: notes.map((n, i) => `Note ${i + 1}: ${n.text}`).join('\n'), shown: notes.map((n, i) => `${i + 1}. ${n.text}`).join('\n'), ctx: `${notes.length} task${notes.length === 1 ? '' : 's'}`, where: 'notes', atts: [] });
+    const m = { role: 'kerf', busy: true, status: 'pending', where: 'notes', targets: all, noteTexts: notes.map((n) => n.text), skip: [], started: Date.now(), looked: all.map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: all.length, helpers: notes.map((n, i) => ({ n: i + 1, name: helperFor(i + 1).name })) };
+    S.chat.push(m);
+    S.card = m;
+    notes.forEach((n, k) => workOn(n.locs?.length ? n.locs : per[k].slice(0, 3).map((t) => t.loc), `Note ${k + 1}`));
+    renderAI();
+    const offScreen = notes.some((n) => W && (n.y + (n.h || 0) < W.scrollY || n.y > W.scrollY + W.innerHeight));
+    const screen = offScreen ? (await realFull()) || (await captureScreen(true)) : await captureScreen();
+    m.mode = S.modeOnce || S.styleMode;
+    S.modeOnce = null;
+    const run = async (k) => {
+      if (!per[k].length) return { error: 'Nothing is under this mark any more (the page may have moved). Draw it again.' };
+      const stop = () => {};
+      const atts = (notes[k].atts || []).slice(0, 4);
+      try {
+        const p = await api('/ai', { request: `Note ${k + 1}: ${notes[k].text}\nEach element is tagged with the note it sits under.`, fast: true, targets: per[k], history, screen, context: aiContext(), mode: m.mode, images: atts.map((x) => ({ name: x.name, media_type: x.type, data: x.data, orig: x.orig })) });
+        return { p };
+      } catch (e) { return { error: e.message }; } finally { stop(); }
+    };
+    const out = [];
+    let next = 0;
+    // Each note's changes land as soon as its answer arrives, so the page starts changing within seconds.
+    // Saves run one after another (never two writing at once) and share one batch, so one Undo reverts them all.
+    const batch = Date.now(), results = [];
+    let saving = Promise.resolve(), landed = 0, nNow = S.count;
+    m.noStop = true;
+    const land = (k) => {
+      const es = (out[k]?.p?.edits || []).filter((e) => e.structure?.type !== 'imageAsk').map((e) => (e.structure ? { ...e, note: k + 1 } : { ...e, note: k + 1, bp: bpParam() }));
+      if (!es.length) { landed++; return; }
+      saving = saving.then(async () => {
+        const r = await applyLive(m, es, batch).catch((e) => ({ error: e.message }));
+        if (r.results) { results.push(...r.results); nNow = Math.max(nNow, r.n || nNow); S.count = nNow; afterEdit(); }
+        landed++;
+        m.progress = `Applied ${landed} of ${notes.length} note${notes.length === 1 ? '' : 's'}…`;
+        renderChat();
+      });
+    };
+    m.progress = `Working on ${notes.length} note${notes.length === 1 ? '' : 's'}…`;
+    renderChat();
+    await Promise.all(Array.from({ length: Math.min(4, notes.length) }, async () => { while (next < notes.length) { const k = next++; out[k] = await run(k); land(k); } }));
+    await saving;
+    m.progress = null;
+    // Put the answers together, one row per task.
+    const edits = [], rows = [];
+    out.forEach((o, k) => {
+      const nn = k + 1;
+      if (o.error) { rows.push({ note: nn, status: 'not_possible', summary: o.error }); return; }
+      o.p.edits.forEach((e) => edits.push({ ...e, note: nn }));
+      const own = o.p.notes?.find((x) => x.note === nn) || o.p.notes?.[0];
+      const st = own?.status || (o.p.scope === 'done' ? 'done' : o.p.edits.length ? 'partial' : 'not_possible');
+      rows.push({ note: nn, status: st, summary: own?.summary || cleanMsg(o.p.message) });
+    });
+    // Where two helpers change the same element, they say so (and Tovi applies them in task order).
+    const byLoc = new Map();
+    edits.forEach((e) => byLoc.set(e.loc, [...new Set([...(byLoc.get(e.loc) || []), e.note])]));
+    const talk = [];
+    for (const [loc, ns] of byLoc) {
+      if (ns.length < 2) continue;
+      const [first, ...later] = ns.sort((a, b) => a - b), el = elOf(loc), what = el ? dName(el) : 'this element';
+
+    }
+    const names = m.helpers.map((h) => h.name);
+    m.talk = talk;
+    m.proposal = { scope: rows.every((r) => r.status === 'done') ? 'done' : edits.length ? 'partial' : 'not_yet', message: `Tovi worked on ${notes.length === 1 ? 'the task' : `${notes.length} tasks`}.`, notes: rows, edits, suggest: null, mode: m.mode };
+    S.amber = edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
+    if (edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
+    if (!edits.length) m.status = 'info';
+    m.busy = false;
+    m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
+    renderAI();
+    if (m.status === 'pending' && chosen(m).length) {
+      const ok = results.filter((x) => x.ok && x.changed).length, bad = results.filter((x) => !x.ok);
+      m.failed = bad.map((x) => x.loc);
+      m.appliedN = ok;
+      m.status = ok ? 'applied' : 'failed';
+      toast(`Applied ${ok} change${ok === 1 ? '' : 's'}`, bad.length ? `${bad.length} skipped: ${bad[0].error}` : '', !!bad.length && !ok, !!ok);
+      if (ok) S.notes = [];
+      if (chosen(m).some((e) => e.structure?.type === 'token')) S.tokens = null;
+      S.amber = [];
+      afterEdit();
+      renderAI();
+    }
+    workClear();
+    saveChat();
+    // Then look at the page and check every note was really fixed; fix what's left (up to two checks).
+    if (m.status === 'applied') await checkAndFix({ request: notes.map((n) => n.title || n.text).join('; '), done: chosen(m), round: 1, notes, full: true });
   }
   let draw = null;
   const ovPoint = (e) => { const r = $('ov').getBoundingClientRect(); return { x: (e.clientX - r.left) / S.z + W.scrollX, y: (e.clientY - r.top) / S.z + W.scrollY }; };
   $('annoCap').addEventListener('pointerdown', (e) => {
     if (S.tool !== 'annotate' || !W) return;
     e.preventDefault();
-    $('annoCap').setPointerCapture(e.pointerId);
+    try { $('annoCap').setPointerCapture(e.pointerId); } catch {}
     S.noteDraft = null;
     renderMarks();
     draw = ovPoint(e);
@@ -1852,7 +3194,7 @@
   $('annoCap').addEventListener('pointermove', (e) => {
     if (!draw) return;
     const { x: x2, y: y2 } = ovPoint(e);
-    S.noteDraft = S.shape === 'pin' ? { shape: 'pin', x: x2, y: y2 } : S.shape === 'arrow' ? { shape: 'arrow', x: draw.x, y: draw.y, x2, y2 } : { shape: S.shape, x: Math.min(draw.x, x2), y: Math.min(draw.y, y2), w: Math.abs(x2 - draw.x), h: Math.abs(y2 - draw.y) };
+    S.noteDraft = { shape: 'box', x: Math.min(draw.x, x2), y: Math.min(draw.y, y2), w: Math.abs(x2 - draw.x), h: Math.abs(y2 - draw.y) };
     renderMarks();
   });
   $('annoCap').addEventListener('pointerup', () => {
@@ -1869,7 +3211,7 @@
     take('noteIn', (v, atts) => {
       S.notes.push({ ...S.noteDraft, text: v || 'See the attached image.', atts });
       S.noteDraft = null;
-      if (S.mode === 'edit' && S.tab !== 'chat') { S.tab = 'chat'; renderBar(); }
+      if (S.mode === 'edit' && (S.left !== 'chat' || !S.layersOpen)) { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
       refreshTasks();
     });
   }
@@ -1877,8 +3219,13 @@
     S.tool = t;
     S.noteDraft = null;
     S.hintSeen = true;
-    if (t === 'annotate') { S.hover = null; S.askOpen = false; }
-    renderBar(); renderMarks(); renderAsk();
+    if (t !== 'select') { S.hover = null; S.pendingInsert = false; }
+    if (t === 'interact') S.pageSel = false;
+    // Interacting or moving around isn't editing: let go of the selection so the outline and handles go away.
+    if (t === 'interact' && (S.sel || S.multi.length)) { S.multi = []; select(null); }
+    if (t === 'annotate') S.askOpen = false;
+    syncTool();
+    renderBar(); renderMarks(); renderAsk(); renderPanel();
   }
   // AI buttons use data-act2 so they never collide with the editor's own actions.
   document.addEventListener('click', (e) => {
@@ -1908,9 +3255,11 @@
         if (!m) return;
         (async () => {
           let undone = 0;
-          for (let k = 0; k < (m.appliedN || 0); k++) { const r = await api('/undo', {}).catch(() => null); if (!r?.undone) break; S.count = r.n; undone++; }
-          m.status = 'discarded';
-          toast(undone ? `Undid the look (${undone} change${undone === 1 ? '' : 's'})` : 'Nothing to undo');
+          if (m.batch) { const r = await api('/undo', {}).catch(() => null); if (r?.undone) { S.count = r.n; undone = r.count || 1; } }
+          else for (let k = 0; k < (m.appliedN || 0); k++) { const r = await api('/undo', {}).catch(() => null); if (!r?.undone) break; S.count = r.n; undone++; }
+          m.status = 'undone';
+          const what = m.proposal?.mode === 'explore' ? 'Undid the look:' : 'Undid';
+          toast(undone ? `${what} ${undone} change${undone === 1 ? '' : 's'}` : 'Nothing to undo');
           afterEdit(); renderAI(); saveChat();
         })();
       }
@@ -1947,6 +3296,24 @@
       }
       else if (act === 'pickKind') { if (S.pick) { S.pick.kind = v; S.pick.prompt = $('pickQ')?.value || S.pick.prompt; renderPicker(); if (S.pick.prompt && !(v === 'photo' ? S.pick.photos : S.pick.drawings)) runPicker(); } }
       else if (act === 'pickImg') { if (S.pick) chooseImage(S.pick, +a.dataset.i); }
+      else if (act === 'pickAll') {
+        // Choose each picture in turn (each opens on its own element); when they're all chosen, apply.
+        const m = S.chat[+a.dataset.i];
+        if (!m) return;
+        const next = () => {
+          const e2 = m.proposal.edits.find((x) => x.structure?.type === 'imageAsk');
+          if (!e2) { renderAI(); if (m.status === 'pending' && chosen(m).length) decide(m, 'apply'); return; }
+          const el = D?.querySelector(q(e2.loc)), left = m.proposal.edits.filter((x) => x.structure?.type === 'imageAsk').length;
+          el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          openImagePicker({ kind: e2.structure.kind, prompt: e2.structure.prompt, el, step: left > 1 || m._picks ? `${(m._picks || 0) + 1} of ${(m._picks || 0) + left}` : '', onPick: ({ src, alt, credit }) => {
+            e2.structure = { type: 'image', src, alt, credit, kind: e2.structure.kind, prompt: e2.structure.prompt, preview: src };
+            m._picks = (m._picks || 0) + 1;
+            renderAI();
+            setTimeout(next, 250);
+          } });
+        };
+        next();
+      }
       else if (act === 'imgOptions') {
         // A proposed image: open the picker with Tovi's description; the pick fills in this edit.
         const m = S.chat[+a.dataset.i], e2 = m?.proposal.edits[+a.dataset.e];
@@ -1980,13 +3347,15 @@
       else if (act === 'noteDiscard') { S.noteDraft = null; renderMarks(); }
       else if (act === 'noteDel') { S.notes.splice(+a.dataset.i, 1); S.openTask = []; S.hlNote = null; refreshTasks(); }
       else if (act === 'notesClear') { S.notes = []; S.openTask = []; if (S.card?.where === 'notes') S.card = null; S.amber = []; refreshTasks(); }
+      else if (act === 'tasksAll') { S.tasksAll = !S.tasksAll; refreshTasks(); }
+      else if (act === 'ngMore') { const m = S.chat[+a.dataset.i]; if (m) { m.allRows = !m.allRows; renderAI(); } }
       else if (act === 'tkOpen') { const i = +a.dataset.i; S.openTask = S.openTask.includes(i) ? S.openTask.filter((x) => x !== i) : [...S.openTask, i]; refreshTasks(); }
       else if (act === 'ngOpen') { const m = S.chat[+a.dataset.i], n = +a.dataset.n; if (m) { m.openN = (m.openN || []).includes(n) ? m.openN.filter((x) => x !== n) : [...(m.openN || []), n]; renderAI(); } }
       else if (act === 'notesApply') applyNotes();
       return;
     }
     const t = e.target.closest('[data-act="tool"],[data-act="shape"]');
-    if (t) { if (t.dataset.act === 'tool') setTool(S.tool === t.dataset.v ? 'select' : t.dataset.v); else { S.shape = t.dataset.v; renderBar(); } }
+    if (t) { if (t.dataset.act === 'tool') setTool(t.dataset.v === 'annotate' && S.tool === 'annotate' ? 'select' : t.dataset.v); }
   });
 
   /* ---------- structure: delete, duplicate, move, swap, insert, images ---------- */
@@ -2062,10 +3431,10 @@
   }
   /* image picker: real photos (Unsplash) or illustrations Claude draws, chosen from a few options */
   S.pick = null;
-  function openImagePicker({ kind = 'photo', prompt = '', el = S.sel?.el, onPick }) {
+  function openImagePicker({ kind = 'photo', prompt = '', el = S.sel?.el, onPick, step = '' }) {
     const r = el?.getBoundingClientRect?.() || { width: 4, height: 3 };
     const ratio = r.width && r.height ? r.width / r.height : 4 / 3;
-    S.pick = { kind, prompt, ratio, onPick, photos: null, drawings: null, busy: false, error: '' };
+    S.pick = { kind, prompt, ratio, onPick, step, photos: null, drawings: null, busy: false, error: '' };
     $('modal').hidden = false;
     renderPicker();
     if (prompt) runPicker();
@@ -2085,7 +3454,7 @@
         ? `<div class="pkGrid">${res.map((x, i) => `<button class="pkItem" data-act2="pickImg" data-i="${i}" title="${esc(x.alt)}"><img src="${esc(x.thumb)}" alt="${esc(x.alt)}" style="aspect-ratio:${P.ratio}"><span>${esc(x.credit?.name || '')}</span></button>`).join('')}</div><p class="note pkCredit">Photos from <a href="https://unsplash.com/?utm_source=kerf&utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>, free to use.</p>`
         : `<div class="pkGrid draw">${res.map((x, i) => `<button class="pkItem" data-act2="pickImg" data-i="${i}" title="${esc(x.title)}"><img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(x.svg)}" alt="${esc(x.title)}" style="aspect-ratio:${P.ratio}"><span>${esc(x.title)}</span></button>`).join('')}</div>`;
     $('modal').innerHTML = `<section class="dialog pick" role="dialog" aria-modal="true" aria-labelledby="pkT">
-      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="pkT">Choose an image</h2><span class="note">Pick one and it takes this image’s place, at the same size.</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
+      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="pkT">Choose an image${P.step ? ` <span class="note" style="font-weight:400">· ${esc(P.step)}</span>` : ''}</h2><span class="note">${P.prompt ? `For: “${esc(P.prompt)}”. ` : ''}Pick one and it takes this element’s place, at the same size.</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
       <div class="db">
         <div class="seg pkTabs"><button data-act2="pickKind" data-v="photo" class="${P.kind === 'photo' ? 'on' : ''}">${ico('image', 12)} Photos</button><button data-act2="pickKind" data-v="illustration" class="${P.kind === 'illustration' ? 'on' : ''}">${ico('pen', 12)} Illustrations</button></div>
         <form class="insSearch" data-form="pick">${ico('search', 14)}<input id="pickQ" value="${esc(P.prompt)}" placeholder="${P.kind === 'photo' ? 'Search photos' : 'Describe the illustration'}" autocomplete="off" spellcheck="false" aria-label="What should the image show?"><button class="primary sm">${P.kind === 'photo' ? 'Search' : 'Draw'}</button></form>
@@ -2177,6 +3546,19 @@
   }
   // Boxes that hold other elements take new ones inside; text, images and buttons get them after.
   const defaultPos = () => (S.sel && S.sel.el.children.length && !['p', 'span', 'button', 'a', 'label', 'svg'].includes(S.sel.el.tagName.toLowerCase()) ? 'inside' : 'after');
+  // Add from anywhere: it switches to Select (clicks must pick a spot, not use the app), and if nothing is
+  // selected yet, the next click picks where the new element goes and opens Add right there.
+  function startInsert() {
+    if (S.mode === 'preview') setMode('edit');
+    if (S.tool !== 'select') setTool('select');
+    if (!S.sel) {
+      S.pendingInsert = true;
+      toast('Click where the new element should go', 'Add opens as soon as you pick a spot. Esc to cancel.');
+      return;
+    }
+    S.insertPos = defaultPos();
+    openInsert();
+  }
   async function openInsert() {
     if (!S.sel) { toast('Select where the new element should go, then add it.', '', true); return; }
     S._tpls = await templates();
@@ -2259,7 +3641,7 @@
       if (S.sel.el.tagName.toLowerCase() === 'svg') openIcons('swap');
       else { S.insertPos = 'after'; openSwapComponent(); }
     }
-    else if (act === 'insertMenu') { S.insertPos = defaultPos(); openInsert(); }
+    else if (act === 'insertMenu') startInsert();
     else if (act === 'insPos') { S.insertPos = v; openInsert(); }
     else if (act === 'insTpl') {
       const t = S._tpls[+v];
@@ -2358,7 +3740,7 @@
   window.addEventListener('keydown', structKeys, true);
   function structKeys(e) {
     const t = e.target;
-    if (S.mode !== 'edit' || !S.sel || S.editing || (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName)))) return;
+    if (!picking() || !S.sel || S.editing || (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName)))) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); e.stopImmediatePropagation(); deleteSelected(); }
     else if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyG') { e.preventDefault(); e.stopImmediatePropagation(); groupSelected(); }
     else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === 'KeyG') { e.preventDefault(); e.stopImmediatePropagation(); structure({ type: 'ungroup' }); }
@@ -2373,40 +3755,60 @@
     if (!W) return;
     W.addEventListener('keydown', structKeys, true);
     W.addEventListener('pointerdown', (e) => {
-      if (S.mode !== 'edit' || S.tool === 'annotate' || !S.sel || !S.sel.el.contains(e.target) || S.editing) return;
-      const el = S.sel.el, parent = el.parentElement;
-      if (!parent) return;
-      const sibs = [...parent.children].filter((c) => c.matches('[data-kerf],[data-kerf-use]'));
-      if (sibs.length < 2) return;
-      drag = { el, sibs, x: e.clientX, y: e.clientY, on: false, idx: sibs.indexOf(el) };
+      if (!picking() || thru(e) || !S.sel || !S.sel.el.contains(e.target) || S.editing) return;
+      dragStart(S.sel.el, e.clientX, e.clientY);
     }, true);
-    W.addEventListener('pointermove', (e) => {
-      if (!drag) return;
-      if (!drag.on && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
-      drag.on = true;
-      const flow = cs(drag.el.parentElement);
-      const horiz = /row/.test(flow.flexDirection) && /flex/.test(flow.display) || /grid/.test(flow.display);
-      let best = 0, bd = 1e9, after = false;
-      drag.sibs.forEach((s, k) => {
-        const r = s.getBoundingClientRect(), c = horiz ? r.left + r.width / 2 : r.top + r.height / 2;
-        const d = Math.abs((horiz ? e.clientX : e.clientY) - c);
-        if (d < bd) { bd = d; best = k; after = (horiz ? e.clientX : e.clientY) > c; }
-      });
-      let to = best + (after ? 1 : 0);
-      if (to > drag.idx) to -= 1;
-      drag.to = to;
-      const r = drag.sibs[best].getBoundingClientRect(), line = $('dropLine');
-      line.hidden = false;
-      line.style.cssText = horiz ? `left:${(after ? r.right : r.left) - 1}px;top:${r.top}px;width:3px;height:${r.height}px` : `left:${r.left}px;top:${(after ? r.bottom : r.top) - 1}px;width:${r.width}px;height:3px`;
-    }, true);
-    W.addEventListener('pointerup', () => {
-      if (!drag) return;
-      const d = drag;
-      drag = null;
-      $('dropLine').hidden = true;
-      if (d.on && d.to != null && d.to !== d.idx) structure({ type: 'move', index: d.to });
-    }, true);
+    W.addEventListener('pointermove', (e) => dragMove(e.clientX, e.clientY), true);
+    W.addEventListener('pointerup', dragEnd, true);
   }
+  // Reorder within the parent: pick a spot among the siblings, show a blue line, move the JSX on release.
+  // Coordinates are the app's own (inside the frame).
+  function dragStart(el, x, y, now = false) {
+    const sibs = reorderSibs(el);
+    if (sibs.length < 2 || repeated(el)) return false;
+    drag = { el, sibs, x, y, on: false, idx: sibs.indexOf(el) };
+    if (now) dragMove(x, y, true);
+    return true;
+  }
+  function dragMove(x, y, force) {
+    if (!drag) return;
+    if (!drag.on && !force && Math.hypot(x - drag.x, y - drag.y) < 6) return;
+    if (!drag.on) { drag.on = true; drag.op = drag.el.style.opacity; drag.el.style.opacity = '0.45'; }
+    const flow = cs(drag.el.parentElement);
+    const horiz = /row/.test(flow.flexDirection) && /flex/.test(flow.display) || /grid/.test(flow.display);
+    let best = 0, bd = 1e9, after = false;
+    drag.sibs.forEach((s, k) => {
+      const r = s.getBoundingClientRect(), c = horiz ? r.left + r.width / 2 : r.top + r.height / 2;
+      const d = Math.abs((horiz ? x : y) - c);
+      if (d < bd) { bd = d; best = k; after = (horiz ? x : y) > c; }
+    });
+    let to = best + (after ? 1 : 0);
+    if (to > drag.idx) to -= 1;
+    drag.to = to;
+    const r = drag.sibs[best].getBoundingClientRect(), line = $('dropLine');
+    line.hidden = false;
+    line.style.cssText = horiz ? `left:${(after ? r.right : r.left) - 1}px;top:${r.top}px;width:3px;height:${r.height}px` : `left:${r.left}px;top:${(after ? r.bottom : r.top) - 1}px;width:${r.width}px;height:3px`;
+  }
+  function dragEnd() {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    $('dropLine').hidden = true;
+    if (d.on) d.el.style.opacity = d.op || '';
+    if (d.on && d.to != null && d.to !== d.idx) structure({ type: 'move', index: d.to });
+  }
+  // The grip on the selection tag: drag it to move the element. Editor coordinates → the app's.
+  const toApp = (e) => { const r = frame.getBoundingClientRect(); return [(e.clientX - r.left) / S.z, (e.clientY - r.top) / S.z]; };
+  document.addEventListener('pointerdown', (e) => {
+    const g = e.target.closest?.('[data-drag]');
+    if (!g || !S.sel?.el) return;
+    e.preventDefault(); e.stopPropagation();
+    if (!dragStart(S.sel.el, ...toApp(e))) return;
+    g.setPointerCapture(e.pointerId);
+    const move = (ev) => dragMove(...toApp(ev));
+    const up = () => { g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); dragEnd(); };
+    g.addEventListener('pointermove', move); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+  }, true);
   frame.addEventListener('load', bindDrag);
   if (frame.contentDocument?.readyState === 'complete') setTimeout(bindDrag, 0);
 
@@ -2432,13 +3834,17 @@
     const L = layoutVal(el);
     let h = '';
     const shown = (k) => S.reveal?.el === el && S.reveal[k];
-    const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = (+val('mX') || 0) !== 0 || (+val('mY') || 0) !== 0;
-    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${nf('mX', 'padH', 'Horizontal margin')}${nf('mY', 'padV', 'Vertical margin')}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'sm', 'data-v="margin"'));
-    const sizeSec = () => sec('Size', `<div class="r2">${modeSel('w')}${modeSel('h')}</div><div class="r2">${fixedField('w')}${fixedField('h')}</div>`);
-    const modeSel = (axis) => `<label class="inp"><span class="u">${axis.toUpperCase()}</span><select data-size="${axis}" aria-label="${axis === 'w' ? 'Width' : 'Height'}">${[['auto', 'Auto'], ['hug', 'Hug'], ['fill', 'Fill'], ['fixed', 'Fixed']].map(([v, n]) => `<option value="${v}"${sizeMode(axis) === v ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
-    const fixedField = (axis) => sizeMode(axis) === 'fixed' ? nf(axis, `<b class="tg">${axis.toUpperCase()}</b>`, axis === 'w' ? 'Width' : 'Height') : `<label class="inp lock"><input disabled value="${Math.round(axis === 'w' ? el.getBoundingClientRect().width : el.getBoundingClientRect().height)}"></label>`;
+    const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = ['mX', 'mT', 'mB'].some((k) => (+val(k) || 0) !== 0);
+    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${nf('mX', 'padH', 'Horizontal margin')}<span></span></div><div class="r2">${nf('mT', '<b class="tg">T</b>', 'Top margin')}${nf('mB', '<b class="tg">B</b>', 'Bottom margin')}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
+    // Like Figma: one field per axis, "W 468" with Fixed / Hug / Fill inside it. Typing a number makes it fixed.
+    const MODES = [['fixed', 'Fixed'], ['hug', 'Hug'], ['fill', 'Fill'], ['auto', 'Auto']];
+    const sizeField = (axis) => {
+      const mode = sizeMode(axis), r = el.getBoundingClientRect(), px = Math.round(axis === 'w' ? r.width : r.height), nm = axis === 'w' ? 'Width' : 'Height';
+      return `<div class="inp szf${info()?.sized?.includes(axis) ? ' sized' : ''}" title="${nm}"><span class="ic" data-scrub="${axis}"><b class="tg">${axis.toUpperCase()}</b></span><input type="text" inputmode="decimal" data-prop="${axis}" value="${px}" aria-label="${nm}"><label class="szm" title="${nm}: ${MODES.find(([v]) => v === mode)[1]}"><span>${mode === 'fixed' ? '' : MODES.find(([v]) => v === mode)[1]}</span>${ico('chev', 10)}<select data-size="${axis}" aria-label="${nm} sizing">${MODES.map(([v, n]) => `<option value="${v}"${mode === v ? ' selected' : ''}>${n === 'Auto' ? 'Auto (as coded)' : n === 'Hug' ? 'Hug contents' : n === 'Fill' ? 'Fill container' : 'Fixed'}</option>`).join('')}</select></label></div>`;
+    };
+    const sizeSec = () => sec('Size', `<div class="r2">${sizeField('w')}${sizeField('h')}</div>`);
     if (!isContainer(el)) {
-      if (!isMedia(el)) h += sec('Padding', hasPad || shown('pad') ? `<div class="r2">${nf('padX', 'padH', 'Horizontal padding')}${nf('padY', 'padV', 'Vertical padding')}</div>` : '', hasPad || shown('pad') ? '' : hb('reveal', 'plus', 'Add padding', 'sm', 'data-v="pad"'));
+      if (!isMedia(el)) h += sec('Padding', hasPad || shown('pad') ? `<div class="r2">${nf('padX', 'padH', 'Horizontal padding')}${nf('padY', 'padV', 'Vertical padding')}</div>` : '', hasPad || shown('pad') ? '' : hb('reveal', 'plus', 'Add padding', 'pad'));
       return h + sizeSec() + marginSec();
     }
     // Alignment matrix like Figma's: 3×3, mapped to justify/items by direction.
@@ -2582,6 +3988,12 @@
 
   /* ---------- start ---------- */
   api('/theme').then((t) => { S.theme = t; renderPanel(); }).catch(() => {});
+  // Opened from the start page with "Check my product" on: review the whole product once the app has loaded.
+  if (new URLSearchParams(location.search).get('diagnose') === '1') {
+    history.replaceState(null, '', location.pathname);
+    const go = () => setTimeout(() => { if (!S.diagnosing) { toast('Tovi is checking your product for design issues…'); runDiagnoseProduct(); } }, 2500);
+    if (frame.contentDocument?.readyState === 'complete' && frame.contentWindow?.location.href !== 'about:blank') go(); else frame.addEventListener('load', go, { once: true });
+  }
   api('/project').then((p) => { S.project = p; renderTop(); }).catch(() => {});
   api('/changes').then((c) => { S.count = c.length; renderBar(); }).catch(() => {});
   api('/chat').then((c) => { S.chat = (c.messages || []).map((m) => (m.role === 'kerf' && m.status === 'pending' ? { ...m, status: 'discarded' } : m)); S.notes = c.notes || []; renderAI(); }).catch(() => {});

@@ -13,20 +13,74 @@ import { checkProp } from './props.mjs';
 import { checkSnippet } from './structure.mjs';
 
 const ENV = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env');
-const MODEL = 'claude-opus-5-5';
 
-export const PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity', 'shadow', 'fit', 'gradient', 'clipText', 'mX', 'mY', 'w', 'h', 'layout', 'alignItems', 'justify', 'wrap'];
+export const PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity', 'shadow', 'mT', 'mB', 'fontFamily', 'fit', 'gradient', 'clipText', 'mX', 'mY', 'w', 'h', 'layout', 'alignItems', 'justify', 'wrap'];
 const NUMERIC = new Set(['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity']);
 const COLOR = new Set(['bg', 'color', 'borderC']);
 
-// The key is read on each request, so saving a new one on the start page takes effect at once.
-function apiKey() {
+// Which AI answers: Claude (default), OpenAI or Gemini. Read on each request, so Settings takes effect at once.
+export const PROVIDERS = {
+  anthropic: { label: 'Claude', keyName: 'ANTHROPIC_API_KEY', model: 'claude-opus-5-5' },
+  openai: { label: 'OpenAI', keyName: 'OPENAI_API_KEY', model: 'gpt-6-astra' },
+  gemini: { label: 'Gemini', keyName: 'GEMINI_API_KEY', model: 'gemini-4-argon' },
+};
+// The models offered in Settings, grouped by provider. Any other name can be typed in ("Other … model").
+export const MODELS = [
+  { provider: 'anthropic', id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
+  { provider: 'anthropic', id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
+  { provider: 'openai', id: 'gpt-6-astra', label: 'GPT-6 Astra' },
+  { provider: 'gemini', id: 'gemini-4-argon', label: 'Gemini 4 Argon' },
+  { provider: 'gemini', id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+  { provider: 'gemini', id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
+];
+function envValue(name) {
   try {
-    const m = fs.readFileSync(ENV, 'utf8').match(/^ANTHROPIC_API_KEY=(\S+)/m);
+    const m = fs.readFileSync(ENV, 'utf8').match(new RegExp(`^${name}=(\\S+)`, 'm'));
     return m ? m[1] : null;
   } catch {
     return null;
   }
+}
+// The models a saved key can use, asked from the provider itself (free), so new models appear on their own.
+// Kept for 10 minutes. Without a key, or if the provider can't be reached, the short list above is used.
+const modelCache = new Map();
+const CHAT_ONLY = /(embed|audio|realtime|tts|transcribe|whisper|dall-e|image|moderation|search|instruct|babbage|davinci|computer-use|live|aqa|learnlm|gemma|banana|omni|robotics|translate|lyria|research|antigravity)/i;
+export async function listModels(provider) {
+  const pr = PROVIDERS[provider];
+  if (!pr) return { models: [], live: false };
+  const fallback = { models: MODELS.filter((m) => m.provider === provider).map(({ id, label }) => ({ id, label })), live: false };
+  const key = envValue(pr.keyName);
+  if (!key) return fallback;
+  const hit = modelCache.get(provider);
+  if (hit && hit.key === key && Date.now() - hit.at < 600000) return hit.value;
+  let models = [];
+  try {
+    if (provider === 'anthropic') {
+      for await (const m of new Anthropic({ apiKey: key }).models.list({ limit: 100 })) models.push({ id: m.id, label: m.display_name || m.id, at: Date.parse(m.created_at) || 0 });
+    } else if (provider === 'openai') {
+      const r = await fetch('https://api.openai.com/v1/models', { headers: { authorization: `Bearer ${key}` } });
+      if (!r.ok) throw new Error(String(r.status));
+      models = ((await r.json()).data || []).filter((m) => /^(gpt-|o\d|chatgpt-)/.test(m.id) && !CHAT_ONLY.test(m.id)).map((m) => ({ id: m.id, label: m.id, at: (m.created || 0) * 1000 }));
+    } else {
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', { headers: { 'x-goog-api-key': key } });
+      if (!r.ok) throw new Error(String(r.status));
+      models = ((await r.json()).models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini/.test(m.name) && !CHAT_ONLY.test(m.name)).map((m) => ({ id: m.name.replace(/^models\//, ''), label: m.displayName || m.name, at: 0 }));
+    }
+  } catch (e) {
+    console.error('Tovi: could not list models for', pr.label, e.message);
+    return fallback;
+  }
+  if (!models.length) return fallback;
+  // Newest first where the provider says when a model came out; otherwise by name, newest-looking first.
+  models.sort((a, b) => (b.at - a.at) || b.id.localeCompare(a.id, undefined, { numeric: true }));
+  const value = { models: models.map(({ id, label }) => ({ id, label })), live: true };
+  modelCache.set(provider, { key, at: Date.now(), value });
+  return value;
+}
+export function aiConfig() {
+  const provider = PROVIDERS[envValue('AI_PROVIDER')] ? envValue('AI_PROVIDER') : 'anthropic';
+  const model = envValue('AI_MODEL') || PROVIDERS[provider].model;
+  return { provider, model, key: envValue(PROVIDERS[provider].keyName) };
 }
 
 const Proposal = z.object({
@@ -45,7 +99,7 @@ const Proposal = z.object({
     z.object({
       loc: z.string().describe('Exactly one of the element ids you were given'),
       note: z.number().int().nullable().describe('When the request has numbered notes: the note this edit answers; otherwise null'),
-      ops: z.array(z.object({ prop: z.enum(PROPS), value: z.string().describe('For w/h: hug, fill or px. For layout: row, col or none. A number for sizes (px; % for opacity and letterSpacing; 100-900 for fontWeight), a color token name or #RRGGBB for colors, a shadow key or "none", left/center/right/justify for align') })),
+      ops: z.array(z.object({ prop: z.enum(PROPS), value: z.string().describe('For w/h: hug, fill or px. For layout: row, col or none. A number for sizes (px; % for opacity and letterSpacing; 100-900 for fontWeight), a color token name or #RRGGBB for colors, a shadow key or "none", left/center/right/justify for align, a font family key for fontFamily') })),
       text: z.string().nullable().describe('New text, only when the element’s text is editable and the request asks to change wording; otherwise null'),
       props: z.array(z.object({ name: z.string(), value: z.string() })).describe('Component property changes, only names listed as editable for that element, with one of its allowed values; [] if none'),
       target: z.string().nullable().describe('For style edits: where to make the change. null lets Tovi choose (where the property is set now). Otherwise one of the element’s listed style targets: "element" (only this element), "table:NAME:KEY" (that entry of a style table, so every element using it), "table:NAME:*" (every entry), "css:NAME" (that CSS class everywhere), "const:NAME"'),
@@ -65,7 +119,7 @@ const Proposal = z.object({
       insertPosition: z.enum(['before', 'after', 'inside']).nullable().describe('For insert: relative to this element; inside puts it at the end of its children'),
       insertJsx: z.string().nullable().describe('For insert or replace: the new JSX. Plain tags (div, p, h2, span, img, button, ul/li…) or the project’s components and icons, Tailwind classes using the project’s tokens, fixed text only. No handlers, no expressions.'),
       groupWith: z.array(z.string()).nullable().describe('For group: ids of the neighboring siblings to wrap together with this element, in the same parent'),
-      groupClass: z.string().nullable().describe('For group: Tailwind classes for the new frame, e.g. "flex flex-row items-center gap-3"'),
+      groupClass: z.string().nullable().describe('For group: Tailwind classes for the new frame, e.g. "flex items-center gap-3"'),
       imageSrc: z.string().nullable().describe('For image: one of the uploaded images, "attachment:N" for an image attached to this message, a URL the designer gave, or a new picture as "photo: <what it shows>" or "illustration: <what it shows>"'),
       imageAlt: z.string().nullable().describe('For image: alt text describing the image'),
       why: z.string().describe('A few words, e.g. "warmer, more premium card"'),
@@ -89,6 +143,26 @@ Work like a sharp collaborator:
 - Be decisive: for vague requests ("make it pop", "more premium"), make tasteful, on-system choices and say in one sentence what you chose. Ask one short question (and return no edits) only when two very different readings are equally likely.
 - Keep the message to one or two plain sentences. Don't list every class; the edit list shows the details.
 
+Design craft (use your eye, like a senior designer reviewing this screen):
+- Hierarchy: one clear focal point per area; levels differ in size, weight or colour (a heading at least one step up the type scale or a weight step from body), not everything bold.
+- Rhythm: spacing from the project's scale; related things closer than unrelated ones; the same padding inside similar containers; edges aligned to a shared grid.
+- Contrast: body text at least WCAG AA (4.5:1), large text and icons 3:1; check text over images and tinted fills.
+- Consistency: siblings that do the same job look the same; reuse the tokens, radii and shadows already on the screen.
+- Typography: headings about 1.1-1.3 line height with slightly tighter tracking when large, body about 1.5; comfortable line length (45-75 characters). Use the project's font families for their roles (a display font for headings when the project has one).
+- Primary controls at least 40-44px tall.
+- Restraint: the fewest changes that clearly improve the result; don't restyle what already works.
+For vague requests ("make it better", "polish this", "more premium"), look at the whole selection in the screenshots and make a complete, coordinated pass: every part that falls short gets fixed in the same answer (type, spacing, alignment, colour, surfaces, controls), not just one or two things. Name the main moves in the message.
+
+Designer moves (concrete recipes; use the project's tokens and scales):
+- Premium / refined: headings larger and lighter with slightly tighter tracking (a display font if the project has one); more whitespace around and between blocks (section padding toward 96-128px, 24-32px between a heading and what follows); one quiet surface instead of several nested frames or borders; restrained colour (one accent); larger, calmer buttons (about 48px tall, generous side padding); the secondary action as a quiet text link or subtle outline; consistent radii.
+- Polish: fix alignment with layout, not numbers: siblings that should line up (card footers, buttons, prices) line up because each card is a vertical stack with the last item pushed down (layout col, then mT auto on the bottom item, and equal heights from the parent grid), never with a fixed margin tuned to today's text; same role = same style across siblings (all prices the same size and weight, all badges alike); even spacing rhythm; icons tinted with the brand colour; remove stray borders, shadows and colours that add noise.
+- Cleaner / simpler: remove duplicate frames, borders and shadows; fewer colours and weights; more space; align to one grid.
+- Stronger hierarchy: one clear focal point; enlarge or darken the key element and quiet the rest (smaller, lighter, muted); group related items tightly.
+- Highlight one option (a featured plan or item): a filled or tinted surface or a stronger border in the brand colour, not just a shadow, with its button filled while the others stay outlined.
+Avoid: nesting a framed box inside another framed box; mixing several radii or greys; spacing values off the scale; fixed margins or heights used to fake alignment; changing what already works.
+
+Reading code: when the source file of the selection is included, read it first to understand the structure (what wraps what, what repeats from a list, what comes from props or a shared component) before deciding. For action code, copy the find snippet exactly from that source.
+
 How to work:
 - When the request has numbered notes (the designer marked parts of the screen), answer each note on its own: set note on every edit, and fill notes with one entry per note saying what you changed for it or why it could not be done. Elements tagged (note N) sit under that note's mark. Keep message to one short overall sentence.
 - Only edit elements from the list you are given, by their exact id. Prefer the fewest edits that achieve the request.
@@ -97,13 +171,14 @@ How to work:
 - Text is editable only where marked editable. Never invent product data.
 - Components can also have editable properties, like Figma component properties (an icon's weight or stroke, a button's variant). Use them: they are often the right tool for "more refined", "lighter", "bolder" icons and controls. Only use property names and values listed for that element.
 - You can also change structure, like a designer in Figma: delete an element, duplicate it, move it up or down among its siblings, swap an icon or component for another (use the exact icon names from the project's library, e.g. "replace the bookmark with a heart" is a swap to Heart), insert new elements before, after or inside an element, and change an image's source or alt text. To replace an element with something different, use replace with the new JSX (never insert plus delete).
+- Fonts: fontFamily takes one of the project's font family keys listed below (e.g. display for headings, sans for body).
 - Gradients are a style: set the gradient property to "<direction> <from> <to>" or "<direction> <from> <via> <to>" with directions t, tr, r, br, b, bl, l, tl and project color tokens (e.g. "r primary positive"); "none" removes it. For gradient text, also set clipText to "on". Don't also set a fill: the gradient is the fill. Never rebuild an element just to restyle it. Elements shown by a condition or repeated by a list can't be deleted or moved; edit their parent or their style instead.
 - To arrange some siblings differently from the rest (e.g. put an input and a button side by side while the label stays above), group them: action group on the first one, groupWith the others, and groupClass for the new frame's layout. Then set Fill width on the child that should take the remaining space. Ungroup removes a plain wrapper and keeps its children.
 - New elements must fit the design: reuse the project's components where one fits, and use the project's tokens and scales in their classes.
-- Layout works like Figma auto layout: layout row/col/none (direction), alignItems start/center/end/stretch, justify start/center/end/between, wrap wrap/nowrap, gap, padX/padY, margins mX/mY (px or auto), and width/height w/h as hug, fill or a px size.
+- Layout works like Figma auto layout: layout row/col/none (direction), alignItems start/center/end/stretch, justify start/center/end/between, wrap wrap/nowrap, gap, padX/padY, margins mX (left and right), mT (top), mB (bottom) (px or auto), and width/height w/h as hug, fill or a px size.
 - To put a new picture in an image (a photo, a drawing, "an illustration of…", "a picture of…"), use action image with imageSrc "photo: <4 to 12 words of what it shows>" for real photographs, or "illustration: <…>" for drawn or flat art. Tovi shows the designer options to pick from. Never say you can't create images.
 - action token changes a design-system colour everywhere it's used: token.name from the token list, token.value #RRGGBB, token.theme light, dark or both.
-- action code is the last resort for visual changes no other action can make (classes computed in an unusual way, inline styles): code.file is the file shown for that element or its style sources, code.find an exact snippet of code you were shown that occurs once, code.replace the new text. Keep it minimal and visual only: never change logic, data, handlers or imports.
+- action code is the last resort for visual changes no other action can make (classes computed in an unusual way, inline styles): code.file is the file shown for that element or its style sources, code.find an exact snippet of code you were shown that occurs once, code.replace the new text. Keep it minimal and visual only: never change logic, data, handlers or imports. Keep the original formatting exactly: the same line breaks and indentation, one element per line as before; never squash several lines into one. Prefer several small code edits over one large one.
 - Always do what you can. If part of a request needs something not in your toolset yet (free positioning, animation, hover states, new pages), make the edits that get closest, set scope to partial, and say in one short sentence what you could not do yet. Never refuse a visual request outright when some of it is possible.
 - needs_developer is only for requests that change behavior, data, logic, payments or accounts. Visual changes are never developer work, even when Tovi cannot make them yet; use not_yet for those.
 - This can be a conversation: earlier turns are included. Read follow-ups ("smaller", "undo that", "try again but warmer") against what you proposed before and whether it was applied.
@@ -119,6 +194,7 @@ function themeSummary(theme) {
     `Radius scale: ${scale(theme.radius)}`,
     `Font sizes: ${scale(theme.fontSize)}`,
     `Shadows: ${theme.shadow.join(', ')}`,
+    theme.fonts && Object.keys(theme.fonts).length ? `Font families (fontFamily): ${Object.entries(theme.fonts).map(([k, f]) => `${k}=${f}`).join(', ')}` : '',
   ].join('\n');
 }
 
@@ -173,7 +249,7 @@ export function cleanOps(ops, theme) {
       else if (/^#?[0-9a-f]{6}$/i.test(v)) out.push({ prop, value: '#' + v.replace('#', '').toUpperCase() });
     } else if (prop === 'shadow') {
       if (v === 'none' || theme.shadow.includes(v)) out.push({ prop, value: v });
-    } else if (prop === 'mX' || prop === 'mY') {
+    } else if (prop === 'mX' || prop === 'mY' || prop === 'mT' || prop === 'mB') {
       if (v === 'auto') out.push({ prop, value: 'auto' });
       else if (isFinite(parseFloat(v))) out.push({ prop, value: Math.round(parseFloat(v)) });
     } else if (prop === 'w' || prop === 'h') {
@@ -196,6 +272,8 @@ export function cleanOps(ops, theme) {
       out.push({ prop, value: /^(on|true|yes)$/i.test(v) ? 'on' : 'off' });
     } else if (prop === 'fit') {
       if (['cover', 'contain', 'fill', 'none', 'scale-down'].includes(v)) out.push({ prop, value: v });
+    } else if (prop === 'fontFamily') {
+      if ((theme.keys?.fontFamily || []).includes(v)) out.push({ prop, value: v });
     } else if (prop === 'align') {
       if (['left', 'center', 'right', 'justify'].includes(v)) out.push({ prop, value: v });
     }
@@ -222,9 +300,93 @@ const PRESETS = {
   minimal: 'Minimal: near-monochrome, few elements, lots of space, thin lines, quiet type.',
 };
 
-export async function propose({ request, targets, history = [], images = [], tokens = [], webRoot = null, screen = null, context = null, mode = 'system', direction = null }, theme, library) {
-  const key = apiKey();
-  if (!key) throw new KerfError('Add your Anthropic key on Tovi’s start page (localhost:4100) to use AI.');
+// OpenAI and Gemini take the same request as Claude and answer with the same proposal, checked by the same schema.
+// Images go in as data URLs (OpenAI) or inline data (Gemini).
+// Fields that can be empty aren't required here, so the model can leave them out instead of writing
+// "null" for each of them on every edit: much less to generate, so answers come back faster.
+// parseProposal fills them back in before the schema check.
+const nullableOf = (p) => Array.isArray(p.anyOf) ? p.anyOf.some((x) => x.type === 'null') : Array.isArray(p.type) && p.type.includes('null');
+function relax(node) {
+  if (!node || typeof node !== 'object') return node;
+  if (Array.isArray(node)) { node.forEach(relax); return node; }
+  if (node.properties && Array.isArray(node.required)) node.required = node.required.filter((k) => !nullableOf(node.properties[k]));
+  for (const v of Object.values(node)) relax(v);
+  return node;
+}
+const PROPOSAL_SCHEMA = () => { const { $schema, ...rest } = z.toJSONSchema(Proposal, { io: 'input' }); return relax(rest); };
+const EDIT_NULLS = ['note', 'text', 'target', 'token', 'code', 'moveDir', 'swapTo', 'insertPosition', 'insertJsx', 'groupWith', 'groupClass', 'imageSrc', 'imageAlt'];
+async function askOther(provider, model, key, { systemText, history8, lastContent, light, schema = PROPOSAL_SCHEMA(), parse = parseProposal }) {
+  const text = (b) => b.type === 'text' ? b.text : null;
+  let res, body;
+  try {
+    if (provider === 'openai') {
+      const parts = lastContent.map((b) => b.type === 'image' ? { type: 'image_url', image_url: { url: `data:${b.source.media_type};base64,${b.source.data}` } } : { type: 'text', text: text(b) });
+      res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          max_completion_tokens: 16000,
+          messages: [{ role: 'system', content: systemText }, ...history8, { role: 'user', content: parts }],
+          response_format: { type: 'json_schema', json_schema: { name: 'proposal', schema } },
+        }),
+      });
+      body = await res.json();
+      if (!res.ok) throw { status: res.status, message: body?.error?.message };
+      const msg = body.choices?.[0]?.message;
+      if (msg?.refusal) throw new KerfError(`${PROVIDERS.openai.label} declined this request. Try rewording it as a visual change.`);
+      const raw = msg?.content;
+      return { p: parse(raw), usedModel: body.model || model, usage: { input: body.usage?.prompt_tokens, output: body.usage?.completion_tokens } };
+    }
+    // Gemini
+    const parts = lastContent.map((b) => b.type === 'image' ? { inline_data: { mime_type: b.source.media_type, data: b.source.data } } : { text: text(b) });
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemText }] },
+        contents: [
+          ...history8.map((h) => ({ role: h.role === 'assistant' ? 'model' : 'user', parts: [{ text: h.content }] })),
+          { role: 'user', parts },
+        ],
+        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, maxOutputTokens: 16000, ...(light ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
+      }),
+    });
+    body = await res.json();
+    if (!res.ok) throw { status: res.status, message: body?.error?.message };
+    const cand = body.candidates?.[0];
+    if (cand?.finishReason === 'SAFETY') throw new KerfError('Gemini declined this request. Try rewording it as a visual change.');
+    const raw = (cand?.content?.parts || []).map((x) => x.text || '').join('');
+    return { p: parse(raw), usedModel: body.modelVersion || model, usage: { input: body.usageMetadata?.promptTokenCount, output: body.usageMetadata?.candidatesTokenCount } };
+  } catch (e) {
+    if (e instanceof KerfError) throw e;
+    const name = PROVIDERS[provider].label;
+    if (e.status === 401 || e.status === 403) throw new KerfError(`${name} didn’t accept the saved key. Save a new one in Settings.`);
+    if (e.status === 429) throw new KerfError(`${name} is busy right now. Try again in a moment.`);
+    if (e.status) { console.error('Tovi AI error:', e.status, e.message); throw new KerfError(`${name} couldn’t answer (${e.status}). Try again.`); }
+    throw new KerfError(`${name} couldn’t be reached. Check your connection and try again.`);
+  }
+}
+function parseProposal(raw) {
+  let obj;
+  try { obj = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The answer couldn’t be read. Try again.'); }
+  if (obj && typeof obj === 'object') {
+    for (const k of ['suggest', 'notes']) if (obj[k] === undefined) obj[k] = null;
+    for (const e of Array.isArray(obj.edits) ? obj.edits : []) {
+      for (const k of EDIT_NULLS) if (e[k] === undefined) e[k] = null;
+      if (!Array.isArray(e.ops)) e.ops = [];
+      if (!Array.isArray(e.props)) e.props = [];
+      if (typeof e.why !== 'string') e.why = '';
+    }
+  }
+  const r = Proposal.safeParse(obj);
+  if (!r.success) throw new KerfError('The answer couldn’t be read. Try again.');
+  return r.data;
+}
+
+export async function propose({ request, targets, history = [], images = [], tokens = [], webRoot = null, screen = null, focus = null, light = false, fast = false, context = null, mode = 'system', direction = null }, theme, library) {
+  const { provider, model, key } = aiConfig();
+  if (!key) throw new KerfError(`Add your ${PROVIDERS[provider].label} key in Tovi’s Settings to use AI.`);
   if (!request || !String(request).trim()) throw new KerfError('Say or type what should change.');
   if (!targets?.length) throw new KerfError('Nothing on screen to work with. Select something or draw a note first.');
 
@@ -249,41 +411,68 @@ export async function propose({ request, targets, history = [], images = [], tok
     ctx.selected ? `Selected: ${String(ctx.selected).slice(0, 80)}. "This", "it" and "here" mean the selection unless the request says otherwise.` : 'Nothing is selected: the request is about the visible screen.',
   ].filter(Boolean).join('\n');
   const shot = screen && typeof screen.data === 'string' && screen.data.length < 7e6 && /^image\/(jpeg|png)$/.test(screen.media_type) ? screen : null;
+  // A sharp close-up of the selection, so spacing, type and alignment can be judged in detail.
+  const close = focus && typeof focus.data === 'string' && focus.data.length < 7e6 && /^image\/(jpeg|png)$/.test(focus.media_type) ? focus : null;
   const m = MODES[mode] ? mode : 'system';
   const dir = direction && (direction.preset || direction.text) ? `Design direction for this project: ${[PRESETS[direction.preset], direction.text].filter(Boolean).join(' ')}${m === 'system' ? ' (keep within the design system).' : ''}` : '';
   const refs = m !== 'system' && direction?.refs?.length ? direction.refs.slice(0, 3) : [];
-  const lastText = `${MODES[m]}\n${dir ? dir + '\n' : ''}${refs.length ? `The ${refs.length} reference image${refs.length > 1 ? 's' : ''} labelled "Reference" show the look the designer wants.\n` : ''}${where}\n${shot ? 'The first image is a screenshot of exactly what the designer sees. Use it to judge contrast, alignment, spacing and hierarchy. Element boxes below are x,y,w,h in CSS pixels of that same visible area.\n' : ''}\nElements on screen:\n${targets.map(describeTarget).join('\n')}\n\n${imgs.length ? `The designer attached ${imgs.length} image${imgs.length > 1 ? 's' : ''} (above). Treat them as a reference to match, a screenshot pointing at a problem, or an image to put in the design, whichever the request means. To place one, use imageSrc "attachment:N" (or src="attachment:N" in insertJsx).\n\n` : ''}Request:\n${request}`;
+  // For a selection (not the whole screen), show the source of its file(s) so the AI understands the structure and
+  // can write precise code edits: up to two files, trimmed if very long.
+  let source = '';
+  // A light request (the second look) judges from the screenshots, so it skips the source.
+  if (webRoot && targets.length <= 15 && !light) {
+    const files = [...new Set(targets.map((t) => t.file).filter(Boolean))].slice(0, 2);
+    for (const f of files) {
+      let code;
+      try { code = fs.readFileSync(path.join(webRoot, f), 'utf8'); } catch { continue; }
+      if (code.length > 12000) code = code.slice(0, 12000) + '\n… (file continues)';
+      source += `\n--- ${f} ---\n${code}\n--- end of ${f} ---\n`;
+    }
+  }
+  const lastText = `${MODES[m]}\n${dir ? dir + '\n' : ''}${refs.length ? `The ${refs.length} reference image${refs.length > 1 ? 's' : ''} labelled "Reference" show the look the designer wants.\n` : ''}${where}\n${shot ? 'The first image is a screenshot of exactly what the designer sees. Use it to judge contrast, alignment, spacing and hierarchy. Element boxes below are x,y,w,h in CSS pixels of that same visible area.\n' : ''}\nElements on screen:\n${targets.map(describeTarget).join('\n')}\n${source ? `\nSource of the selection's file(s), exactly as saved:${source}` : ''}\n${imgs.length ? `The designer attached ${imgs.length} image${imgs.length > 1 ? 's' : ''} (above). Treat them as a reference to match, a screenshot pointing at a problem, or an image to put in the design, whichever the request means. To place one, use imageSrc "attachment:N" (or src="attachment:N" in insertJsx).\n\n` : ''}Request:\n${request}`;
   const lastContent = [
     ...(shot ? [{ type: 'text', text: 'Screenshot of the screen:' }, { type: 'image', source: { type: 'base64', media_type: shot.media_type, data: shot.data } }] : []),
+    ...(close ? [{ type: 'text', text: 'Close-up of the selection at twice the size (judge spacing, type and alignment here):' }, { type: 'image', source: { type: 'base64', media_type: close.media_type, data: close.data } }] : []),
     ...refs.flatMap((r, n) => [{ type: 'text', text: `Reference ${n + 1} for the design direction:` }, { type: 'image', source: { type: 'base64', media_type: r.media_type, data: r.data } }]),
     ...imgs.flatMap((im, n) => [{ type: 'text', text: `Attachment ${n + 1}: ${String(im.name || 'image').slice(0, 80)}` }, { type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } }]),
     { type: 'text', text: lastText },
   ];
-  const client = new Anthropic({ apiKey: key });
-  let res;
-  try {
-    res = await client.beta.messages.parse({
-      model: MODEL,
-      max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'medium', format: betaZodOutputFormat(Proposal) },
-      // The instructions and design system are the same on every request: cache them so later requests start faster.
-      system: [{ type: 'text', text: `${SYSTEM}\n\nThis project's design system:\n${themeSummary(theme)}\n${tokens.length ? `Colour tokens you can change with action token (light / dark values): ${tokens.map((t) => `${t.name} ${t.values.map((v) => `${v.theme} ${v.hex}`).join(' / ')}`).join('; ')}\n` : ''}${libSummary(library)}`, cache_control: { type: 'ephemeral' } }],
-      messages: [
-        ...history.slice(-8).map((h) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.text).slice(0, 2000) })),
-        { role: 'user', content: lastContent },
-      ],
-    });
-  } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) throw new KerfError('Anthropic didn’t accept the saved key. Save a new one on Tovi’s start page.');
-    if (e instanceof Anthropic.RateLimitError) throw new KerfError('Claude is busy right now. Try again in a moment.');
-    if (e instanceof Anthropic.APIError) { console.error('Tovi AI error:', e.status, e.message); throw new KerfError(`Claude couldn’t answer (${e.status}). Try again.`); }
-    throw e;
+  const systemText = `${SYSTEM}\n\nThis project's design system:\n${themeSummary(theme)}\n${tokens.length ? `Colour tokens you can change with action token (light / dark values): ${tokens.map((t) => `${t.name} ${t.values.map((v) => `${v.theme} ${v.hex}`).join(' / ')}`).join('; ')}\n` : ''}${libSummary(library)}`;
+  const history8 = history.slice(light ? -2 : -8).map((h) => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.text).slice(0, 2000) }));
+  let p, usedModel, usage;
+  if (provider === 'anthropic') {
+    const client = new Anthropic({ apiKey: key });
+    let res;
+    try {
+      res = await client.beta.messages.parse({
+        model,
+        max_tokens: 16000,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        // Think before answering: design judgement and code reading both benefit, and it stays quick for simple asks.
+        thinking: { type: 'adaptive' },
+        output_config: { effort: light || fast ? 'low' : 'medium', format: betaZodOutputFormat(Proposal) },
+        // The instructions and design system are the same on every request: cache them so later requests start faster.
+        system: [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }],
+        messages: [
+          ...history8,
+          { role: 'user', content: lastContent },
+        ],
+      });
+    } catch (e) {
+      if (e instanceof Anthropic.AuthenticationError) throw new KerfError('Anthropic didn’t accept the saved key. Save a new one in Settings.');
+      if (e instanceof Anthropic.RateLimitError) throw new KerfError('Claude is busy right now. Try again in a moment.');
+      if (e instanceof Anthropic.APIError) { console.error('Tovi AI error:', e.status, e.message); throw new KerfError(`Claude couldn’t answer (${e.status}). Try again.`); }
+      throw e;
+    }
+    if (res.stop_reason === 'refusal') throw new KerfError('Claude declined this request. Try rewording it as a visual change.');
+    p = res.parsed_output;
+    if (!p) throw new KerfError('Claude’s answer couldn’t be read. Try again.');
+    usedModel = res.model;
+    usage = { input: res.usage.input_tokens, output: res.usage.output_tokens, cacheRead: res.usage.cache_read_input_tokens, cacheWrite: res.usage.cache_creation_input_tokens };
+  } else {
+    ({ p, usedModel, usage } = await askOther(provider, model, key, { systemText, history8, lastContent, light: light || fast }));
   }
-  if (res.stop_reason === 'refusal') throw new KerfError('Claude declined this request. Try rewording it as a visual change.');
-  const p = res.parsed_output;
-  if (!p) throw new KerfError('Claude’s answer couldn’t be read. Try again.');
 
   const edits = [];
   const known = (nm) => !!library.findIcon(nm) || library.componentList().has(nm);
@@ -330,7 +519,7 @@ export async function propose({ request, targets, history = [], images = [], tok
       }
       if (e.action === 'group') {
         st.others = (e.groupWith || []).filter((l) => allowed.has(l) && l.split(':')[0] === e.loc.split(':')[0]);
-        st.className = (e.groupClass || 'flex flex-row items-center gap-2').replace(/[^\w\s:/.[\]#-]/g, '');
+        st.className = (e.groupClass || 'flex items-center gap-2').replace(/[^\w\s:/.[\]#-]/g, '');
       }
       const ask = e.action === 'image' && String(e.imageSrc || '').match(/^\s*(photo|illustration)\s*:\s*(.+)$/i);
       if (ask) {
@@ -363,5 +552,72 @@ export async function propose({ request, targets, history = [], images = [], tok
   const notes = Array.isArray(p.notes) ? p.notes.filter((n) => Number.isInteger(n.note) && n.note > 0).map((n) => ({ note: n.note, status: n.status, summary: n.summary })) : null;
   if (m === 'explore') edits.forEach((e) => { if (!e.structure) e.offSystem = true; });
   if (m !== 'improve') { for (let k = edits.length - 1; k >= 0; k--) if (m === 'explore' && edits[k].structure?.type === 'token') edits.splice(k, 1); }
-  return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, edits, model: res.model, usage: { input: res.usage.input_tokens, output: res.usage.output_tokens, cacheRead: res.usage.cache_read_input_tokens || 0, cacheWrite: res.usage.cache_creation_input_tokens || 0 } };
+  return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, edits, model: usedModel, usage: { input: usage.input || 0, output: usage.output || 0, cacheRead: usage.cacheRead || 0, cacheWrite: usage.cacheWrite || 0 } };
+}
+
+
+/* ---------- Diagnose: a design review of a screen, as notes pinned to the elements ---------- */
+const Diagnosis = z.object({
+  summary: z.string().describe('One plain sentence on the overall state of what was reviewed'),
+  findings: z.array(z.object({
+    title: z.string().describe('2 to 5 words naming the issue, e.g. "Mixed greys in body text"'),
+    problem: z.string().describe('One plain sentence a designer understands: what is wrong here and why it matters'),
+    fix: z.string().describe('The change for Tovi to make, as a clear instruction in plain designer words (no class names or code), e.g. "Use your muted colour for these three descriptions."'),
+    severity: z.enum(['high', 'medium', 'low']),
+    locs: z.array(z.string()).describe('The exact ids of the elements this is about, from the list'),
+  })),
+});
+const DIAGNOSE = `You are a senior product designer doing a design review of one screen of a team's real React + Tailwind product, inside Tovi (a Figma-style editor that changes the real code).
+Look at the screenshot, the close-up if given, and the element list (each element's classes and measured values), and find what most hurts the quality of this screen:
+- Hierarchy: no clear focal point, competing emphasis, headings not distinct enough from body.
+- Spacing and rhythm: values off the project's scale, uneven gaps between similar things, groups not separated more than their parts.
+- Alignment: edges and baselines that should line up but don't; alignment faked with fixed margins.
+- Consistency: siblings with the same role styled differently (sizes, weights, colours, radii, shadows); several near-identical greys.
+- Contrast and legibility: text below WCAG AA (4.5:1 body, 3:1 large text and icons), text over images, very long or very short line lengths, cramped line height.
+- System: raw colours or sizes (gray-500, #hex, [17px]) where the project has a token or scale step.
+- Controls: buttons and links too small to tap (under about 40px), primary action not clearly primary.
+- Clutter: nested frames, borders plus shadows plus fills on the same box, decoration that adds noise.
+Rules:
+- Report at most 8 findings, most important first. Fewer is better than weak ones: only real problems you can see in the screenshot or the classes. Never invent; if the screen is in good shape, say so with few or no findings.
+- One finding per issue: when the same problem repeats (three cards, five greys), make it one finding listing every element id it covers.
+- locs must be ids from the element list, pointing at the exact elements to change.
+- fix is an instruction Tovi can carry out with style, layout and structure edits on those elements, using the project's tokens and scales. No behaviour, data or copy rewrites.
+- Write for a designer: plain words everywhere, including fix (the designer reads and may edit it). No class names, code or CSS values in backticks: say "your muted colour", "the display font", "one step tighter line height", not text-muted or leading-tight.`;
+export async function diagnose({ targets, screen = null, focus = null, context = null, scope = 'page' }, theme) {
+  const { provider, model, key } = aiConfig();
+  if (!key) throw new KerfError(`Add your ${PROVIDERS[provider].label} key in Tovi’s Settings to use AI.`);
+  if (!targets?.length) throw new KerfError('Nothing on screen to review yet.');
+  const img = (x) => (x && typeof x.data === 'string' && x.data.length < 7e6 && /^image\/(jpeg|png)$/.test(x.media_type) ? x : null);
+  const shot = img(screen), close = img(focus);
+  const ctx = context && typeof context === 'object' ? context : {};
+  const text = `${ctx.page ? `Page: ${String(ctx.page).slice(0, 80)} (${String(ctx.path || '').slice(0, 120)})\n` : ''}${ctx.device ? `Screen size: ${ctx.device}${ctx.width ? `, ${ctx.width}px wide` : ''}\n` : ''}Review ${scope === 'selection' ? 'the selected part of the screen' : scope === 'section' ? 'this one section of the page (the screenshot shows just this section, top to bottom). Report at most 5 findings for it' : 'this screen as visible'}.\n\nElements:\n${targets.map(describeTarget).join('\n')}`;
+  const lastContent = [
+    ...(shot ? [{ type: 'text', text: 'Screenshot of the screen:' }, { type: 'image', source: { type: 'base64', media_type: shot.media_type, data: shot.data } }] : []),
+    ...(close ? [{ type: 'text', text: 'Close-up of the selection at twice the size:' }, { type: 'image', source: { type: 'base64', media_type: close.media_type, data: close.data } }] : []),
+    { type: 'text', text },
+  ];
+  const systemText = `${DIAGNOSE}\n\nThis project's design system:\n${themeSummary(theme)}`;
+  let d;
+  if (provider === 'anthropic') {
+    const client = new Anthropic({ apiKey: key });
+    let res;
+    try {
+      res = await client.beta.messages.parse({ model, max_tokens: 8000, thinking: { type: 'adaptive' }, output_config: { effort: 'medium', format: betaZodOutputFormat(Diagnosis) }, system: systemText, messages: [{ role: 'user', content: lastContent }] });
+    } catch (e) {
+      if (e instanceof Anthropic.AuthenticationError) throw new KerfError('Anthropic didn’t accept the saved key. Save a new one in Settings.');
+      if (e instanceof Anthropic.APIError) { console.error('Tovi AI error:', e.status, e.message); throw new KerfError(`Claude couldn’t answer (${e.status}). Try again.`); }
+      throw e;
+    }
+    d = res.parsed_output;
+    if (!d) throw new KerfError('The review couldn’t be read. Try again.');
+  } else {
+    const parse = (raw) => { let o; try { o = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The review couldn’t be read. Try again.'); } const r = Diagnosis.safeParse(o); if (!r.success) throw new KerfError('The review couldn’t be read. Try again.'); return r.data; };
+    const { $schema, ...schema } = z.toJSONSchema(Diagnosis, { io: 'input' });
+    ({ p: d } = await askOther(provider, model, key, { systemText, history8: [], lastContent, schema, parse }));
+  }
+  // Keep only findings that point at elements we were given; most important first.
+  const ids = new Set(targets.map((t) => t.loc));
+  const rank = { high: 0, medium: 1, low: 2 };
+  const findings = (d.findings || []).map((f) => ({ ...f, locs: [...new Set((f.locs || []).filter((l) => ids.has(l)))] })).filter((f) => f.locs.length && f.fix).sort((a, b) => rank[a.severity] - rank[b.severity]).slice(0, scope === 'section' ? 5 : 8);
+  return { summary: d.summary, findings };
 }

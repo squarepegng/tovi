@@ -183,6 +183,33 @@ test('insert next to a page’s outer box goes inside it instead', () => {
   assert.match(summary.action, /went inside/);
 });
 
+test('editing for all screen sizes keeps the class in its place', () => {
+  const r = applyResponsive('mt-4 text-sm font-bold text-content'.split(' '), [{ prop: 'fontSize', value: 18 }], th, { mode: 'all' });
+  assert.equal(r.classes.join(' '), 'mt-4 text-lg font-bold text-content');
+});
+test('a small line height is a ratio, not pixels', () => {
+  assert.equal(ops('text-xl', [{ prop: 'lineHeight', value: 1.2 }]), 'text-xl leading-[1.2]');
+  assert.equal(ops('text-xl', [{ prop: 'lineHeight', value: 1.25 }]), 'text-xl leading-tight');
+});
+test('equal horizontal and vertical padding become one class', () => {
+  assert.equal(ops('card', [{ prop: 'padX', value: 24 }, { prop: 'padY', value: 24 }]), 'card p-6');
+  assert.equal(ops('card px-6 py-2', [{ prop: 'padY', value: 24 }]), 'card p-6');
+  assert.equal(ops('card px-6 py-4', [{ prop: 'padY', value: 16 }]), 'card px-6 py-4');
+});
+test('font family uses the project’s own font keys', () => {
+  assert.equal(ops('text-xl font-bold', [{ prop: 'fontFamily', value: 'display' }]), 'text-xl font-bold font-display');
+  assert.equal(ops('font-display text-xl', [{ prop: 'fontFamily', value: 'sans' }]), 'font-sans text-xl');
+});
+test('top and bottom margin are separate, and split my-* / m-* so the other side keeps its value', () => {
+  assert.equal(ops('mt-4 text-xl', [{ prop: 'mT', value: 8 }]), 'mt-2 text-xl');
+  assert.equal(ops('my-4 text-xl', [{ prop: 'mT', value: 8 }]), 'mb-4 text-xl mt-2');
+  assert.equal(ops('my-4 text-xl', [{ prop: 'mB', value: null }]), 'mt-4 text-xl');
+  assert.equal(ops('m-4', [{ prop: 'mB', value: 0 }]), 'mx-4 mt-4 mb-0');
+});
+test('gradient stops can carry positions, written only when not the usual 0 / 50 / 100', () => {
+  assert.equal(ops('bg-surface p-4', [{ prop: 'gradient', value: 'r #FCBDDD@10 primary@37 #967184' }]), 'p-4 bg-gradient-to-r from-[#FCBDDD] from-10% via-primary via-[37%] to-[#967184]');
+  assert.equal(ops('bg-gradient-to-r from-primary from-10% to-surface p-4', [{ prop: 'gradient', value: 'r primary@0 surface@100' }]), 'bg-gradient-to-r from-primary to-surface p-4');
+});
 test('gradients replace solid fills, gradient text replaces the text color', () => {
   assert.equal(ops('bg-surface p-4', [{ prop: 'gradient', value: 'r primary surface-2' }]), 'p-4 bg-gradient-to-r from-primary to-surface-2');
   assert.equal(ops('bg-gradient-to-r from-primary to-surface p-4', [{ prop: 'bg', value: 'surface' }]), 'p-4 bg-surface');
@@ -203,7 +230,7 @@ test('a transparent fill does not cancel a gradient', () => {
 
 test('layout: margin, size, direction, alignment, wrap', () => {
   assert.equal(ops('m-4 text-sm', [{ prop: 'mY', value: 24 }]), 'mx-4 text-sm my-6');
-  assert.equal(ops('block w-64', [{ prop: 'layout', value: 'row' }, { prop: 'w', value: 'fill' }]), 'flex flex-row w-full');
+  assert.equal(ops('block w-64', [{ prop: 'layout', value: 'row' }, { prop: 'w', value: 'fill' }]), 'flex w-full');
   assert.equal(ops('flex flex-col items-start', [{ prop: 'alignItems', value: 'center' }, { prop: 'justify', value: 'between' }, { prop: 'wrap', value: 'wrap' }]), 'flex flex-col items-center justify-between flex-wrap');
   assert.equal(ops('flex flex-row gap-2', [{ prop: 'layout', value: 'none' }]), 'gap-2');
   assert.equal(ops('h-10', [{ prop: 'h', value: 'hug' }]), 'h-fit');
@@ -295,7 +322,7 @@ test('grouping reports where each element moved', () => {
 
 const rsp = (list, o, bp) => applyResponsive(list.split(' '), o, th, bp).classes.join(' ');
 test('only on mobile keeps the old value from tablet up', () => {
-  assert.equal(rsp('text-lg px-4', [{ prop: 'fontSize', value: 14 }], { mode: 'only', start: null, end: 'md' }), 'px-4 text-sm md:text-lg');
+  assert.equal(rsp('text-lg px-4', [{ prop: 'fontSize', value: 14 }], { mode: 'only', start: null, end: 'md' }), 'text-sm px-4 md:text-lg');
 });
 test('only on tablet sets md: and keeps desktop as it was', () => {
   assert.equal(rsp('px-4', [{ prop: 'padX', value: 24 }], { mode: 'only', start: 'md', end: 'lg' }), 'px-4 md:px-6 lg:px-4');
@@ -304,10 +331,10 @@ test('only on desktop replaces lg: and drops bigger overrides', () => {
   assert.equal(rsp('px-4 lg:px-5 xl:px-6', [{ prop: 'padX', value: 8 }], { mode: 'only', start: 'lg', end: null }), 'px-4 lg:px-2');
 });
 test('all sizes sets the base value and removes size overrides', () => {
-  assert.equal(rsp('text-sm md:text-lg font-bold', [{ prop: 'fontSize', value: 16 }], { mode: 'all' }), 'font-bold text-base');
+  assert.equal(rsp('text-sm md:text-lg font-bold', [{ prop: 'fontSize', value: 16 }], { mode: 'all' }), 'text-base font-bold');
 });
 test('an existing override at the end screen is left alone', () => {
-  assert.equal(rsp('px-4 md:px-6', [{ prop: 'padX', value: 8 }], { mode: 'only', start: null, end: 'md' }), 'md:px-6 px-2');
+  assert.equal(rsp('px-4 md:px-6', [{ prop: 'padX', value: 8 }], { mode: 'only', start: null, end: 'md' }), 'px-2 md:px-6');
 });
 
 // Styles that live outside the element: a status table in another file, like Stratemark's chips.
@@ -381,4 +408,47 @@ test('illustrations are cleaned of scripts, event handlers and outside links', (
   assert.ok(!/script|onclick|evil|x\.example/.test(s));
   assert.ok(s.includes('url(#g)') && s.includes('<use href="#g"/>'));
   assert.equal(cleanSvg('no svg here'), null);
+});
+
+test('text passed in as a component prop is traced to the prop', async () => {
+  const { propText, findElement } = await import('../src/edit.mjs');
+  const code = `export function SectionHeading({ eyebrow, title, children }) {\n  return (\n    <div>\n      <p>{eyebrow}</p>\n      <h2>{title}</h2>\n      {children}\n    </div>\n  );\n}\nconst Button = forwardRef(function Button(props, ref) { return <button ref={ref}>{props.label}</button>; });\nfunction Card({ data }) { return <h3>{data.name}</h3>; }\n`;
+  const at = (needle) => { const i = code.indexOf(needle); const before = code.slice(0, i); return findElement(code, before.split('\n').length, i - before.lastIndexOf('\n') - 1); };
+  assert.deepEqual(propText(code, at('<h2>')), { comp: 'SectionHeading', prop: 'title' });
+  assert.deepEqual(propText(code, at('<button')), { comp: 'Button', prop: 'label' });
+  assert.equal(propText(code, at('<h3>')), null);
+});
+
+test('a variant the usage does not set yet can be added from its options', async () => {
+  const { editElement } = await import('../src/edit.mjs');
+  const code = `import { Button } from './Button';\nexport const A = () => <Button size="lg">Go</Button>;\n`;
+  const { code: out } = editElement(code, 2, 23, { props: [{ name: 'variant', value: 'outline', options: ['primary', 'outline', 'ghost'] }] }, { colors: {}, spacing: {} });
+  assert.match(out, /<Button size="lg" variant="outline">|<Button variant="outline" size="lg">/);
+  assert.throws(() => editElement(code, 2, 23, { props: [{ name: 'variant', value: 'huge', options: ['primary', 'outline'] }] }, { colors: {}, spacing: {} }));
+  assert.throws(() => editElement(code, 2, 23, { props: [{ name: 'onClick', value: 'x', options: ['x'] }] }, { colors: {}, spacing: {} }));
+});
+
+test('a picture can replace an icon, keeping its size', async () => {
+  const { structureEdit } = await import('../src/structure.mjs');
+  const code = `import { Leaf, Truck } from 'lucide-react';\nexport const A = () => (<div>\n  <Leaf className="h-6 w-6 text-primary" />\n  <Truck className="h-6 w-6" />\n</div>);\n`;
+  const { code: out } = structureEdit(code, 3, 2, { type: 'image', src: '/kerf/leaf.svg', alt: 'Leaf drawing', kind: 'illustration' }, {});
+  assert.match(out, /<img src="\/kerf\/leaf.svg" alt="Leaf drawing" className="h-16 w-16 object-contain" \/>/);
+  assert.match(out, /import \{ Truck \} from 'lucide-react'/);
+});
+
+// Google Fonts: joining the project's font link and naming the font in tailwind.config.
+import { htmlWithFont, configWithFont } from '../src/fonts.mjs';
+test('a Google Font joins the existing font link, or gets its own in <head>', () => {
+  const html = '<head>\n    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet" />\n  </head>';
+  assert.match(htmlWithFont(html, 'Lora:wght@400..700'), /family=Inter:wght@400;700&family=Lora:wght@400\.\.700&display=swap/);
+  const bare = '<html>\n  <head>\n    <title>x</title>\n  </head>\n</html>';
+  const out = htmlWithFont(bare, 'Lora:wght@400..700');
+  assert.match(out, /\n    <link href="https:\/\/fonts\.googleapis\.com\/css2\?family=Lora:wght@400\.\.700&display=swap" rel="stylesheet" \/>\n  <\/head>/);
+});
+test('a Google Font is named in tailwind.config, in the file’s own style', () => {
+  const cfg = "export default {\n  theme: {\n    extend: {\n      fontFamily: {\n        sans: ['Inter', 'sans-serif'],\n      },\n    },\n  },\n};\n";
+  assert.equal(configWithFont(cfg, 'tailwind.config.js', 'playfair-display', 'Playfair Display', 'serif'),
+    "export default {\n  theme: {\n    extend: {\n      fontFamily: {\n        sans: ['Inter', 'sans-serif'],\n        'playfair-display': ['\"Playfair Display\"', 'serif'],\n      },\n    },\n  },\n};\n");
+  const noFonts = "export default {\n  theme: {\n    extend: {\n      colors: { a: '#fff' },\n    },\n  },\n};\n";
+  assert.match(configWithFont(noFonts, 'tailwind.config.js', 'lora', 'Lora', 'serif'), /colors: \{ a: '#fff' \},\n      fontFamily: \{\n        lora: \['"Lora"', 'serif'\],\n      \},\n/);
 });

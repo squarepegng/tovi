@@ -29,6 +29,8 @@ const server = await vite.createServer({
   ...userConfig,
   configFile: false,
   root: webRoot,
+  // PORT=5180 node bin/kerf.mjs … picks the port (handy when another app already uses 5173).
+  ...(process.env.PORT ? { server: { ...(userConfig.server || {}), port: +process.env.PORT } } : {}),
   plugins: [kerf(), ...(userConfig.plugins || [])],
 });
 await server.listen();

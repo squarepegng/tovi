@@ -65,6 +65,8 @@ export function buildTheme(t) {
       borderWidth: Object.keys(t.borderWidth || {}),
       fontFamily: Object.keys(t.fontFamily || {}),
     },
+    // Each font family's first font, for people and for the AI: { sans: 'Inter', display: 'DM Serif Display' }.
+    fonts: Object.fromEntries(Object.entries(t.fontFamily || {}).map(([k, v]) => [k, String(Array.isArray(v) ? (Array.isArray(v[0]) ? v[0][0] : v[0]) : v).replace(/["']/g, '').split(',')[0].trim()])),
   };
 }
 
@@ -77,6 +79,8 @@ export async function loadTheme(webRoot) {
     .find((f) => fs.existsSync(f));
   if (!file) throw new Error(`No tailwind.config file found in ${webRoot}`);
   let mod;
+  // Read it fresh each time: Tovi edits this file (colour tokens, fonts). See liveTailwindConfig in plugin.mjs.
+  delete req.cache[file];
   // Tailwind 3.3+ ships its own loader, which also reads TypeScript configs.
   try { mod = req('tailwindcss/loadConfig')(file); } catch { mod = null; }
   if (!mod) mod = await import(pathToFileURL(file).href);
@@ -108,6 +112,7 @@ export function matcher(prop, th) {
     case 'fontSize': return (c) => c.startsWith('text-') && (fs.has(c.slice(5)) || /^\[[\d.]+(px|rem|em)\]$/.test(c.slice(5)));
     case 'align': return (c) => /^text-(left|center|right|justify|start|end)$/.test(c);
     case 'fontWeight': return (c) => c.startsWith('font-') && (th.keys.fontWeight.includes(c.slice(5)) || /^\[\d+\]$/.test(c.slice(5)));
+    case 'fontFamily': return (c) => c.startsWith('font-') && (th.keys.fontFamily || []).includes(c.slice(5));
     case 'lineHeight': return (c) => c.startsWith('leading-');
     case 'letterSpacing': return (c) => c.startsWith('tracking-');
     case 'opacity': return (c) => c.startsWith('opacity-');
@@ -117,6 +122,8 @@ export function matcher(prop, th) {
     case 'padX': return (c) => /^(px|pl|pr|ps|pe)-/.test(c);
     case 'mX': return (c) => /^-?(mx|ml|mr|ms|me)-/.test(c);
     case 'mY': return (c) => /^-?(my|mt|mb)-/.test(c);
+    case 'mT': return (c) => /^-?mt-/.test(c);
+    case 'mB': return (c) => /^-?mb-/.test(c);
     case 'w': return (c) => /^w-/.test(c) || c === 'flex-1' || c === 'grow' || c === 'flex-auto';
     case 'h': return (c) => /^h-/.test(c) || c === 'flex-1';
     case 'layout': return (c) => ['flex', 'inline-flex', 'flex-row', 'flex-col', 'flex-row-reverse', 'flex-col-reverse', 'block', 'inline-block', 'grid', 'inline-grid'].includes(c);
@@ -144,8 +151,8 @@ function scale(prefix, map, px, unit = 'px') {
 export function classFor(prop, v, th) {
   switch (prop) {
     case 'padX': return scale('px', th.spacing, v);
-    case 'mX': case 'mY': {
-      const pre = prop === 'mX' ? 'mx' : 'my';
+    case 'mX': case 'mY': case 'mT': case 'mB': {
+      const pre = { mX: 'mx', mY: 'my', mT: 'mt', mB: 'mb' }[prop];
       if (v === 'auto') return `${pre}-auto`;
       const n = Number(v);
       return n < 0 ? '-' + scale(pre, th.spacing, -n) : scale(pre, th.spacing, n);
@@ -157,7 +164,7 @@ export function classFor(prop, v, th) {
       if (v === 'auto') return `${prop}-auto`;
       return scale(prop, th.spacing, Number(v));
     }
-    case 'layout': return v === 'row' ? 'flex flex-row' : v === 'col' ? 'flex flex-col' : v === 'grid' ? 'grid' : 'block';
+    case 'layout': return v === 'row' ? 'flex' : v === 'col' ? 'flex flex-col' : v === 'grid' ? 'grid' : 'block';
     case 'alignItems': return `items-${v}`;
     case 'justify': return `justify-${v}`;
     case 'wrap': return v === 'wrap' ? 'flex-wrap' : 'flex-nowrap';
@@ -169,21 +176,33 @@ export function classFor(prop, v, th) {
     case 'rBR': return scale('rounded-br', th.radius, v);
     case 'rBL': return scale('rounded-bl', th.radius, v);
     case 'fontSize': return scale('text', th.fontSize, v);
-    case 'lineHeight': return scale('leading', th.lineHeight, v);
+    case 'lineHeight': {
+      // A small number is a ratio of the font size (1.2), not pixels: leading-[1.2], never leading-[1.2px].
+      const n = Number(v);
+      if (n > 0 && n < 4) { const named = { 1: 'none', 1.25: 'tight', 1.375: 'snug', 1.5: 'normal', 1.625: 'relaxed', 2: 'loose' }[Math.round(n * 1000) / 1000]; return named ? `leading-${named}` : `leading-[${Math.round(n * 100) / 100}]`; }
+      return scale('leading', th.lineHeight, v);
+    }
     case 'borderW': return scale('border', th.borderWidth, v);
     case 'letterSpacing': { const k = th.letterSpacing[v]; return k ? `tracking-${k}` : `tracking-[${v / 100}em]`; }
     case 'fontWeight': { const k = th.fontWeight[String(v)]; return k ? `font-${k}` : `font-[${v}]`; }
+    case 'fontFamily': return `font-${v}`;
     case 'opacity': { const k = th.opacity[v]; return k != null ? `opacity-${k}` : `opacity-[${v / 100}]`; }
     case 'align': return `text-${v}`;
     case 'fit': return `object-${v}`;
     case 'shadow': return v === 'none' ? 'shadow-none' : v === 'DEFAULT' ? 'shadow' : `shadow-${v}`;
     case 'gradient': {
       // "r primary positive" or "br primary via-color positive": direction, then from (via) to.
-      const [dir, ...stops] = String(v).trim().split(/\s+/);
+      // A stop can carry a position, "primary@20": written as from-20% (or from-[23%] off the 5% steps).
+      // Positions at the usual places (0, 50, 100) are left out, like a developer would.
+      const [dir, ...raw] = String(v).trim().split(/\s+/);
+      const stops = raw.map((x) => { const [col, pos] = x.split('@'); return { col, pos: pos === undefined || pos === '' ? null : Math.max(0, Math.min(100, Math.round(Number(pos)))) }; });
       const c = (x) => (x.startsWith('#') ? `[${x}]` : x);
-      const out = [`${th.gradientPrefix || 'bg-gradient-to-'}${dir}`, `from-${c(stops[0])}`];
-      if (stops.length > 2) out.push(`via-${c(stops[1])}`);
-      out.push(`to-${c(stops[stops.length - 1])}`);
+      const at = (n) => (n % 5 === 0 ? `${n}%` : `[${n}%]`);
+      const put = (key, st, def) => { out.push(`${key}-${c(st.col)}`); if (st.pos != null && !isNaN(st.pos) && st.pos !== def) out.push(`${key}-${at(st.pos)}`); };
+      const out = [`${th.gradientPrefix || 'bg-gradient-to-'}${dir}`];
+      put('from', stops[0], 0);
+      if (stops.length > 2) put('via', stops[1], 50);
+      put('to', stops[stops.length - 1], 100);
       return out.join(' ');
     }
     case 'clipText': return 'bg-clip-text text-transparent';
@@ -227,6 +246,21 @@ export function applyOps(list, ops, th) {
         out.splice(i, 1, keep);
       }
     }
+    // my-4 / m-4 set top and bottom together: changing one side splits it so the other side keeps its value.
+    if (prop === 'mT' || prop === 'mB') {
+      const keepSide = prop === 'mT' ? 'mb-' : 'mt-';
+      const i = out.findIndex((c) => base(c) && /^-?my-/.test(c));
+      if (i > -1) {
+        const keep = (out[i].startsWith('-') ? '-' : '') + keepSide + out[i].replace(/^-?my-/, '');
+        removed.push(out[i]); added.push(keep); out.splice(i, 1, keep);
+      } else {
+        const j = out.findIndex((c) => base(c) && /^-?m-/.test(c));
+        if (j > -1) {
+          const neg = out[j].startsWith('-') ? '-' : '', v0 = out[j].replace(/^-?m-/, '');
+          removed.push(out[j]); added.push(`${neg}mx-${v0}`, `${neg}${keepSide}${v0}`); out.splice(j, 1, `${neg}mx-${v0}`, `${neg}${keepSide}${v0}`);
+        }
+      }
+    }
     if (prop === 'layout' && value === 'none') value = null;
     if (prop === 'padX' || prop === 'padY') {
       const i = out.findIndex((c) => base(c) && /^p-/.test(c));
@@ -257,16 +291,27 @@ export function applyOps(list, ops, th) {
     const pickFrom = prop === 'layout' ? mine.find((c) => /^flex-(row|col)/.test(c)) || mine[0] : mine[0];
     changes.push({ prop, from: pickFrom ? valueOfClass(prop, pickFrom, th) : null, to: value ?? null });
   }
+  // px-8 py-8 → p-8 (and mx/my → m), like a developer would write it, when this edit wrote one of them.
+  for (const [a, b, c] of [['px-', 'py-', 'p-'], ['mx-', 'my-', 'm-']]) {
+    const x = out.find((k) => k.startsWith(a)), y = out.find((k) => k.startsWith(b));
+    if (x && y && x.slice(a.length) === y.slice(b.length) && (added.includes(x) || added.includes(y))) {
+      const at = Math.min(out.indexOf(x), out.indexOf(y)), merged = c + x.slice(a.length);
+      out = out.filter((k) => k !== x && k !== y);
+      out.splice(at, 0, merged);
+      added.splice(0, added.length, ...added.filter((k) => k !== x && k !== y), merged);
+    }
+  }
   return { classes: out, removed, added, changes };
 }
 
-const PREFIX = { padX: ['px', 'p'], padY: ['py', 'p'], mX: ['mx', 'm'], mY: ['my', 'm'], gap: ['gap'], radius: ['rounded'], rTL: ['rounded-tl'], rTR: ['rounded-tr'], rBR: ['rounded-br'], rBL: ['rounded-bl'], fontSize: ['text'], lineHeight: ['leading'], borderW: ['border'], opacity: ['opacity'], w: ['w'], h: ['h'] };
-const SCALE = { padX: 'spacing', padY: 'spacing', mX: 'spacing', mY: 'spacing', gap: 'spacing', w: 'spacing', h: 'spacing', radius: 'radius', rTL: 'radius', rTR: 'radius', rBR: 'radius', rBL: 'radius', fontSize: 'fontSize', lineHeight: 'lineHeight', borderW: 'borderWidth', opacity: 'opacity' };
+const PREFIX = { padX: ['px', 'p'], padY: ['py', 'p'], mX: ['mx', 'm'], mY: ['my', 'm'], mT: ['mt', 'my', 'm'], mB: ['mb', 'my', 'm'], gap: ['gap'], radius: ['rounded'], rTL: ['rounded-tl'], rTR: ['rounded-tr'], rBR: ['rounded-br'], rBL: ['rounded-bl'], fontSize: ['text'], lineHeight: ['leading'], borderW: ['border'], opacity: ['opacity'], w: ['w'], h: ['h'] };
+const SCALE = { padX: 'spacing', padY: 'spacing', mX: 'spacing', mY: 'spacing', mT: 'spacing', mB: 'spacing', gap: 'spacing', w: 'spacing', h: 'spacing', radius: 'radius', rTL: 'radius', rTR: 'radius', rBR: 'radius', rBL: 'radius', fontSize: 'fontSize', lineHeight: 'lineHeight', borderW: 'borderWidth', opacity: 'opacity' };
 export function valueOfClass(prop, cls, th) {
   if (!cls) return null;
   const neg = cls.startsWith('-');
   const c = neg ? cls.slice(1) : cls;
   if (prop === 'bg' || prop === 'color' || prop === 'borderC') return c.replace(/^(bg|text|border)-/, '').replace(/^\[|\]$/g, '');
+  if (prop === 'fontFamily') return c.replace(/^font-/, '');
   if (prop === 'fontWeight') { const k = c.replace(/^font-/, ''); return th.byKey?.fontWeight?.[k] ?? k.replace(/^\[|\]$/g, ''); }
   if (prop === 'shadow') return c === 'shadow' ? 'default' : c.replace(/^shadow-/, '');
   if (prop === 'align') return c.replace(/^text-/, '');
