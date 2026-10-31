@@ -415,8 +415,14 @@
     closeIconPop?.();
     if (!el) { S.multi = []; S.sel = null; S.cpick = S.cp = null; renderPanel(); renderLayers(); chatCtx(); return; }
     S.pageSel = false;
-    const list = [...sameLoc(el)];
+    const list = [...sameLoc(el)], prev = S.sel;
     S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null };
+    // "This one" / "Only here" is a choice for one element: a new selection starts from the default again
+    // (all copies, every look-alike), so edits keep reaching every copy unless you choose otherwise.
+    if (!prev || prev.def !== S.sel.def || prev.use !== S.sel.use) {
+      S.scope = 'auto';
+      try { S.simScope = localStorage.getItem('kerf.sim') || 'all'; } catch { S.simScope = 'all'; }
+    }
     if (!S.sel.def) S.scope = 'here';
     else if (!S.sel.use) S.scope = 'all';
     S.cpick = S.cp = null;
@@ -1311,6 +1317,7 @@
       if (!opts.some(([v]) => v === S.scope)) S.scope = vname ? 'variant' : 'all';
       return `<div class="seg">${opts.map(([v, n, t]) => `<button data-act="scope" data-v="${v}" class="${S.scope === v ? 'on' : ''}" title="${esc(t)}">${esc(n)}</button>`).join('')}</div>`;
     }
+    if (s.def && s.use && S.scope === 'auto') S.scope = 'all';
     if (s.def && s.use) return `<div class="seg"><button data-act="scope" data-v="all" class="${S.scope === 'all' ? 'on' : ''}" title="Change the component itself, everywhere it's used">Everywhere</button><button data-act="scope" data-v="here" class="${S.scope === 'here' ? 'on' : ''}" title="Change only this use of the component">Only here</button></div>`;
     return '';
   }
@@ -1347,7 +1354,7 @@
       ${sourceHTML(inf)}
       ${sizeHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}
-      ${s.repeat > 1 ? `<span class="note">Repeated ×${s.repeat} by the same code: edits apply to all of them.</span>` : ''}
+      ${s.repeat > 1 && S.scope !== 'here' && !s.defInfo?.cva ? `<span class="note">Repeated ×${s.repeat} by the same code: edits apply to all of them.</span>` : ''}
       ${actionsHTML()}</div>`;
     if (!inf) h += `<div class="sec"><span class="note">Reading code…</span></div>`;
     else if (inf.offline) { h += `<div class="sec"><span class="note">Reconnecting to your app…</span></div>`; clearTimeout(S.infoRetry); S.infoRetry = setTimeout(() => { if (S.sel) loadInfo(); }, 2000); }
