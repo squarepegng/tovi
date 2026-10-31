@@ -1157,3 +1157,6 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 #panel .cr .inp.ca{width:68px}
 #panel .cr:has(.ca){grid-template-columns:minmax(0,1fr) 68px;gap:8px}
 :root[data-theme="light"] #panel .seg button.on,:root[data-theme="light"] #panel .ibs .ib.on{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+/* The number always stays readable: the scale-step chip gives way first. */
+#panel .inp input{min-width:3.5ch}
+#panel .inp .u.step{flex-shrink:1;min-width:0;overflow:hidden;text-overflow:clip}
