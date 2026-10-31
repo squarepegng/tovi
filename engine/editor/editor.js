@@ -659,6 +659,8 @@
     edit: '<rect x="2" y="2" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8.5 8.5l5.2 2-2.3.7-.7 2.3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
     undo: '<path d="M4 6h6a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M6.5 3.5L4 6l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
     cursor: '<path d="M4 2.5l8.5 5.2-3.7.9 2.1 4.1-1.5.8-2.1-4.2L4.6 12z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
+    // Edit tool: a pen working on a frame.
+    editFrame: '<path d="M7.2 2.6H4.1a1.5 1.5 0 0 0-1.5 1.5v7.8a1.5 1.5 0 0 0 1.5 1.5h7.8a1.5 1.5 0 0 0 1.5-1.5V8.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M12.1 1.9a1.35 1.35 0 0 1 1.95 1.9L8.6 9.3l-2.6.7.7-2.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
     tap: '<path d="M6.5 8.5V3.2a1.1 1.1 0 0 1 2.2 0v4.3m0-1.1a1.1 1.1 0 0 1 2.2 0v1.3m0-.4a1.1 1.1 0 0 1 2.1 0V10a4 4 0 0 1-4 4H8.6a3.6 3.6 0 0 1-2.9-1.5L3.4 9.4a1.1 1.1 0 0 1 1.7-1.3l1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
     hand: '<path d="M5.2 8.6V4.4a1 1 0 0 1 2 0v3.4m0-4.6a1 1 0 0 1 2 0v4.4m0-3.4a1 1 0 0 1 2 0v3.6m0-2a1 1 0 0 1 2 0v3.4A4.6 4.6 0 0 1 8.6 14h-.4a4.4 4.4 0 0 1-3.6-1.9L2.9 9.6a1 1 0 0 1 1.5-1.3l.8.8" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
     task: '<rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.2 6h5.6M5.2 8.4h5.6M5.2 10.8h3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
@@ -1034,7 +1036,7 @@
     const tool = (t, icon, name, key) => `<button class="tb${S.tool === t ? ' on' : ''}" data-act="tool" data-v="${t}" aria-label="${name}" aria-pressed="${S.tool === t}">${ico(icon, 20)}${tip(name, key)}</button>`;
     $('bar').innerHTML = `<div class="modes">
         ${tool('interact', 'tap', 'Interact with the app', 'P')}
-        ${tool('select', 'cursor', 'Select', 'V')}
+        ${tool('select', 'editFrame', 'Edit', 'V')}
       </div>
       <span class="div"></span>
       <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 20)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
@@ -1336,7 +1338,7 @@
       // Nothing selected: say how to start, then what applies to the whole page (like Figma's page panel).
       const keys = [['Select the parent', '⇧ ↵'], ['Select several', '⇧ Click'], ['Click through to the app', '⌘ Click'], ['Measure spacing', 'Hold ⌥'], ['Add an element', 'I'], ['Mark something for Tovi', 'A'], ['Ask Tovi', '⌘K']];
       p.innerHTML = tabsHTML() + `<div class="scroll">
-        ${S.pageSel ? '' : `<div class="selHint"><span class="shIc">${ico('cursor', 16)}</span><b>Select something to edit it</b><span>Click any element in your app, or pick it in Layers. Double-click text to retype it.</span></div>`}
+        ${S.pageSel ? '' : `<div class="selHint"><span class="shIc">${ico('editFrame', 16)}</span><b>Select something to edit it</b><span>Click any element in your app, or pick it in Layers. Double-click text to retype it.</span></div>`}
         <div class="sec"><div class="secH"><span class="nm">${ico('desktop')}Page</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
           <div class="pgRow"><span>Screen</span><span>${DEV_LABEL[S.device]} · ${Math.round(W?.innerWidth || frame.clientWidth || 0)} px</span></div>
           <div class="pgRow"><span>Changes</span>${S.versions.draft.length ? `<button class="linkBtn" data-act="history">${S.versions.draft.length} not saved yet</button>` : '<span>All saved</span>'}</div></div>
