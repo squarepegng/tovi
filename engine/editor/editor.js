@@ -425,7 +425,8 @@
     renderPanel();
     renderLayers();
     chatCtx();
-    await loadInfo();
+    S.sel.ready = loadInfo();
+    await S.sel.ready;
     if (S.pendingInsert && S.sel?.el === el) { S.pendingInsert = false; $('toast').hidden = true; S.insertPos = defaultPos(); openInsert(); }
   }
   // The chat box says what Tovi will look at: the selection, or the whole screen.
@@ -609,13 +610,19 @@
   }
 
   /* ---------- text editing on the canvas ---------- */
-  function beginText() {
-    const s = S.sel, ti = info()?.text;
-    if (!s || !ti) return;
+  async function beginText() {
+    const s = S.sel;
+    if (!s || S.editing) return;
+    // Double-clicking right after selecting: the element's details may still be loading.
+    if (!info() && s.ready) await s.ready;
+    const ti = info()?.text;
+    if (S.sel !== s || !ti) return;
     if (!ti.editable) { toast(ti.reason, '', true); return; }
     const el = s.el, orig = el.textContent;
     S.editing = el;
-    el.contentEditable = 'true';
+    // Plain text only: pasting never brings in another page's fonts or colours.
+    try { el.contentEditable = 'plaintext-only'; } catch {}
+    if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';
     el.focus();
     const r = D.createRange();
     r.selectNodeContents(el);
@@ -625,12 +632,13 @@
       el.removeEventListener('blur', bl);
       el.contentEditable = 'false';
       S.editing = null;
-      const v = el.textContent.trim();
-      if (save && v && v !== orig.trim()) commit({ text: v });
+      const v = el.textContent.replace(/\s+/g, ' ').trim();
+      if (save && v && v !== orig.replace(/\s+/g, ' ').trim()) commit({ text: v });
       else el.textContent = orig;
     };
     const kd = (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); el.blur(); }
+      // Enter saves. Line breaks aren't written to code yet, so Shift+Enter does nothing rather than lose words.
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (!e.shiftKey) el.blur(); }
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); el.removeEventListener('blur', bl); done(false); }
     };
     const bl = () => done(true);
@@ -1312,7 +1320,7 @@
       if (el.tagName.toLowerCase() === 'svg') h += iconSection(el);
       else h += propsSection(inf);
       if (inf.classKind === 'dynamic') h += `<div class="sec"><span class="note warn">${esc(inf.classReason)}</span></div>`;
-      if (inf.text?.editable) h += sec('Content', `<label class="inp"><input type="text" data-text="1" value="${esc(inf.text.value)}" aria-label="Text"></label>`);
+      if (inf.text?.editable) h += sec('Content', `<label class="inp area"><textarea data-text="1" rows="1" aria-label="Text">${esc(inf.text.value)}</textarea></label>${inf.text.value.length > 60 ? '<span class="note">Double-click the text on the page to edit it in place.</span>' : ''}`);
       else if (isText(el)) h += sec('Content', `<span class="note">${esc(inf.text?.reason || '')}</span>`);
       if (isText(el) || inf.text?.editable) {
         // next/font names fonts like "__geistSans_1e4310": show "Geist Sans".
@@ -1351,9 +1359,23 @@
     }
     const st = p.querySelector('.scroll')?.scrollTop || 0;
     p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
+    p.querySelectorAll('textarea[data-text]').forEach(growText);
     p.querySelector('.scroll').scrollTop = st;
     renderFpop();
   }
+  // The Content box grows with its text, up to about six lines, then scrolls.
+  function growText(t) {
+    t.style.height = 'auto';
+    t.style.height = Math.min(t.scrollHeight, 6 * 18 + 8) + 'px';
+  }
+  document.addEventListener('input', (e) => { if (e.target.matches?.('textarea[data-text]')) growText(e.target); });
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (!t.matches?.('textarea[data-text]') || e.isComposing) return;
+    // Enter saves (line breaks aren't written to code yet); Esc puts the text back.
+    if (e.key === 'Enter') { e.preventDefault(); if (!e.shiftKey) t.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); t.value = t.defaultValue; growText(t); t.blur(); }
+  }, true);
 
   /* ---------- history ---------- */
   async function refreshVersions() {
@@ -1635,6 +1657,7 @@
         renderPanel();
         return;
       }
+      if (hit && S.sel?.el === hit && !S.multi.length) return;
       S.multi = [];
       select(hit);
     }
@@ -1680,7 +1703,7 @@
     if (mod && (e.key === '-' || e.key === '_')) { e.preventDefault(); setZoom('out'); return; }
     if (e.shiftKey && !mod && !typing && (e.code === 'Digit1' || e.code === 'Digit0')) { e.preventDefault(); setZoom(e.code === 'Digit1' ? 'fit' : 1); return; }
     if (e.key === 'Escape') {
-      if (S.editing) return;
+      if (S.editing || t?.matches?.('textarea[data-text]')) return;
       // While interacting, Escape belongs to the app (closing its menus and dialogs).
       if (S.mode === 'edit' && S.tool === 'interact' && t?.ownerDocument === D) return;
       e.preventDefault();
@@ -1832,7 +1855,7 @@
     if (t.dataset.propnum) { const n = parseFloat(t.value); return isFinite(n) && commit({ props: [{ name: t.dataset.propnum, value: n }] }); }
     if (t.dataset.proptext) return commit({ props: [{ name: t.dataset.proptext, value: t.value }] });
     if (t.dataset.sel) return commit({ ops: [{ prop: t.dataset.sel, value: /^\d+$/.test(t.value) ? +t.value : t.value }] });
-    if (t.dataset.text) return t.value.trim() && commit({ text: t.value.trim() });
+    if (t.dataset.text) { const v = t.value.replace(/\s+/g, ' ').trim(); return v && v !== t.defaultValue.replace(/\s+/g, ' ').trim() && commit({ text: v }); }
     if (t.dataset.shv != null || t.dataset.shhex != null || t.dataset.shtype != null) {
       const o = shadowNow();
       if (t.dataset.shtype != null) o.inset = t.value === 'inner';

@@ -1110,3 +1110,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 @keyframes workSweep{from{background-position:130% 0}to{background-position:-130% 0}}
 @keyframes workPulse{0%{box-shadow:0 0 0 0 rgba(217,70,143,.35)}100%{box-shadow:0 0 0 calc(8px*var(--iz,1)) rgba(217,70,143,0)}}
 @media (prefers-reduced-motion: reduce){.box.work::after,.box.work[data-state="edit"]{animation:none}}
+/* Content: a box that grows with the text (up to ~6 lines), so long copy is readable while editing. */
+.inp.area{height:auto;min-height:28px;align-items:stretch;padding:5px 8px}
+.inp.area textarea{flex:1;min-width:0;width:100%;resize:none;padding:0;margin:0;background:transparent;border:0;outline:none;color:var(--ink);font:inherit;line-height:18px;overflow-y:auto;display:block}
+.inp.area + .note{display:block;margin-top:6px}
