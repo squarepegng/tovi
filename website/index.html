@@ -4,230 +4,386 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tovi · Edit your live product</title>
-<meta name="description" content="Open your team's app, fix it by hand like in Figma, and send the changes as a pull request.">
+<meta name="description" content="Tovi opens the app your team already built, so you can fix it by hand like in Figma. Every edit lands in your code and goes to developers as one pull request.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wdth,wght@0,75..125,200..900;1,75..125,200..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='3' width='5.5' height='10' rx='1.5' fill='%238A57BC'/%3E%3Crect x='8.5' y='3' width='5.5' height='10' rx='1.5' fill='%23FCBDDD'/%3E%3C/svg%3E">
 <style>
-:root{--bg:#08080A;--panel:#111114;--raised:#18181C;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);--ink:#EDEDF0;--ink2:#A1A1AB;--ink3:#6E6E78;--brand:#8A57BC;--pink:#FCBDDD;--max:1200px}
+/* Tovi's own palette: the page is a design canvas, like the one inside Tovi. */
+:root{
+  --canvas:#1B1B1E;
+  --dot:rgba(255,255,255,.055);
+  --frame:#121214;
+  --raised:#26262B;
+  --edge:rgba(255,255,255,.08);
+  --edge2:rgba(255,255,255,.14);
+  --ink:#F2F1EE;
+  --ink2:#A9A8B0;
+  --ink3:#7A7981;
+  --sel:#2B66D9;   /* what you're touching */
+  --brand:#8A57BC; /* Tovi */
+  --pink:#FCBDDD;  /* Tovi's AI */
+  --max:1180px;
+}
 *{box-sizing:border-box;margin:0}
 html{scroll-behavior:smooth}
 html,body{overflow-x:clip}
-body{background:var(--bg);color:var(--ink);font:400 16px/1.55 Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{background-color:var(--canvas);background-image:radial-gradient(var(--dot) 1px,transparent 1.2px);background-size:22px 22px;color:var(--ink);font:400 17px/1.6 'Mona Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 a{color:inherit;text-decoration:none}
 img{display:block;max-width:100%;height:auto}
-.wrap{max-width:var(--max);margin:0 auto;padding:0 24px}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sel);outline-offset:3px;border-radius:6px}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 28px}
+h1,h2,h3{font-weight:500;text-wrap:balance}
+p{text-wrap:pretty}
+.vh{position:absolute;left:-9999px}
 
 /* nav */
-.nav{position:sticky;top:0;z-index:10;background:rgba(8,8,10,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid transparent;transition:border-color .2s}
-.nav.scrolled{border-color:var(--line)}
-.nav .wrap{display:flex;align-items:center;height:64px;gap:32px}
-.logo{display:flex;align-items:center;gap:8px;font-weight:600;font-size:17px;letter-spacing:-.01em}
-.links{display:flex;gap:28px;font-size:14px;color:var(--ink2)}
+.nav{position:fixed;inset:0 0 auto;z-index:20;transition:background-color .2s ease-out,box-shadow .2s ease-out}
+.nav.on{background:rgba(27,27,30,.84);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);box-shadow:0 1px 0 var(--edge)}
+.nav .wrap{display:flex;align-items:center;height:68px;gap:36px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:18px;letter-spacing:-.01em;font-variation-settings:'wdth' 108}
+.links{display:flex;gap:28px;font-size:14.5px;color:var(--ink2)}
+.links a{transition:color .15s ease-out}
 .links a:hover{color:var(--ink)}
 .nav .btn{margin-left:auto}
 
 /* buttons */
-.btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border-radius:10px;font:500 14px/1 Geist,system-ui,sans-serif;border:0;cursor:pointer;transition:background .15s,transform .15s}
-.btn:active{transform:scale(.98)}
-.btn.light{background:var(--ink);color:#0B0B0D}
-.btn.light:hover{background:#fff}
-.btn.dark{background:var(--raised);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line2)}
-.btn.dark:hover{background:#202026}
-.btn.sm{height:34px;padding:0 14px;border-radius:9px;font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 20px;border-radius:12px;border:0;cursor:pointer;font-weight:500;font-size:15px;letter-spacing:-.005em;transition-property:background-color,scale;transition-duration:.15s;transition-timing-function:ease-out}
+.btn:active{scale:.96}
+.btn.brand{background:var(--brand);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 1px 2px rgba(0,0,0,.4)}
+.btn.brand:hover{background:#9563C6}
+.btn.quiet{background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--edge2)}
+.btn.quiet:hover{background:rgba(255,255,255,.1)}
+.btn.sm{height:36px;padding:0 15px;border-radius:10px;font-size:14px}
 
-/* hero */
-.hero{padding:96px 0 0;position:relative}
-.hero .top{display:grid;grid-template-columns:1fr auto;gap:28px 64px;align-items:end}
-.hero .top>div:first-child{grid-column:1/-1}
-.hero .top>div:last-child{grid-column:1/-1;display:flex;justify-content:space-between;align-items:end;gap:32px;flex-wrap:wrap}
-.hero .top>div:last-child .lead{margin:0}
-.eyebrow{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px 0 6px;border-radius:99px;background:var(--raised);box-shadow:inset 0 0 0 1px var(--line);font-size:13px;color:var(--ink2);margin-bottom:24px}
-.eyebrow b{font-weight:500;color:#0B0B0D;background:var(--pink);border-radius:99px;padding:2px 8px;font-size:12px}
-h1{font-size:clamp(42px,6.6vw,84px);line-height:1.02;letter-spacing:-.035em;font-weight:600}
-h1 span{color:var(--ink3)}
-.hero p.lead{font-size:18px;color:var(--ink2);max-width:420px;margin-bottom:24px}
+/* ---------- hero: the headline is a selected element ---------- */
+.hero{padding:150px 0 0;position:relative}
+.pill{display:inline-flex;align-items:center;gap:10px;height:32px;padding:0 14px 0 5px;border-radius:99px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--edge);font-size:14px;color:var(--ink2);margin-bottom:64px}
+.pill b{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:99px;background:var(--pink);color:#3A1730;font-size:12.5px;font-weight:600}
+.stage{position:relative}
+.sel{position:relative;display:inline-block;padding:6px 10px 10px;margin-left:-10px}
+.sel::before{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 1.5px var(--sel);pointer-events:none}
+.sel .h{position:absolute;width:9px;height:9px;background:#fff;box-shadow:0 0 0 1.5px var(--sel);border-radius:1.5px}
+.sel .h.tl{left:-4px;top:-4px}.sel .h.tr{right:-4px;top:-4px}.sel .h.bl{left:-4px;bottom:-4px}.sel .h.br{right:-4px;bottom:-4px}
+.sel .tag{position:absolute;left:0;bottom:calc(100% + 6px);display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:5px;background:var(--sel);color:#fff;font-size:12.5px;font-weight:500;white-space:nowrap}
+.sel .dims{position:absolute;left:50%;top:calc(100% + 8px);translate:-50% 0;height:22px;padding:0 7px;border-radius:5px;background:var(--sel);color:#fff;font-size:12px;font-weight:500;line-height:22px;font-variant-numeric:tabular-nums;white-space:nowrap}
+h1{--fs:60;font-size:calc(var(--fs) * 1px * var(--k,1));line-height:1.02;letter-spacing:-.035em;font-weight:500;font-variation-settings:'wdth' 104;transition:font-size .55s cubic-bezier(.2,0,0,1);white-space:nowrap}
+.lead{max-width:520px;color:var(--ink2);font-size:18.5px;line-height:1.55;margin:46px 0 30px}
 .cta{display:flex;gap:10px;flex-wrap:wrap}
-.note{font-size:13px;color:var(--ink3);margin-top:16px}
-.stage{position:relative;margin-top:64px}
-.stage::before{content:"";position:absolute;inset:-6% -10% auto;height:70%;background:radial-gradient(50% 60% at 30% 40%,rgba(138,87,188,.35),transparent 70%),radial-gradient(40% 50% at 75% 30%,rgba(252,189,221,.18),transparent 70%);filter:blur(30px);z-index:-1}
-.frame{border-radius:16px;padding:6px;background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.04));box-shadow:0 40px 120px rgba(0,0,0,.6)}
-.frame img{border-radius:11px;width:100%}
+
+/* the little properties panel, styled like Tovi's */
+.panel{position:absolute;right:0;top:-6px;width:292px;padding:14px;border-radius:16px;background:rgba(18,18,20,.92);box-shadow:0 0 0 1px var(--edge),0 24px 60px rgba(0,0,0,.45);font-size:13px;backdrop-filter:blur(10px)}
+.panel .t{font-weight:500;font-size:13.5px;display:flex;justify-content:space-between;margin-bottom:12px}
+.panel .t span{color:var(--ink3);font-weight:400}
+.pl{font-size:11.5px;color:var(--ink3);margin-bottom:6px}
+.field{display:flex;align-items:center;gap:8px;height:34px;padding:0 6px 0 10px;white-space:nowrap;border-radius:10px;background:rgba(255,255,255,.055);font-variant-numeric:tabular-nums}
+.field .ic{color:var(--ink3);font-size:12px;font-weight:600}
+.field .v{flex:1}
+.field .stp{font-size:11px;padding:1px 6px;border-radius:5px;background:var(--frame);color:var(--ink2);font-family:'JetBrains Mono',monospace}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.slider{position:relative;height:48px;margin:2px 8px 0;cursor:ew-resize;touch-action:none}
+.slider .track{position:absolute;left:0;right:0;top:12px;height:2px;border-radius:2px;background:rgba(255,255,255,.12)}
+.slider .fill{position:absolute;left:0;top:12px;height:2px;border-radius:2px;background:var(--sel)}
+.slider .tick{position:absolute;top:9px;width:2px;height:8px;border-radius:1px;background:rgba(255,255,255,.22);translate:-1px 0}
+.slider .knob{position:absolute;top:5px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.2),0 2px 6px rgba(0,0,0,.4);translate:-8px 0}
+.slider .lbl{position:absolute;top:28px;translate:-50% 0;font-size:10.5px;color:var(--ink3);transition:color .15s ease-out}
+.slider .lbl.on{color:var(--ink)}
+
+/* the "saved" note, as in Tovi */
+.toast{position:absolute;right:0;top:-92px;display:flex;align-items:center;gap:14px;padding:10px 10px 10px 14px;border-radius:12px;background:var(--raised);box-shadow:0 0 0 1px var(--edge),0 16px 40px rgba(0,0,0,.45);font-size:13.5px;opacity:0;translate:0 8px;transition:opacity .25s ease-out,translate .25s ease-out;pointer-events:none;max-width:min(440px,100%)}
+.toast.on{opacity:1;translate:0 0;pointer-events:auto}
+.toast .code{display:block;font:400 12px/1.5 'JetBrains Mono',monospace;color:var(--ink2);margin-top:2px}
+.toast .code em{font-style:normal;color:#9BE3B7}
+.toast .undo{height:28px;padding:0 10px;border-radius:8px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px var(--edge2);font-size:12.5px;border:0;cursor:pointer}
+
+.cursor{position:absolute;left:0;top:0;z-index:5;pointer-events:none;transition:translate .7s cubic-bezier(.3,0,.2,1),opacity .3s;opacity:0}
+.cursor.on{opacity:1}
+.cursor svg{filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+
+/* product window */
+.window{margin-top:96px;border-radius:18px;padding:8px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03));box-shadow:0 0 0 1px rgba(0,0,0,.6),0 50px 120px rgba(0,0,0,.55)}
+.window img{border-radius:10px;outline:1px solid rgba(255,255,255,.1);outline-offset:-1px}
+.caption{display:flex;justify-content:space-between;gap:20px;color:var(--ink3);font-size:13.5px;margin-top:14px;padding:0 4px}
+
+/* who it's for (where Wonder shows logos) */
+.for{display:grid;grid-template-columns:repeat(3,1fr);margin-top:96px}
+.for div{padding:20px 28px 0 0;box-shadow:inset 0 1px 0 var(--edge2)}
+.for div+div{padding-left:28px}
+.for h3{font-size:16.5px;margin-bottom:4px}
+.for p{font-size:15px;color:var(--ink2)}
 
 /* sections */
-section{padding:140px 0 0}
-.head{display:flex;align-items:end;justify-content:space-between;gap:32px;margin-bottom:48px}
-h2{font-size:clamp(34px,4.4vw,52px);line-height:1.05;letter-spacing:-.03em;font-weight:600;max-width:720px}
-h2 span{color:var(--ink3)}
-.head p{color:var(--ink2);max-width:360px}
+section{padding:170px 0 0}
+h2{font-size:clamp(34px,4.2vw,50px);line-height:1.06;letter-spacing:-.03em;font-variation-settings:'wdth' 104;max-width:780px}
+.sub{color:var(--ink2);font-size:18.5px;max-width:560px;margin-top:20px}
 
-/* steps */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
-.step{padding:28px 28px 0 0}
-.step+.step{padding-left:28px;border-left:1px solid var(--line)}
-.step .n{font:500 13px Geist Mono,monospace;color:var(--pink)}
-.step h3{font-size:20px;font-weight:500;letter-spacing:-.015em;margin:14px 0 6px}
-.step p{color:var(--ink2);font-size:15px}
+/* bring your AI */
+.ai{display:grid;grid-template-columns:5fr 6fr;gap:72px;align-items:center}
+.models{border-radius:18px;background:var(--frame);box-shadow:0 0 0 1px var(--edge),0 30px 80px rgba(0,0,0,.4);padding:8px}
+.model{display:flex;align-items:center;gap:14px;padding:14px 14px;border-radius:12px}
+.model+.model{box-shadow:inset 0 1px 0 var(--edge);border-radius:0}
+.model .mk{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-weight:600;font-size:14px}
+.model .nm{font-weight:500}
+.model .ds{font-size:14px;color:var(--ink3)}
+.model .st{margin-left:auto;font-size:13px;color:var(--ink2);display:flex;align-items:center;gap:7px}
+.model .st i{width:7px;height:7px;border-radius:50%;background:#7FD3A2}
+.model.on{background:rgba(255,255,255,.04)}
+.models .foot{padding:12px 14px 6px;font-size:13.5px;color:var(--ink3)}
 
-/* feature cards */
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
-.card{background:var(--panel);border-radius:18px;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;display:flex;flex-direction:column}
-.card.wide{grid-column:span 2}
-.crop{position:relative;overflow:hidden;margin:14px 14px 0;border-radius:10px;background:#0c0c0f;box-shadow:inset 0 0 0 1px var(--line)}
+/* the flow: a real sequence */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);margin-top:64px;counter-reset:s}
+.step{padding:22px 28px 0 0;box-shadow:inset 0 1px 0 var(--edge2)}
+.step+.step{padding-left:28px;box-shadow:inset 0 1px 0 var(--edge2),inset 1px 0 0 var(--edge)}
+.step::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.06);font-size:13px;font-weight:500;color:var(--ink2);margin-bottom:28px}
+.step h3{font-size:20px;letter-spacing:-.015em;margin-bottom:8px}
+.step p{color:var(--ink2);font-size:15.5px}
+
+/* feature rows */
+.row{display:grid;grid-template-columns:5fr 7fr;gap:72px;align-items:center;margin-top:128px}
+.row.flip{grid-template-columns:7fr 5fr}
+.row.flip .text{order:2}
+.text h3{font-size:30px;line-height:1.12;letter-spacing:-.025em;font-variation-settings:'wdth' 104}
+.text p{color:var(--ink2);margin-top:16px;max-width:430px}
+.view .label{font-size:12.5px;color:var(--ink3);margin:0 0 10px 2px;display:flex;justify-content:space-between}
+.crop{position:relative;overflow:hidden;border-radius:14px;background:var(--frame);box-shadow:0 0 0 1px var(--edge),0 30px 80px rgba(0,0,0,.4)}
 .crop img{position:absolute;max-width:none}
-.card .tx{padding:22px 24px 26px;font-size:16px;color:var(--ink2)}
-.card .tx b{color:var(--ink);font-weight:500}
+.crop::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);pointer-events:none}
 
-/* code band */
-.band{display:grid;grid-template-columns:1fr 1.1fr;gap:48px;align-items:center}
-.band p{color:var(--ink2);font-size:17px;margin-top:20px;max-width:440px}
-.code{background:var(--panel);border-radius:16px;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;font:400 13.5px/1.75 'Geist Mono',ui-monospace,monospace}
-.code .bar{display:flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-bottom:1px solid var(--line);color:var(--ink3);font-size:12.5px}
-.code .bar i{width:10px;height:10px;border-radius:50%;background:#2a2a30}
-.code pre{padding:18px 0;overflow-x:auto;margin:0}
-.code .l{display:block;padding:0 20px;white-space:pre}
-.code .del{background:rgba(240,106,95,.1);color:#F3A39B}
-.code .add{background:rgba(127,211,162,.1);color:#9BE3B7}
-.code .dim{color:var(--ink3)}
-.saved{display:flex;align-items:center;gap:10px;margin:0 16px 16px;padding:10px 14px;border-radius:10px;background:var(--raised);box-shadow:inset 0 0 0 1px var(--line);font-size:12.5px;color:var(--ink2)}
-.saved::before{content:"";width:8px;height:8px;border-radius:50%;background:#7FD3A2;box-shadow:0 0 0 4px rgba(127,211,162,.15)}
+/* code */
+.band{display:grid;grid-template-columns:5fr 7fr;gap:72px;align-items:center}
+.diff{border-radius:16px;background:var(--frame);box-shadow:0 0 0 1px var(--edge),0 30px 80px rgba(0,0,0,.4);overflow:hidden;font:400 14px/1.85 'JetBrains Mono',ui-monospace,monospace}
+.diff .bar{display:flex;align-items:center;justify-content:space-between;height:46px;padding:0 18px;box-shadow:inset 0 -1px 0 var(--edge);font-size:12.5px;color:var(--ink3)}
+.diff .bar b{font-weight:400;color:var(--ink2)}
+.diff pre{margin:0;padding:18px 0;overflow-x:auto}
+.diff .l{display:block;padding:0 22px;white-space:pre}
+.diff .dim{color:var(--ink3)}
+.diff .del{background:rgba(240,106,95,.09);color:#F3A39B}
+.diff .add{background:rgba(127,211,162,.09);color:#9BE3B7}
 
-/* facts */
-.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-.fact{padding:24px;border-radius:16px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)}
-.fact svg{color:var(--pink);margin-bottom:28px}
-.fact h3{font-size:16px;font-weight:500;margin-bottom:4px}
-.fact p{font-size:14px;color:var(--ink2)}
+/* shipped */
+.head{display:flex;justify-content:space-between;align-items:end;gap:32px}
+.log{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:56px}
+.entry{padding:24px;border-radius:16px;background:var(--frame);box-shadow:0 0 0 1px var(--edge)}
+.entry time{font-size:13px;color:var(--ink3)}
+.entry h3{font-size:19px;letter-spacing:-.01em;margin:36px 0 8px}
+.entry p{font-size:15px;color:var(--ink2)}
+
+/* faq */
+.faq{display:grid;grid-template-columns:4fr 7fr;gap:72px}
+.faq .sub a{color:var(--ink);box-shadow:inset 0 -1px 0 var(--edge2)}
+details{box-shadow:inset 0 -1px 0 var(--edge)}
+summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:22px 0;cursor:pointer;font-size:18px;font-weight:500}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"";width:11px;height:11px;flex:0 0 11px;background:linear-gradient(var(--ink2),var(--ink2)) center/11px 1.5px no-repeat,linear-gradient(var(--ink2),var(--ink2)) center/1.5px 11px no-repeat;transition:rotate .2s ease-out}
+details[open] summary::after{rotate:45deg}
+details p{color:var(--ink2);padding:0 40px 24px 0;max-width:640px}
 
 /* closing */
-.close{text-align:center;padding:160px 0 140px;position:relative}
-.close::before{content:"";position:absolute;left:50%;top:40%;width:min(720px,100vw);height:360px;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(138,87,188,.28),transparent);filter:blur(20px);z-index:-1}
-.close h2{margin:0 auto 16px;max-width:none}
-.close p{color:var(--ink2);margin-bottom:32px}
-form{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-input{height:40px;width:280px;max-width:100%;padding:0 14px;border-radius:10px;border:0;background:var(--raised);box-shadow:inset 0 0 0 1px var(--line2);color:var(--ink);font:400 14px Geist,system-ui,sans-serif;outline:none}
-input:focus{box-shadow:inset 0 0 0 1px var(--brand)}
-.thanks{color:var(--pink);font-size:14px;margin-top:14px;min-height:20px}
-footer{border-top:1px solid var(--line);padding:28px 0;color:var(--ink3);font-size:13px}
+.close{padding:200px 0 160px;text-align:center}
+.close h2{margin:0 auto}
+.close .sub{margin:18px auto 36px}
+form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+input{height:44px;width:300px;max-width:100%;padding:0 16px;border-radius:12px;border:0;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--edge2);color:var(--ink);font:400 15px 'Mona Sans',system-ui,sans-serif;outline:none;transition:box-shadow .15s ease-out}
+input::placeholder{color:var(--ink3)}
+input:focus{box-shadow:inset 0 0 0 1.5px var(--sel)}
+.thanks{min-height:24px;margin-top:16px;color:var(--pink);font-size:15px}
+footer{box-shadow:0 -1px 0 var(--edge);padding:30px 0;color:var(--ink3);font-size:14px;background:var(--canvas)}
 footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 
-/* reveal on scroll */
-.rv{opacity:0;transform:translateY(16px);transition:opacity .7s ease,transform .7s ease}
-.rv.in{opacity:1;transform:none}
-@media (prefers-reduced-motion:reduce){.rv{opacity:1;transform:none;transition:none}}
-
+@media (max-width:1100px){.panel{position:relative;right:auto;top:auto;margin-top:48px;width:100%;max-width:340px}.toast{top:-80px;right:auto;left:0}.steps{grid-template-columns:1fr 1fr}.step:nth-child(3){padding-left:0;box-shadow:inset 0 1px 0 var(--edge2)}.step{padding-bottom:32px}}
 @media (max-width:900px){
-  .hero .top,.band{grid-template-columns:1fr;gap:28px}
+  h1{--k:.72}
   .links{display:none}
-  .steps{grid-template-columns:1fr}
-  .step,.step+.step{padding:24px 0;border-left:0;border-bottom:1px solid var(--line)}
-  .grid{grid-template-columns:1fr}
-  .card.wide{grid-column:auto}
-  .facts{grid-template-columns:1fr 1fr}
+  .row,.row.flip,.band,.ai,.faq{grid-template-columns:1fr;gap:32px}
+  .row,.row.flip{margin-top:100px}
+  .row.flip .text{order:0}
+  .steps,.for,.log{grid-template-columns:1fr}
+  .step,.step+.step,.step:nth-child(3){padding:22px 0 28px;box-shadow:inset 0 1px 0 var(--edge2)}
+  .for div,.for div+div{padding:20px 0 24px}
   .head{flex-direction:column;align-items:start}
-  section{padding-top:100px}
+  section{padding-top:130px}
 }
-@media (max-width:520px){.facts{grid-template-columns:1fr}.hero{padding-top:64px}}
+@media (max-width:560px){
+  h1{--k:.5}
+  .hero{padding-top:120px}
+  .pill{margin-bottom:48px}
+  .wrap{padding:0 20px}
+  .caption{flex-direction:column;gap:4px}
+}
+@media (prefers-reduced-motion:reduce){h1,.toast,.cursor{transition:none}}
 </style>
 </head>
 <body>
 
 <header class="nav" id="nav">
   <div class="wrap">
-    <a href="#" class="logo"><svg width="22" height="22" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="#8A57BC"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="#FCBDDD"/></svg>Tovi</a>
-    <nav class="links"><a href="#how">How it works</a><a href="#features">Features</a><a href="#code">Code</a></nav>
-    <a href="#invite" class="btn light sm">Request an invite</a>
+    <a href="#" class="logo" aria-label="Tovi home"><svg width="22" height="22" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="#8A57BC"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="#FCBDDD"/></svg>Tovi</a>
+    <nav class="links" aria-label="Sections"><a href="#how">How it works</a><a href="#features">Features</a><a href="#shipped">What's new</a><a href="#faq">Questions</a></nav>
+    <a href="#invite" class="btn brand sm">Request an invite</a>
   </div>
 </header>
 
 <main>
   <div class="hero">
     <div class="wrap">
-      <div class="top">
-        <div>
-          <span class="eyebrow"><b>Beta</b>For React + Tailwind teams</span>
-          <h1>Edit your live product.<br><span>Ship it as code.</span></h1>
+      <span class="pill"><b>Beta</b>Now open to React and Tailwind teams</span>
+      <div class="stage" id="stage">
+        <div class="toast" id="toast" role="status" aria-live="polite"><div><span id="tMsg">Heading, size 72</span><span class="code" id="tCode">Saved to Hero.jsx · text-6xl → <em>text-7xl</em></span></div><button class="undo" id="undo" type="button">Undo</button></div>
+        <div class="sel" id="sel">
+          <span class="tag"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M8 4v9" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>Heading</span>
+          <h1 id="h1">Edit your live product.</h1>
+          <i class="h tl"></i><i class="h tr"></i><i class="h bl"></i><i class="h br"></i>
+          <span class="dims" id="dims">812 × 60</span>
         </div>
-        <div>
-          <p class="lead">Open your team's app, fix it by hand like in Figma, and send the changes as a pull request.</p>
-          <div class="cta"><a href="#invite" class="btn light">Request an invite</a><a href="#how" class="btn dark">How it works</a></div>
-        </div>
+        <aside class="panel" id="panel" aria-label="Try it: change the headline size">
+          <div class="t">Typography <span>Mona Sans</span></div>
+          <div class="r2">
+            <div><div class="pl">Weight</div><div class="field"><span class="v">Medium</span></div></div>
+            <div><div class="pl">Size</div><div class="field"><span class="ic">T</span><span class="v" id="sizeV">60</span><span class="stp" id="stepV">6xl</span></div></div>
+          </div>
+          <div class="pl">Drag to resize. It snaps to your scale.</div>
+          <div class="slider" id="slider" role="slider" tabindex="0" aria-label="Headline size" aria-valuemin="36" aria-valuemax="96" aria-valuenow="60">
+            <span class="track"></span><span class="fill" id="fill"></span><span class="knob" id="knob"></span>
+            
+          </div>
+        </aside>
+        <div class="cursor" id="cursor" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
       </div>
-      <div class="stage rv"><div class="frame"><img src="img/select-text.jpg" alt="Tovi editing a live website: a paragraph is selected and its typography, colour and size show in the properties panel" width="2400" height="1500"></div></div>
+      <p class="lead">Tovi opens the app your team already built, so you can fix it by hand, the way you would in Figma. Every edit lands in your code as you make it, and goes to developers as one pull request.</p>
+      <div class="cta"><a href="#invite" class="btn brand">Request an invite</a><a href="#how" class="btn quiet">See how it works</a></div>
+
+      <div class="window"><img src="img/select-text.jpg" alt="Tovi editing a live website: a paragraph is selected, and its font, size and colour show in the panel on the right" width="2400" height="1500" loading="eager"></div>
+      <div class="caption"><span>Tovi editing Aster, a React and Tailwind site, running live.</span><span>Every value in the panel is read from the code.</span></div>
+
+      <div class="for">
+        <div><h3>Product designers</h3><p>Fix what shipped yourself, instead of filing a ticket and waiting for a sprint.</p></div>
+        <div><h3>Founders and builders</h3><p>Make the product look considered, with guardrails that keep you on your design system.</p></div>
+        <div><h3>Developers</h3><p>Get small, readable pull requests instead of screenshots that say “move this 4px”.</p></div>
+      </div>
     </div>
   </div>
 
+  <section id="ai">
+    <div class="wrap ai">
+      <div>
+        <h2>Bring the AI you already use</h2>
+        <p class="sub">Connect Claude, OpenAI or Gemini with your own key and pick any model it can use. Your requests go straight to the provider you chose. No credits to buy, and nothing added on top.</p>
+      </div>
+      <div class="models">
+        <div class="model on"><span class="mk" style="background:#2A1E1A"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="#D97757" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg></span><div><div class="nm">Claude</div><div class="ds">Anthropic</div></div><span class="st"><i></i>Connected</span></div>
+        <div class="model"><span class="mk" style="background:#F2F1EE"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#0B0B0B" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg></span><div><div class="nm">OpenAI</div><div class="ds">GPT models</div></div><span class="st">Add key</span></div>
+        <div class="model"><span class="mk" style="background:#1A1D2B"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4285F4"/><stop offset=".55" stop-color="#9B72CB"/><stop offset="1" stop-color="#D96570"/></linearGradient></defs><path fill="url(#gm)" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg></span><div><div class="nm">Gemini</div><div class="ds">Google</div></div><span class="st">Add key</span></div>
+        <p class="foot">Switch providers or models any time in Settings.</p>
+      </div>
+    </div>
+  </section>
+
   <section id="how">
     <div class="wrap">
-      <div class="head rv"><h2>Three steps. <span>No code.</span></h2></div>
-      <div class="steps rv">
-        <div class="step"><span class="n">01</span><h3>Open</h3><p>Connect your repo. Your app runs live in Tovi.</p></div>
-        <div class="step"><span class="n">02</span><h3>Edit</h3><p>Select anything and change it, like in Figma.</p></div>
-        <div class="step"><span class="n">03</span><h3>Hand off</h3><p>All your changes go out as one pull request.</p></div>
+      <h2>From live product to pull request</h2>
+      <p class="sub">No mockups to keep in sync and no handoff file. You work on the product itself, and the result is code your team can review.</p>
+      <div class="steps">
+        <div class="step"><h3>Connect your repository</h3><p>Paste a GitHub link or pick a folder on your Mac. Tovi installs the app, starts it and opens it with its real pages, data and components.</p></div>
+        <div class="step"><h3>Edit the running app</h3><p>Select anything and change spacing, type, colour, layout, gradients or shadows. Each edit is written to the right file as you make it.</p></div>
+        <div class="step"><h3>Ask Tovi, or let it review</h3><p>Describe a change, mark spots on the page, or let Diagnose review the product. You approve what it does, and it checks its own work.</p></div>
+        <div class="step"><h3>Hand off</h3><p>One click commits everything to a new branch and opens a pull request. Tovi makes sure the app still builds first.</p></div>
       </div>
     </div>
   </section>
 
   <section id="features">
     <div class="wrap">
-      <div class="head rv"><h2>Design on the real thing. <span>Not a copy of it.</span></h2></div>
-      <div class="grid">
-        <div class="card wide rv">
-          <div class="crop" style="aspect-ratio:2.08"><img src="img/lookalike.jpg" alt="Four look-alike cards selected together in Tovi" style="width:128.2%;left:-28.2%;top:-5%"></div>
-          <div class="tx"><b>Every copy at once.</b> Change one card and all four follow. Or switch to just this one.</div>
+      <h2>Design on the real thing, not a copy of it</h2>
+      <p class="sub">The editing you know from Figma, on the product your customers actually use.</p>
+
+      <div class="row">
+        <div class="text">
+          <h3>Every copy at once</h3>
+          <p>Tovi knows which elements come from the same code. Change one card and the other three follow. Change a shared button and choose whether it applies to this one, to every primary button, or to all of them.</p>
         </div>
-        <div class="card rv">
-          <div class="crop" style="aspect-ratio:1.45"><img src="img/chat-done.jpg" alt="Tovi's AI restyling a heading from a short request" style="width:166%;left:0;top:-7%"></div>
-          <div class="tx"><b>Ask Tovi.</b> Describe a change. Tovi looks at the screen and the code, then does it.</div>
+        <div class="view"><p class="label"><span>Places</span><span>4 look alike</span></p><div class="crop" style="aspect-ratio:1.62"><img src="img/lookalike.jpg" alt="Four look-alike cards selected together, with the panel offering All 4 or This one" style="width:128.2%;left:-28.2%;top:-4%"></div></div>
+      </div>
+
+      <div class="row flip">
+        <div class="text">
+          <h3>Speaks your design system</h3>
+          <p>Colours show their token names, and every number shows its step on your scale. Values snap to that scale as you drag, and anything off it is flagged, so a quick fix never quietly adds a new grey. Tovi also warns you when text gets hard to read.</p>
         </div>
-        <div class="card rv">
-          <div class="crop" style="aspect-ratio:1.45"><img src="img/diagnose.jpg" alt="Diagnose notes pinned on a page" style="width:166%;left:0;top:-14%"></div>
-          <div class="tx"><b>Diagnose.</b> Tovi reviews a page and leaves notes. Keep the ones you agree with.</div>
+        <div class="view"><p class="label"><span>Button “Find your stay”</span><span>Variant primary</span></p><div class="crop" style="aspect-ratio:1.45"><img src="img/component.jpg" alt="A shared button selected, with its variant and size options in the panel" style="width:128.2%;left:-28.2%;top:-3%"></div></div>
+      </div>
+
+      <div class="row">
+        <div class="text">
+          <h3>Ask when it's quicker to say it</h3>
+          <p>“Make this heading feel more editorial.” Tovi looks at the screen and reads the code behind what you selected, then makes the change. A second look checks the result, and every change can be undone.</p>
         </div>
-        <div class="card rv">
-          <div class="crop" style="aspect-ratio:1.45"><img src="img/component.jpg" alt="A shared button component with variant options" style="width:128.2%;left:-28.2%;top:-4%"></div>
-          <div class="tx"><b>Your design system.</b> Components, variants and tokens, straight from your code.</div>
+        <div class="view"><p class="label"><span>Chat</span><span>1 change applied</span></p><div class="crop" style="aspect-ratio:1.45"><img src="img/chat-done.jpg" alt="Tovi's chat restyling the hero heading, with the change listed" style="width:166%;left:0;top:-7%"></div></div>
+      </div>
+
+      <div class="row flip">
+        <div class="text">
+          <h3>A second pair of eyes</h3>
+          <p>Diagnose reviews a page section by section, or every page of the product, and pins a note wherever hierarchy, spacing, contrast or consistency slips. Keep the notes you agree with, edit the rest, then apply. Simple fixes land instantly, and Tovi checks each one with a screenshot.</p>
         </div>
-        <div class="card rv">
-          <div class="crop" style="aspect-ratio:1.45"><img src="img/history.jpg" alt="Version history listing each change" style="width:128.2%;left:-28.2%;top:-4%"></div>
-          <div class="tx"><b>Version history.</b> Every change is saved and named. Undo anything.</div>
+        <div class="view"><p class="label"><span>Diagnose</span><span>14 notes</span></p><div class="crop" style="aspect-ratio:1.45"><img src="img/diagnose.jpg" alt="Diagnose notes pinned across the page, listed in the chat" style="width:166%;left:0;top:-14%"></div></div>
+      </div>
+
+      <div class="row">
+        <div class="text">
+          <h3>Nothing is lost</h3>
+          <p>Tovi saves versions as you work and names who made each change. Compare before and after, restore a version, or undo a single edit.</p>
         </div>
+        <div class="view"><p class="label"><span>Version history</span><span>Current version</span></p><div class="crop" style="aspect-ratio:1.45"><img src="img/history.jpg" alt="Version history listing each change with before and after values" style="width:128.2%;left:-28.2%;top:-3%"></div></div>
       </div>
     </div>
   </section>
 
   <section id="code">
     <div class="wrap band">
-      <div class="rv">
-        <h2>Edits land in your code. <span>Instantly.</span></h2>
-        <p>Each change is written to the right file as you make it. Small, readable diffs your developers can review and merge.</p>
+      <div>
+        <h2>Every edit is real code</h2>
+        <p class="sub">Tovi maps each element on the screen to its exact place in your source, and changes it the way a careful developer would: one class here, one value there, using your own tokens. No inline styles, no wrapper divs, no generated mess.</p>
       </div>
-      <div class="code rv">
-        <div class="bar"><i></i><i></i><i></i><span>src/sections/Hero.jsx</span></div>
-<pre><span class="l dim">  &lt;div className="max-w-6xl px-6"&gt;</span><span class="l del">-   &lt;h1 className="mt-5 text-7xl"&gt;</span><span class="l add">+   &lt;h1 className="mt-6 text-8xl"&gt;</span><span class="l dim">      Nights under the northern sky</span><span class="l dim">    &lt;/h1&gt;</span></pre>
-        <div class="saved">Saved to Hero.jsx · mt-5 text-7xl → mt-6 text-8xl</div>
+      <div class="diff">
+        <div class="bar"><b>src/sections/Hero.jsx</b><span>1 line changed</span></div>
+<pre><span class="l dim">&lt;section className="relative min-h-[760px]"&gt;</span><span class="l del">-  &lt;h1 className="font-display text-6xl text-content"&gt;</span><span class="l add">+  &lt;h1 className="font-display text-7xl text-content"&gt;</span><span class="l dim">     Nights under the northern sky</span><span class="l dim">   &lt;/h1&gt;</span></pre>
       </div>
     </div>
   </section>
 
-  <section>
+  <section id="shipped">
     <div class="wrap">
-      <div class="head rv"><h2>Good to know</h2></div>
-      <div class="facts">
-        <div class="fact rv"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg><h3>React + Tailwind</h3><p>Works with Vite and Next.js apps.</p></div>
-        <div class="fact rv"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><h3>Runs on your Mac</h3><p>Your code stays with you.</p></div>
-        <div class="fact rv"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg><h3>Your own AI key</h3><p>Claude, OpenAI or Gemini.</p></div>
-        <div class="fact rv"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v7M18 15.5V11a3 3 0 0 0-3-3h-4"/></svg><h3>Reviewed, always</h3><p>Nothing merges without your team.</p></div>
+      <div class="head"><h2>Shipped recently</h2><p class="sub" style="margin:0;max-width:380px">Tovi improves every week. Here's what landed most recently.</p></div>
+      <div class="log">
+        <article class="entry"><time datetime="2026-10-31">October 31</time><h3>A calmer properties panel</h3><p>Labels on every field, your design scale beside each number, colour opacity, and a note showing exactly what changed in the code.</p></article>
+        <article class="entry"><time datetime="2026-10-30">October 30</time><h3>Diagnose</h3><p>Tovi reviews every section of a page, or the whole product, and pins notes where things slip. Simple fixes now apply instantly.</p></article>
+        <article class="entry"><time datetime="2026-10-30">October 30</time><h3>Google Fonts</h3><p>Search and preview any Google Font. Picking one adds it to your project as a single change you can undo.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap faq">
+      <div><h2>Questions</h2><p class="sub">Something else on your mind? Write to <a href="mailto:hello@usetovi.com">hello@usetovi.com</a>.</p></div>
+      <div>
+        <details open><summary>What is Tovi?</summary><p>A design editor for your real product. You open the app your team built, edit it by hand like in Figma, and Tovi turns your edits into code and a pull request.</p></details>
+        <details><summary>Do I need to know how to code?</summary><p>No. You edit visually. Tovi writes the code, and developers review it before anything is merged.</p></details>
+        <details><summary>Which apps does it work with?</summary><p>React apps styled with Tailwind, built with Vite or Next.js. Other setups aren't supported yet.</p></details>
+        <details><summary>Where does my code go?</summary><p>Tovi runs on your Mac and your code stays there. When you use the AI, the screen and the relevant code go to the AI provider you chose, with your own key.</p></details>
+        <details><summary>Do I pay for AI credits?</summary><p>No. You bring your own key from Claude, OpenAI or Gemini and pay the provider directly.</p></details>
+        <details><summary>Will it touch our main branch?</summary><p>No. Changes go to a new branch and a pull request. Nothing merges without your team.</p></details>
+        <details><summary>Does it replace Figma?</summary><p>No. Figma is still the place to explore new ideas. Tovi is for the product once it's built.</p></details>
       </div>
     </div>
   </section>
 
   <div class="close" id="invite">
-    <div class="wrap rv">
-      <h2>Tovi is in private beta.</h2>
-      <p>Join the list and we'll send you an invite.</p>
-      <form id="form"><input type="email" required placeholder="you@company.com" aria-label="Email"><button class="btn light" type="submit">Request an invite</button></form>
+    <div class="wrap">
+      <h2>Tovi is in private beta</h2>
+      <p class="sub">We're inviting a small group of designers and teams to try it and help shape it. Leave your email and we'll be in touch.</p>
+      <form id="form"><label for="email" class="vh">Email</label><input id="email" type="email" required placeholder="you@company.com" autocomplete="email"><button class="btn brand" type="submit">Request an invite</button></form>
       <p class="thanks" id="thanks" aria-live="polite"></p>
     </div>
   </div>
@@ -236,12 +392,81 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 <footer><div class="wrap"><span>© 2026 Tovi</span><span>usetovi.com</span></div></footer>
 
 <script>
-  const nav = document.getElementById('nav');
-  addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 8), { passive: true });
-  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
-  document.querySelectorAll('.rv').forEach((el) => io.observe(el));
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const nav = $('nav');
+  addEventListener('scroll', () => nav.classList.toggle('on', scrollY > 8), { passive: true });
+
+  // The headline is a live, selected element. Its size snaps to Tailwind's scale, like in Tovi.
+  const STEPS = [[36, '4xl'], [48, '5xl'], [60, '6xl'], [72, '7xl'], [96, '8xl']];
+  const MIN = 36, MAX = 96;
+  const h1 = $('h1'), slider = $('slider'), knob = $('knob'), fill = $('fill'), toast = $('toast'), cursor = $('cursor'), stage = $('stage');
+  let size = 60, saved = 60, toastT, dimsT;
+  const stepOf = (v) => STEPS.reduce((a, b) => (Math.abs(b[0] - v) < Math.abs(a[0] - v) ? b : a));
+  const pct = (v) => (v - MIN) / (MAX - MIN);
+  STEPS.forEach(([v, n]) => { const t = document.createElement('span'); t.className = 'tick'; t.style.left = pct(v) * 100 + '%'; slider.insertBefore(t, knob); const l = document.createElement('span'); l.className = 'lbl'; l.dataset.v = v; l.textContent = n; l.style.left = pct(v) * 100 + '%'; slider.appendChild(l); });
+  const k = () => parseFloat(getComputedStyle(h1).getPropertyValue('--k')) || 1;
+  function paint(v, snap) {
+    const s = stepOf(v), shown = snap ? s[0] : Math.round(v);
+    h1.style.setProperty('--fs', shown);
+    $('sizeV').textContent = shown;
+    $('stepV').textContent = snap || Math.abs(shown - s[0]) < 2 ? s[1] : 'custom';
+    knob.style.left = fill.style.width = pct(shown) * 100 + '%';
+    slider.setAttribute('aria-valuenow', shown);
+    slider.querySelectorAll('.lbl').forEach((l) => l.classList.toggle('on', +l.dataset.v === s[0]));
+    clearTimeout(dimsT);
+    dimsT = setTimeout(() => { $('dims').textContent = `${Math.round(h1.getBoundingClientRect().width / k())} × ${shown}`; }, 580);
+  }
+  function note(msg, code, ms = 3200) { $('tMsg').textContent = msg; $('tCode').innerHTML = code; toast.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove('on'), ms); }
+  function save(v) {
+    const from = stepOf(saved)[1], to = stepOf(v)[1];
+    saved = stepOf(v)[0];
+    if (from !== to) note(`Heading, size ${saved}`, `Saved to Hero.jsx · text-${from} → <em>text-${to}</em>`);
+  }
+  paint(60, true);
+
+  let dragging = false, demo = true;
+  const fromX = (x) => { const r = slider.getBoundingClientRect(); return MIN + Math.min(1, Math.max(0, (x - r.left) / r.width)) * (MAX - MIN); };
+  slider.addEventListener('pointerdown', (e) => { stopDemo(); dragging = true; slider.setPointerCapture(e.pointerId); size = fromX(e.clientX); paint(size); });
+  slider.addEventListener('pointermove', (e) => { if (dragging) { size = fromX(e.clientX); paint(size); } });
+  const release = () => { if (!dragging) return; dragging = false; size = stepOf(size)[0]; paint(size, true); save(size); };
+  slider.addEventListener('pointerup', release); slider.addEventListener('pointercancel', release);
+  slider.addEventListener('keydown', (e) => {
+    const i = STEPS.findIndex(([v]) => v === stepOf(size)[0]);
+    const j = ['ArrowRight', 'ArrowUp'].includes(e.key) ? Math.min(STEPS.length - 1, i + 1) : ['ArrowLeft', 'ArrowDown'].includes(e.key) ? Math.max(0, i - 1) : -1;
+    if (j < 0) return; e.preventDefault(); stopDemo(); size = STEPS[j][0]; paint(size, true); save(size);
+  });
+  $('undo').addEventListener('click', () => { stopDemo(); const was = stepOf(saved)[1]; size = saved = 60; paint(60, true); note('Undone', `Hero.jsx · text-${was} → <em>text-6xl</em>`, 2200); });
+
+  // Opening demo: a cursor drags the size from 60 to 72, Tovi saves it, then undoes. Stops as soon as you touch it.
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const rel = (el, fx, fy) => { const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect(); return [r.left - s.left + r.width * fx, r.top - s.top + r.height * fy]; };
+  const move = (x, y) => { cursor.style.translate = `${x}px ${y}px`; };
+  const onKnob = () => { const r = slider.getBoundingClientRect(), s = stage.getBoundingClientRect(); move(r.left - s.left + pct(size) * r.width - 3, r.top - s.top + 6); };
+  function stopDemo() { demo = false; cursor.classList.remove('on'); }
+  function glide(from, to, ms) {
+    const t0 = performance.now();
+    return new Promise((res) => { const f = (t) => { if (!demo) return res(); const x = Math.min(1, (t - t0) / ms), e = x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; size = from + (to - from) * e; paint(size); onKnob(); x < 1 ? requestAnimationFrame(f) : res(); }; requestAnimationFrame(f); });
+  }
+  async function run() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    await wait(1200);
+    while (demo) {
+      if (getComputedStyle($('panel')).position !== 'absolute') { await wait(4000); continue; }
+      move(...rel($('panel'), 0.2, 1.4)); cursor.classList.add('on'); await wait(700); if (!demo) break;
+      onKnob(); await wait(800); if (!demo) break;
+      await glide(60, 74, 1100); if (!demo) break;
+      size = 72; paint(72, true); save(72); await wait(3400); if (!demo) break;
+      move(...rel($('undo'), 0.4, 0.55)); await wait(900); if (!demo) break;
+      const was = stepOf(saved)[1]; size = saved = 60; paint(60, true); note('Undone', `Hero.jsx · text-${was} → <em>text-6xl</em>`, 1600);
+      await wait(1400); move(...rel($('panel'), 0.9, 1.6)); await wait(500); cursor.classList.remove('on'); await wait(2800);
+    }
+  }
+  run();
+
   // No sign-up service is connected yet: the form only confirms on the page.
-  document.getElementById('form').addEventListener('submit', (e) => { e.preventDefault(); document.getElementById('thanks').textContent = "Thanks. You're on the list."; e.target.reset(); });
+  $('form').addEventListener('submit', (e) => { e.preventDefault(); $('thanks').textContent = "Thanks. You're on the list."; e.target.reset(); });
+})();
 </script>
 </body>
 </html>
