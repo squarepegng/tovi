@@ -572,7 +572,7 @@
           const who = S.sel ? dName(S.sel.el) : '';
           const where = sm.scope === 'variant' ? ` (all “${activeVariant()?.variant}”)` : sm.scope === 'all' ? ' (every one)' : '';
           if (sm.size) sm.labels = (sm.labels || []).map((l) => l.replace(/ \((only on \w+|all sizes)\)$/, ''));
-          toast(`${who}${where} · ${(sm.labels || []).join(' · ')}${sm.size ? ` · ${sm.size.toLowerCase()}` : ''}`, sm.offScale.length ? 'Some values are off your design scale' : '', false, true, `${fileName(r.file)}: ${[sm.removed.join(' ') || '—', sm.added.join(' ')].join(' → ')}`);
+          toast(`${who}${where} · ${(sm.labels || []).join(' · ')}${sm.size ? ` · ${sm.size.toLowerCase()}` : ''}`, sm.offScale.length ? 'Some values are off your design scale' : '', false, true, `Saved to ${fileName(r.file)} · ${[sm.removed.join(' ') || '—', sm.added.join(' ') || '—'].join(' → ')}`);
         }
       }
       afterEdit();
@@ -1114,11 +1114,49 @@
 
   /* ---------- design panel ---------- */
   const val = (p) => read(p, S.sel?.el);
-  const nf = (p, icon, title, unit) => `<label class="inp${info()?.sized?.includes(p) ? ' sized' : ''}" title="${title}${info()?.sized?.includes(p) ? ' · different on other screen sizes' : ''}"><span class="ic" data-scrub="${p}">${icon.startsWith('<') ? icon : ico(icon, 12)}</span><input type="text" inputmode="decimal" data-prop="${p}" value="${esc(val(p))}" aria-label="${title}">${unit ? `<span class="u">${unit}</span>` : ''}</label>`;
+  const nf = (p, icon, title, unit) => { const st = stepOf(p); return `<label class="inp${info()?.sized?.includes(p) ? ' sized' : ''}" title="${title}${st ? ` · ${st === 'custom' ? 'off your design scale' : `scale step ${st}`}` : ''}${info()?.sized?.includes(p) ? ' · different on other screen sizes' : ''}"><span class="ic" data-scrub="${p}">${icon.startsWith('<') ? icon : ico(icon, 12)}</span><input type="text" inputmode="decimal" data-prop="${p}" value="${esc(val(p))}" aria-label="${title}">${st ? `<span class="u step${st === 'custom' ? ' off' : ''}">${esc(st)}</span>` : ''}${unit ? `<span class="u">${unit}</span>` : ''}</label>`; };
+  // A field with its name above it, like Figma's labelled fields.
+  const lf = (label, field) => `<div class="fl"><span class="flab">${label}</span>${field}</div>`;
+  // The design-system step behind a number (p-4 → "4", rounded-lg → "lg", text-xl → "xl"); "custom" when off the scale.
+  const STEP = { padX: ['px', 'p'], padY: ['py', 'p'], gap: ['gap'], mT: ['mt', 'my', 'm'], mB: ['mb', 'my', 'm'], mX: ['mx', 'm'], lineHeight: ['leading'], letterSpacing: ['tracking'], opacity: ['opacity'] };
+  function stepOf(p) {
+    const cls = (info()?.classes || []).filter((c) => !c.includes(':'));
+    const pick = (pre, ok = () => true) => { for (const x of pre) { const c = cls.find((k) => (k.startsWith(x + '-') || k.startsWith('-' + x + '-')) && ok(k.slice(k.indexOf(x + '-') + x.length + 1))); if (c) return c.slice(c.indexOf(x + '-') + x.length + 1); } return null; };
+    let v = null;
+    if (STEP[p]) v = pick(STEP[p]);
+    else if (p === 'radius') { const c = cls.find((k) => k === 'rounded' || /^rounded-(none|sm|md|lg|xl|2xl|3xl|full|\[.+\]|[\w-]+)$/.test(k) && !/^rounded-(t|b|l|r|s|e|tl|tr|bl|br|ss|se|es|ee)(-|$)/.test(k)); v = c ? (c === 'rounded' ? 'default' : c.slice(8)) : null; }
+    else if (p === 'fontSize') v = pick(['text'], (x) => (S.theme?.keys?.fontSize || []).includes(x) || /^\[[\d.]+(px|rem|em)\]$/.test(x));
+    else if (p === 'borderW') { const c = cls.find((k) => k === 'border' || /^border-(\d+|\[[\d.]+px\])$/.test(k)); v = c ? (c === 'border' ? 'default' : c.slice(7)) : null; }
+    if (!v) return '';
+    if (v.startsWith('[')) return 'custom';
+    // Components with variants list several classes: show the step only when it matches what's on screen.
+    const kind = { padX: 'spacing', padY: 'spacing', gap: 'spacing', mT: 'spacing', mB: 'spacing', mX: 'spacing', radius: 'radius', fontSize: 'fontSize', lineHeight: 'lineHeight', borderW: 'borderWidth' }[p];
+    const want = kind && S.theme?.byKey?.[kind]?.[v === 'default' ? 'DEFAULT' : v];
+    if (want != null && !isNaN(want) && Math.abs(want - Math.abs(Number(val(p)) || 0)) > 1) return '';
+    return v;
+  }
   const sec = (title, body, act = '') => `<div class="sec"><div class="secH"><span>${title}</span>${act}</div>${body}</div>`;
+  // A colour's own opacity (text-primary/50), as a percentage.
+  function alphaOf(p) {
+    const el = S.sel?.el;
+    if (!el?.isConnected) return 100;
+    const c = cs(el)[{ bg: 'backgroundColor', color: 'color', borderC: 'borderTopColor' }[p]] || '';
+    const m = c.match(/[\d.]+/g);
+    return m && m.length > 3 ? Math.round(+m[3] * 100) : 100;
+  }
+  document.addEventListener('change', (e) => {
+    const p = e.target.dataset?.calpha;
+    if (!p || !S.sel) return;
+    let a = Math.round(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) / 5) * 5;
+    const tok = tokenOf(p), hex = val(p);
+    const base = tok && !tok.startsWith('#') ? tok : (hex || '').slice(0, 7);
+    if (!base || base === 'transparent') return;
+    const value = a >= 100 ? base : base.startsWith('#') ? base + ('0' + Math.round(a * 2.55).toString(16)).slice(-2).toUpperCase() : `${base}/${a}`;
+    commit({ ops: [{ prop: p, value }] });
+  });
   function colorRow(p, title, removeAct) {
     const hex = val(p), tok = tokenOf(p), none = hex === 'transparent';
-    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label></div>`;
+    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label>${none ? '' : `<label class="inp ca" title="${title} opacity"><input type="text" inputmode="numeric" data-calpha="${p}" value="${alphaOf(p)}" aria-label="${title} opacity"><span class="u">%</span></label>`}</div>`;
     return h;
   }
   const isText = (el) => el && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
@@ -1332,28 +1370,28 @@
         const famKey = (info()?.classes || []).filter((c) => !c.includes(':')).map((c) => c.slice(5)).find((k) => c0(k)) || (fams.find(([, f]) => f.toLowerCase() === fam.toLowerCase()) || [''])[0];
         const famName = famKey ? (S.theme?.fonts?.[famKey] || famKey) : fam;
         h += sec('Typography', `<button class="inp fontBtn${S.cpick === 'font' ? ' on' : ''}" data-act="cpick" data-v="font" title="Font" aria-label="Font: ${esc(famName)}"><span style="font-family:'${esc(famName)}',system-ui">${esc(famName)}</span>${ico('chev', 12)}</button>
-          <div class="r2"><label class="inp"><select data-sel="fontWeight" aria-label="Weight">${[[100, 'Thin'], [200, 'Extra light'], [300, 'Light'], [400, 'Regular'], [500, 'Medium'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold'], [900, 'Black']].map(([v, n]) => `<option value="${v}"${v === fw ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label>${nf('fontSize', '<b class="tg">T</b>', 'Font size')}</div>
-          <div class="r2">${nf('lineHeight', 'lh', 'Line height')}${nf('letterSpacing', 'ls', 'Letter spacing', '%')}</div>
+          <div class="r2"><div class="fl"><span class="flab">Weight</span><label class="inp"><select data-sel="fontWeight" aria-label="Weight">${[[100, 'Thin'], [200, 'Extra light'], [300, 'Light'], [400, 'Regular'], [500, 'Medium'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold'], [900, 'Black']].map(([v, n]) => `<option value="${v}"${v === fw ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label></div>${lf('Size', nf('fontSize', '<b class="tg">T</b>', 'Font size'))}</div>
+          <div class="r2">${lf('Line height', nf('lineHeight', 'lh', 'Line height'))}${lf('Letter spacing', nf('letterSpacing', 'ls', 'Letter spacing', '%'))}</div>
           <div class="r2"><div class="ibs">${[['left', 'alL'], ['center', 'alC'], ['right', 'alR']].map(([v, i]) => `<button class="ib${val('align') === v ? ' on' : ''}" data-act="set" data-p="align" data-v="${v}" title="Align ${v}">${ico(i)}</button>`).join('')}</div><span></span></div>`);
         h += sec('Text color', colorRow('color', 'Text color'));
       }
       h += layoutSections(el);
       if (el.tagName.toLowerCase() === 'svg') {
         h += sec('Icon color', colorRow('color', 'Icon color'));
-        h += sec('Appearance', `<div class="r2">${nf('opacity', 'opa', 'Opacity', '%')}<span></span></div>`);
+        h += sec('Appearance', `<div class="r2">${lf('Opacity', nf('opacity', 'opa', 'Opacity', '%'))}<span></span></div>`);
         const st0 = p.querySelector('.scroll')?.scrollTop || 0;
         p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
         p.querySelector('.scroll').scrollTop = st0;
         return;
       }
       const indep = S.corners;
-      h += sec('Appearance', `<div class="r2c">${nf('opacity', 'opa', 'Opacity', '%')}${nf('radius', 'rad', 'Corner radius')}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>
+      h += sec('Appearance', `<div class="r2c lab">${lf('Opacity', nf('opacity', 'opa', 'Opacity', '%'))}${lf('Corner radius', nf('radius', 'rad', 'Corner radius'))}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>
         ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}`);
       const g = gradOf();
       const hasFill = g || (val('bg') && val('bg') !== 'transparent');
       h += sec('Fill', hasFill ? fillBody(g, el) : '', hasFill ? hb('rmFill', 'minus', 'Remove fill') : hb('addFill', 'plus', 'Add fill'));
       const hasStroke = val('borderW') > 0;
-      h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${nf('borderW', 'sw', 'Stroke width')}<span></span></div>` : '', hasStroke ? hb('rmStroke', 'minus', 'Remove stroke') : hb('addStroke', 'plus', 'Add stroke'));
+      h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${lf('Width', nf('borderW', 'sw', 'Stroke width'))}<span></span></div>` : '', hasStroke ? hb('rmStroke', 'minus', 'Remove stroke') : hb('addStroke', 'plus', 'Add stroke'));
       const sh = shadowOf();
       h += sec('Effects', sh !== 'none' ? shadowBody() : '', sh !== 'none' ? hb('rmShadow', 'minus', 'Remove shadow') : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
     }
@@ -1460,7 +1498,7 @@
     const t = $('toast');
     t.hidden = false;
     t.className = 'toast' + (err ? ' err' : '');
-    t.innerHTML = `<div class="tx"><span>${esc(msg)}</span>${sub ? `<span class="sub">${esc(sub)}</span>` : ''}${code ? `<details class="code"><summary>Code</summary><span class="mono">${esc(code)}</span></details>` : ''}</div>${withUndo ? '<button class="outline" data-act="undo">Undo</button>' : ''}<button class="ib" data-act="toastClose" aria-label="Dismiss">${ico('x')}</button>`;
+    t.innerHTML = `<div class="tx"><span>${esc(msg)}</span>${sub ? `<span class="sub">${esc(sub)}</span>` : ''}${code ? `<span class="mono codeLine">${esc(code)}</span>` : ''}</div>${withUndo ? '<button class="outline" data-act="undo">Undo</button>' : ''}<button class="ib" data-act="toastClose" aria-label="Dismiss">${ico('x')}</button>`;
     clearTimeout(toastT);
     toastT = setTimeout(() => (t.hidden = true), err ? 6000 : 4000);
   }
@@ -2212,7 +2250,7 @@
       const boxes = f.locs.map(elOf).filter((el) => el?.isConnected).map((el) => el.getBoundingClientRect()).filter((b) => b.width || b.height);
       if (!boxes.length) continue;
       const x0 = Math.min(...boxes.map((b) => b.left)), y0 = Math.min(...boxes.map((b) => b.top)), x1 = Math.max(...boxes.map((b) => b.right)), y1 = Math.max(...boxes.map((b) => b.bottom));
-      out.push({ shape: 'box', x: x0 + W.scrollX - 4, y: y0 + W.scrollY - 4, w: x1 - x0 + 8, h: y1 - y0 + 8, text: f.fix, title: f.title, problem: f.problem, sev: f.severity, locs: f.locs, by: 'tovi' });
+      out.push({ shape: 'box', x: x0 + W.scrollX - 4, y: y0 + W.scrollY - 4, w: x1 - x0 + 8, h: y1 - y0 + 8, text: f.fix, title: f.title, problem: f.problem, sev: f.severity, locs: f.locs, by: 'tovi', quick: f.quick || null, quickFor: f.fix });
     }
     return out;
   }
@@ -3108,6 +3146,9 @@
       if (!per[k].length) return { error: 'Nothing is under this mark any more (the page may have moved). Draw it again.' };
       const stop = () => {};
       const atts = (notes[k].atts || []).slice(0, 4);
+      // A Diagnose note with exact edits, still worded as Tovi wrote it, lands at once with no AI round trip.
+      const q = notes[k].quick;
+      if (q?.length && notes[k].text === notes[k].quickFor && !atts.length) return { p: { scope: 'done', message: notes[k].text, notes: [{ note: k + 1, status: 'done', summary: notes[k].text }], edits: q.map((e) => ({ loc: e.loc, ops: e.ops, props: [], text: null, structure: null, note: k + 1 })) } };
       try {
         const p = await api('/ai', { request: `Note ${k + 1}: ${notes[k].text}\nEach element is tagged with the note it sits under.`, fast: true, targets: per[k], history, screen, context: aiContext(), mode: m.mode, images: atts.map((x) => ({ name: x.name, media_type: x.type, data: x.data, orig: x.orig })) });
         return { p };
@@ -3835,7 +3876,7 @@
     let h = '';
     const shown = (k) => S.reveal?.el === el && S.reveal[k];
     const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = ['mX', 'mT', 'mB'].some((k) => (+val(k) || 0) !== 0);
-    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${nf('mX', 'padH', 'Horizontal margin')}<span></span></div><div class="r2">${nf('mT', '<b class="tg">T</b>', 'Top margin')}${nf('mB', '<b class="tg">B</b>', 'Bottom margin')}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
+    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${lf('Horizontal', nf('mX', 'padH', 'Horizontal margin'))}<span></span></div><div class="r2">${lf('Top', nf('mT', '<b class="tg">T</b>', 'Top margin'))}${lf('Bottom', nf('mB', '<b class="tg">B</b>', 'Bottom margin'))}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
     // Like Figma: one field per axis, "W 468" with Fixed / Hug / Fill inside it. Typing a number makes it fixed.
     const MODES = [['fixed', 'Fixed'], ['hug', 'Hug'], ['fill', 'Fill'], ['auto', 'Auto']];
     const sizeField = (axis) => {
@@ -3844,7 +3885,7 @@
     };
     const sizeSec = () => sec('Size', `<div class="r2">${sizeField('w')}${sizeField('h')}</div>`);
     if (!isContainer(el)) {
-      if (!isMedia(el)) h += sec('Padding', hasPad || shown('pad') ? `<div class="r2">${nf('padX', 'padH', 'Horizontal padding')}${nf('padY', 'padV', 'Vertical padding')}</div>` : '', hasPad || shown('pad') ? '' : hb('reveal', 'plus', 'Add padding', 'pad'));
+      if (!isMedia(el)) h += sec('Padding', hasPad || shown('pad') ? `<div class="r2">${lf('Horizontal', nf('padX', 'padH', 'Horizontal padding'))}${lf('Vertical', nf('padY', 'padV', 'Vertical padding'))}</div>` : '', hasPad || shown('pad') ? '' : hb('reveal', 'plus', 'Add padding', 'pad'));
       return h + sizeSec() + marginSec();
     }
     // Alignment matrix like Figma's: 3×3, mapped to justify/items by direction.
@@ -3857,8 +3898,8 @@
     const auto = L.dir !== 'none';
     h += sec('Auto layout', `<div class="r2"><div class="ibs">${[['none', 'Off'], ['col', '↓'], ['row', '→']].map(([v, n]) => `<button class="ib${L.dir === v ? ' on' : ''}" data-act="set" data-p="layout" data-v="${v}" title="${v === 'none' ? 'No auto layout' : v === 'col' ? 'Vertical' : 'Horizontal'}">${n}</button>`).join('')}</div>${auto ? `<div class="ibs txt"><button class="ib${L.wrap ? ' on' : ''}" data-act="set" data-p="wrap" data-v="${L.wrap ? 'nowrap' : 'wrap'}" title="Wrap onto new lines">Wrap</button></div>` : '<span></span>'}</div>
       ${auto ? `<div class="r2c" style="grid-template-columns:76px minmax(0,1fr)"><div class="m9">${[0, 1, 2].map((r) => [0, 1, 2].map((c) => cell(r, c)).join('')).join('')}</div>
-        <div style="display:flex;flex-direction:column;gap:8px">${nf('gap', 'gap', 'Gap')}<div class="ibs txt"><button class="ib${L.justify === 'between' ? ' on' : ''}" data-act="set" data-p="justify" data-v="${L.justify === 'between' ? 'start' : 'between'}" title="Space items out evenly">Space between</button></div></div></div>` : ''}
-      <div class="r2">${nf('padX', 'padH', 'Horizontal padding')}${nf('padY', 'padV', 'Vertical padding')}</div>`);
+        <div style="display:flex;flex-direction:column;gap:8px">${lf('Gap', nf('gap', 'gap', 'Gap'))}<div class="ibs txt"><button class="ib${L.justify === 'between' ? ' on' : ''}" data-act="set" data-p="justify" data-v="${L.justify === 'between' ? 'start' : 'between'}" title="Space items out evenly">Space between</button></div></div></div>` : ''}
+      <div class="r2">${lf('Horizontal', nf('padX', 'padH', 'Horizontal padding'))}${lf('Vertical', nf('padY', 'padV', 'Vertical padding'))}</div>`);
     h += sizeSec() + marginSec();
     return h;
   }

@@ -565,6 +565,10 @@ const Diagnosis = z.object({
     fix: z.string().describe('The change for Tovi to make, as a clear instruction in plain designer words (no class names or code), e.g. "Use your muted colour for these three descriptions."'),
     severity: z.enum(['high', 'medium', 'low']),
     locs: z.array(z.string()).describe('The exact ids of the elements this is about, from the list'),
+    quick: z.array(z.object({
+      loc: z.string().describe('One of this finding\'s element ids'),
+      ops: z.array(z.object({ prop: z.enum(PROPS), value: z.string().describe('Same values as edits: a number for sizes (px; % for opacity and letterSpacing), a colour token name or #RRGGBB, left/center/right for align') })),
+    })).nullable().describe('Only when the fix is a simple measured style change you can state exactly (a spacing or size step, a colour token, alignment, radius, weight): the edits that carry it out, using the project\'s scale and tokens. Tovi applies these instantly. Otherwise null, and Tovi works the fix out when the designer applies it.'),
   })),
 });
 const DIAGNOSE = `You are a senior product designer doing a design review of one screen of a team's real React + Tailwind product, inside Tovi (a Figma-style editor that changes the real code).
@@ -582,6 +586,7 @@ Rules:
 - One finding per issue: when the same problem repeats (three cards, five greys), make it one finding listing every element id it covers.
 - locs must be ids from the element list, pointing at the exact elements to change.
 - fix is an instruction Tovi can carry out with style, layout and structure edits on those elements, using the project's tokens and scales. No behaviour, data or copy rewrites.
+- quick: for simple measured fixes (a spacing or size step, a colour token, alignment, radius, weight), also give the exact edits so Tovi can apply them instantly. Use only scale steps and token names from this project. For anything needing judgment or structure changes, leave quick null.
 - Write for a designer: plain words everywhere, including fix (the designer reads and may edit it). No class names, code or CSS values in backticks: say "your muted colour", "the display font", "one step tighter line height", not text-muted or leading-tight.`;
 export async function diagnose({ targets, screen = null, focus = null, context = null, scope = 'page' }, theme) {
   const { provider, model, key } = aiConfig();
@@ -611,13 +616,13 @@ export async function diagnose({ targets, screen = null, focus = null, context =
     d = res.parsed_output;
     if (!d) throw new KerfError('The review couldn’t be read. Try again.');
   } else {
-    const parse = (raw) => { let o; try { o = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The review couldn’t be read. Try again.'); } const r = Diagnosis.safeParse(o); if (!r.success) throw new KerfError('The review couldn’t be read. Try again.'); return r.data; };
+    const parse = (raw) => { let o; try { o = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The review couldn’t be read. Try again.'); } (o?.findings || []).forEach((f) => { if (f && f.quick === undefined) f.quick = null; }); const r = Diagnosis.safeParse(o); if (!r.success) throw new KerfError('The review couldn’t be read. Try again.'); return r.data; };
     const { $schema, ...schema } = z.toJSONSchema(Diagnosis, { io: 'input' });
     ({ p: d } = await askOther(provider, model, key, { systemText, history8: [], lastContent, schema, parse }));
   }
   // Keep only findings that point at elements we were given; most important first.
   const ids = new Set(targets.map((t) => t.loc));
   const rank = { high: 0, medium: 1, low: 2 };
-  const findings = (d.findings || []).map((f) => ({ ...f, locs: [...new Set((f.locs || []).filter((l) => ids.has(l)))] })).filter((f) => f.locs.length && f.fix).sort((a, b) => rank[a.severity] - rank[b.severity]).slice(0, scope === 'section' ? 5 : 8);
+  const findings = (d.findings || []).map((f) => { const locs = [...new Set((f.locs || []).filter((l) => ids.has(l)))]; const quick = (f.quick || []).filter((q) => locs.includes(q.loc) && q.ops?.length); return { ...f, locs, quick: quick.length ? quick : null }; }).filter((f) => f.locs.length && f.fix).sort((a, b) => rank[a.severity] - rank[b.severity]).slice(0, scope === 'section' ? 5 : 8);
   return { summary: d.summary, findings };
 }

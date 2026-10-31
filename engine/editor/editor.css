@@ -85,8 +85,8 @@ aside[hidden]{display:none!important}
 .scroll{overflow:auto;flex:1;min-height:0;scrollbar-width:thin}
 .empty{display:flex;flex-direction:column;gap:6px;padding:16px;color:var(--ink3);line-height:18px}
 .empty b{color:var(--ink);font-weight:500}
-.sec{display:flex;flex-direction:column;gap:8px;padding:12px;border-bottom:1px solid var(--line)}
-.secH{display:flex;align-items:center;justify-content:space-between;min-height:16px;font-weight:600;font-size:11px}
+.sec{display:flex;flex-direction:column;gap:10px;padding:14px 12px 16px;border-bottom:1px solid var(--line)}
+.secH{display:flex;align-items:center;justify-content:space-between;min-height:20px;font-weight:600;font-size:12px;color:var(--ink)}
 .head .nm{display:flex;align-items:center;gap:6px;font-size:13px;line-height:18px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .path{color:var(--ink3);font:400 11px/14px 'Geist Mono',ui-monospace,monospace;margin-top:-4px;word-break:break-all}
 .note{color:var(--ink3);line-height:16px}
@@ -97,7 +97,7 @@ aside[hidden]{display:none!important}
 .cr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px;align-items:center}
 .kv{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:8px;color:var(--ink2)}
 .kv>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.inp{display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;background:var(--raised);border:1px solid transparent;border-radius:5px;min-width:0;position:relative}
+.inp{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;background:var(--raised);border:1px solid transparent;border-radius:6px;min-width:0;position:relative;transition:border-color .12s,background .12s}
 .inp:hover{border-color:var(--line)}
 .inp:focus-within{border-color:var(--select)}
 .inp.changed{box-shadow:inset 2px 0 0 var(--intent)}
@@ -1114,3 +1114,46 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .inp.area{height:auto;min-height:28px;align-items:stretch;padding:5px 8px}
 .inp.area textarea{flex:1;min-width:0;width:100%;resize:none;padding:0;margin:0;background:transparent;border:0;outline:none;color:var(--ink);font:inherit;line-height:18px;overflow-y:auto;display:block}
 .inp.area + .note{display:block;margin-top:6px}
+
+/* Labelled fields (Weight, Size, Line height…), like Figma's panel */
+.fl{display:flex;flex-direction:column;gap:5px;min-width:0}
+.flab{font-size:11px;line-height:14px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r2c.lab{align-items:end}
+.r2:has(.fl){row-gap:12px}
+/* The design-system step beside a number: "4", "lg"; amber "custom" when it's off the scale */
+.inp .u.step{font:500 10px/16px 'Geist Mono',ui-monospace,monospace;padding:0 4px;border-radius:4px;background:var(--panel);color:var(--ink3)}
+.inp .u.step.off{color:var(--intent)}
+/* A colour's own opacity, beside the colour */
+.cr .inp.ca{width:64px}
+.cr:has(.ca){grid-template-columns:minmax(0,1fr) 64px}
+/* What changed in the code, under each edit's note */
+.toast .codeLine{font:400 11px/16px 'Geist Mono',ui-monospace,monospace;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Panel polish (Framer-level finish): roomier sections, calmer titles, softer fields, quieter icons */
+#panel{font-size:12px}
+#panel .sec{gap:12px;padding:16px 16px 18px}
+#panel .secH{font:500 13px/18px Geist,system-ui,sans-serif;letter-spacing:-.005em}
+#panel .sec.head .secH .nm{font-weight:500}
+#panel .inp{height:32px;padding:0 10px;gap:8px;border-radius:8px;background:rgba(var(--hi),.055)}
+#panel .inp:hover{background:rgba(var(--hi),.075);border-color:transparent}
+#panel .inp:focus-within{background:rgba(var(--hi),.075);border-color:var(--select)}
+#panel .inp .ic{color:var(--ink3);opacity:.85}
+#panel .inp.area{height:auto;padding:8px 10px}
+#panel .r2,#panel .r2c{column-gap:8px}
+#panel .r2:has(.fl),#panel .r2c.lab{row-gap:14px}
+#panel .r2c{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px}
+#panel .fl{gap:6px}
+#panel .flab{font-size:11px;color:var(--ink3)}
+#panel .ib{width:32px;height:32px;border-radius:8px;color:var(--ink3)}
+#panel .ib:hover{background:rgba(var(--hi),.075);color:var(--ink)}
+#panel .ib.on{background:rgba(var(--hi),.12);color:var(--ink)}
+#panel .ib.sm{width:24px;height:24px;border-radius:6px;margin:-3px -4px -3px 0}
+#panel .ibs,#panel .seg{height:32px;padding:3px;gap:2px;border-radius:8px;background:rgba(var(--hi),.055)}
+#panel .ibs .ib{height:26px;border-radius:6px}
+#panel .seg button{height:26px;border-radius:6px;color:var(--ink3)}
+#panel .seg button.on,#panel .ibs .ib.on{background:rgba(var(--hi),.13);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.25)}
+#panel .cchip{width:16px;height:16px;border-radius:4px}
+#panel .note{line-height:17px}
+#panel .cr .inp.ca{width:68px}
+#panel .cr:has(.ca){grid-template-columns:minmax(0,1fr) 68px;gap:8px}
+:root[data-theme="light"] #panel .seg button.on,:root[data-theme="light"] #panel .ibs .ib.on{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12)}

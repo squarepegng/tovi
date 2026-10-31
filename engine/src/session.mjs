@@ -156,8 +156,28 @@ export function createSession(webRoot, editor) {
   }
   const ghJson = (args, cwd) => { const r = spawnSync('gh', args, { cwd, encoding: 'utf8' }); try { return r.status === 0 ? JSON.parse(r.stdout) : null; } catch { return null; } };
 
+  // Build the app (Vite projects) into a throwaway folder, so a change that breaks the build never reaches
+  // developers. Only a failure in a file Tovi changed blocks the hand off: a build that was already broken
+  // before Tovi isn't the designer's problem to fix.
+  function buildCheck(info) {
+    const vite = path.join(webRoot, 'node_modules', '.bin', 'vite');
+    const hasConfig = ['vite.config.js', 'vite.config.mjs', 'vite.config.ts', 'vite.config.mts', 'vite.config.cjs'].some((f) => fs.existsSync(path.join(webRoot, f)));
+    if (!hasConfig || !fs.existsSync(vite)) return;
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'tovi-build-'));
+    try {
+      const r = spawnSync(vite, ['build', '--outDir', out, '--emptyOutDir', '--logLevel', 'error'], { cwd: webRoot, encoding: 'utf8', timeout: 120000, env: { ...process.env, NODE_ENV: 'production' } });
+      if (r.status === 0 || r.error) return;
+      const log = `${r.stderr || ''}\n${r.stdout || ''}`;
+      const hit = info.files.find((f) => log.includes(path.basename(f)));
+      if (!hit) return;
+      const lines = log.split('\n').map((l) => l.trim()).filter(Boolean), at = lines.findIndex((l) => /^error during build/i.test(l));
+      const line = (at > -1 ? lines[at + 1] : lines.find((l) => /error/i.test(l) && l.length < 300)) || 'the build failed';
+      throw new KerfError(`The app doesn’t build with the change in ${path.basename(hit)} (${line.replace(/^\[?error\]?:?\s*/i, '')}), so Tovi won’t send it. Undo the last change and try again.`);
+    } finally { fs.rmSync(out, { recursive: true, force: true }); }
+  }
+
   // Commit Tovi's edits on a kerf/ branch, push it, and open (or update) the pull request.
-  //  - every changed code file must still parse, so a broken change never reaches developers
+  //  - every changed code file must still parse, and the app must still build, so a broken change never reaches developers
   //  - a branch whose PR was merged or closed isn't reused: a new branch and PR are made
   //  - the PR targets the branch the designer started from
   //  - if the push fails, the commit stays on the branch and the next Hand off just pushes again
@@ -183,6 +203,7 @@ export function createSession(webRoot, editor) {
     const base = onKerf ? handoff.bases[info.branch] || null : info.branch;
     const plan = { branch, base, files: info.files, title };
     if (dryRun) return { dryRun: true, reuse, unpushed, ...plan };
+    buildCheck(info);
     const id = [];
     try { git(['config', 'user.email'], info.root); } catch {
       // No git identity in this copy: use the GitHub account's noreply address if gh knows it.
