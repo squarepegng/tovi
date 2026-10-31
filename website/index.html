@@ -7,81 +7,88 @@
 <meta name="description" content="Tovi opens the app your team already built, so you can fix it by hand like in Figma. Every edit lands in your code and goes to developers as one pull request.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wdth,wght@0,75..125,200..900;1,75..125,200..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wdth,wght@0,75..125,200..900;1,75..125,200..900&family=JetBrains+Mono:wght@400;500&family=Instrument+Serif&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='3' width='5.5' height='10' rx='1.5' fill='%238A57BC'/%3E%3Crect x='8.5' y='3' width='5.5' height='10' rx='1.5' fill='%23FCBDDD'/%3E%3C/svg%3E">
 <style>
-/* Tovi's own palette: the page is a design canvas, like the one inside Tovi. */
 :root{
-  --canvas:#1B1B1E;
-  --dot:rgba(255,255,255,.055);
-  --frame:#121214;
-  --raised:#26262B;
-  --edge:rgba(255,255,255,.08);
-  --edge2:rgba(255,255,255,.14);
-  --ink:#F2F1EE;
-  --ink2:#A9A8B0;
-  --ink3:#7A7981;
-  --sel:#2B66D9;   /* what you're touching */
-  --brand:#8A57BC; /* Tovi */
-  --pink:#FCBDDD;  /* Tovi's AI */
-  --max:1180px;
+  --page:#0D0D0F;        /* outside the column */
+  --col:#111113;         /* the column */
+  --band:#141417;        /* alternate bands */
+  --raised:#232328;
+  --line:rgba(255,255,255,.075);
+  --line2:rgba(255,255,255,.13);
+  --hatch:rgba(255,255,255,.035);
+  --ink:#F2F1EE; --ink2:#A9A8B0; --ink3:#77767E;
+  --sel:#2B66D9; --brand:#8A57BC; --pink:#FCBDDD;
+  --ruler:24px; --colw:1180px;
 }
 *{box-sizing:border-box;margin:0}
 html{scroll-behavior:smooth}
 html,body{overflow-x:clip}
-body{background-color:var(--canvas);background-image:radial-gradient(var(--dot) 1px,transparent 1.2px);background-size:22px 22px;color:var(--ink);font:400 17px/1.6 'Mona Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{background:var(--page);color:var(--ink);font:400 17px/1.6 'Mona Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
 img{display:block;max-width:100%;height:auto}
 button{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--sel);outline-offset:3px;border-radius:6px}
-.wrap{max-width:var(--max);margin:0 auto;padding:0 28px}
 h1,h2,h3{font-weight:500;text-wrap:balance}
 p{text-wrap:pretty}
 .vh{position:absolute;left:-9999px}
 
+/* ---------- canvas chrome: rulers, hatched margins, the framed column ---------- */
+.rx,.ry{position:fixed;z-index:30;background:#0B0B0D;color:#55545B;font:500 10px/1 'Mona Sans',system-ui,sans-serif;pointer-events:none}
+.rx{left:0;right:0;top:0;height:var(--ruler);box-shadow:inset 0 -1px 0 var(--line);background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.14) 0 1px,transparent 1px 10px),repeating-linear-gradient(90deg,rgba(255,255,255,.22) 0 1px,transparent 1px 50px);background-size:100% 5px,100% 9px;background-position:var(--ox,0) 100%,var(--ox,0) 100%;background-repeat:repeat-x}
+.ry{left:0;top:0;bottom:0;width:var(--ruler);box-shadow:inset -1px 0 0 var(--line);overflow:hidden}
+.ry .ticks{position:absolute;inset:-200px 0 -200px 0;background-image:repeating-linear-gradient(180deg,rgba(255,255,255,.14) 0 1px,transparent 1px 10px),repeating-linear-gradient(180deg,rgba(255,255,255,.22) 0 1px,transparent 1px 50px);background-size:5px 100%,9px 100%;background-position:100% 0,100% 0;background-repeat:repeat-y}
+.rx span{position:absolute;top:5px;translate:3px 0}
+.ry span{position:absolute;left:4px;writing-mode:vertical-rl;rotate:180deg}
+.corner{position:fixed;left:0;top:0;width:var(--ruler);height:var(--ruler);background:#0B0B0D;z-index:31;box-shadow:inset -1px -1px 0 var(--line)}
+.shell{padding-left:var(--ruler);padding-top:var(--ruler);background-image:repeating-linear-gradient(-45deg,var(--hatch) 0 1px,transparent 1px 7px)}
+.col{max-width:var(--colw);margin:0 auto;background:var(--col);box-shadow:-1px 0 0 var(--line),1px 0 0 var(--line)}
+.band{position:relative;box-shadow:0 1px 0 var(--line)}
+.band.alt{background:var(--band)}
+.band.hatch{background-image:repeating-linear-gradient(-45deg,var(--hatch) 0 1px,transparent 1px 7px)}
+.in{padding:0 40px}
+
 /* nav */
-.nav{position:fixed;inset:0 0 auto;z-index:20;transition:background-color .2s ease-out,box-shadow .2s ease-out}
-.nav.on{background:rgba(27,27,30,.84);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);box-shadow:0 1px 0 var(--edge)}
-.nav .wrap{display:flex;align-items:center;height:68px;gap:36px}
+.nav{position:sticky;top:var(--ruler);z-index:20;background:rgba(17,17,19,.86);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);box-shadow:0 1px 0 var(--line)}
+.nav .in{display:flex;align-items:center;height:64px;gap:34px}
 .logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:18px;letter-spacing:-.01em;font-variation-settings:'wdth' 108}
-.links{display:flex;gap:28px;font-size:14.5px;color:var(--ink2)}
+.links{display:flex;gap:26px;font-size:14.5px;color:var(--ink2)}
 .links a{transition:color .15s ease-out}
 .links a:hover{color:var(--ink)}
 .nav .btn{margin-left:auto}
 
-/* buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 20px;border-radius:12px;border:0;cursor:pointer;font-weight:500;font-size:15px;letter-spacing:-.005em;transition-property:background-color,scale;transition-duration:.15s;transition-timing-function:ease-out}
+/* buttons: Tovi purple with a glass sheen on the top half */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 20px;border-radius:12px;border:0;cursor:pointer;font-weight:500;font-size:15px;transition-property:filter,scale,background-color;transition-duration:.15s;transition-timing-function:ease-out}
 .btn:active{scale:.96}
-.btn.brand{background:var(--brand);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 1px 2px rgba(0,0,0,.4)}
-.btn.brand:hover{background:#9563C6}
-.btn.quiet{background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--edge2)}
-.btn.quiet:hover{background:rgba(255,255,255,.1)}
-.btn.sm{height:36px;padding:0 15px;border-radius:10px;font-size:14px}
+.btn.brand{color:#fff;background:linear-gradient(rgba(255,255,255,.12) 0%,rgba(255,255,255,.06) 49%,rgba(0,0,0,0) 51%),linear-gradient(#9663C9,#7A49AC);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(138,87,188,.25)}
+.btn.brand:hover{filter:brightness(1.08)}
+.btn.quiet{background:linear-gradient(rgba(255,255,255,.06) 0%,rgba(255,255,255,.03) 49%,rgba(0,0,0,0) 51%),#1C1C20;box-shadow:inset 0 0 0 1px var(--line2)}
+.btn.quiet:hover{background-color:#232328}
+.btn.sm{height:34px;padding:0 14px;border-radius:10px;font-size:14px}
 
 /* ---------- hero: the headline is a selected element ---------- */
-.hero{padding:150px 0 0;position:relative}
-.pill{display:inline-flex;align-items:center;gap:10px;height:32px;padding:0 14px 0 5px;border-radius:99px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--edge);font-size:14px;color:var(--ink2);margin-bottom:64px}
+.hero{padding:92px 0 96px}
+.pill{display:inline-flex;align-items:center;gap:10px;height:32px;padding:0 14px 0 5px;border-radius:99px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--line);font-size:14px;color:var(--ink2);margin-bottom:64px}
 .pill b{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:99px;background:var(--pink);color:#3A1730;font-size:12.5px;font-weight:600}
 .stage{position:relative}
 .sel{position:relative;display:inline-block;padding:6px 10px 10px;margin-left:-10px}
 .sel::before{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 1.5px var(--sel);pointer-events:none}
-.sel .h{position:absolute;width:9px;height:9px;background:#fff;box-shadow:0 0 0 1.5px var(--sel);border-radius:1.5px}
-.sel .h.tl{left:-4px;top:-4px}.sel .h.tr{right:-4px;top:-4px}.sel .h.bl{left:-4px;bottom:-4px}.sel .h.br{right:-4px;bottom:-4px}
+.h{position:absolute;width:9px;height:9px;background:#fff;box-shadow:0 0 0 1.5px var(--sel);border-radius:1.5px}
+.h.tl{left:-4px;top:-4px}.h.tr{right:-4px;top:-4px}.h.bl{left:-4px;bottom:-4px}.h.br{right:-4px;bottom:-4px}
 .sel .tag{position:absolute;left:0;bottom:calc(100% + 6px);display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:5px;background:var(--sel);color:#fff;font-size:12.5px;font-weight:500;white-space:nowrap}
 .sel .dims{position:absolute;left:50%;top:calc(100% + 8px);translate:-50% 0;height:22px;padding:0 7px;border-radius:5px;background:var(--sel);color:#fff;font-size:12px;font-weight:500;line-height:22px;font-variant-numeric:tabular-nums;white-space:nowrap}
-h1{--fs:60;font-size:calc(var(--fs) * 1px * var(--k,1));line-height:1.02;letter-spacing:-.035em;font-weight:500;font-variation-settings:'wdth' 104;transition:font-size .55s cubic-bezier(.2,0,0,1);white-space:nowrap}
-.lead{max-width:520px;color:var(--ink2);font-size:18.5px;line-height:1.55;margin:46px 0 30px}
+h1{--fs:60;font-size:calc(var(--fs) * 1px * var(--k,1));line-height:1.02;letter-spacing:-.035em;font-variation-settings:'wdth' 104;transition:font-size .55s cubic-bezier(.2,0,0,1);white-space:nowrap}
+.lead{max-width:540px;color:var(--ink2);font-size:18.5px;line-height:1.55;margin:46px 0 30px}
 .cta{display:flex;gap:10px;flex-wrap:wrap}
-
-/* the little properties panel, styled like Tovi's */
-.panel{position:absolute;right:0;top:-6px;width:292px;padding:14px;border-radius:16px;background:rgba(18,18,20,.92);box-shadow:0 0 0 1px var(--edge),0 24px 60px rgba(0,0,0,.45);font-size:13px;backdrop-filter:blur(10px)}
+.panel{position:absolute;right:0;top:-6px;width:292px;padding:14px;border-radius:16px;background:rgba(20,20,23,.94);box-shadow:0 0 0 1px var(--line2),0 24px 60px rgba(0,0,0,.5);font-size:13px}
 .panel .t{font-weight:500;font-size:13.5px;display:flex;justify-content:space-between;margin-bottom:12px}
 .panel .t span{color:var(--ink3);font-weight:400}
 .pl{font-size:11.5px;color:var(--ink3);margin-bottom:6px}
-.field{display:flex;align-items:center;gap:8px;height:34px;padding:0 6px 0 10px;white-space:nowrap;border-radius:10px;background:rgba(255,255,255,.055);font-variant-numeric:tabular-nums}
+.field{display:flex;align-items:center;gap:8px;height:34px;padding:0 6px 0 10px;border-radius:10px;background:rgba(255,255,255,.055);font-variant-numeric:tabular-nums;white-space:nowrap}
 .field .ic{color:var(--ink3);font-size:12px;font-weight:600}
 .field .v{flex:1}
-.field .stp{font-size:11px;padding:1px 6px;border-radius:5px;background:var(--frame);color:var(--ink2);font-family:'JetBrains Mono',monospace}
+.field .stp{font-size:11px;padding:1px 6px;border-radius:5px;background:#0E0E10;color:var(--ink2);font-family:'JetBrains Mono',monospace}
 .r2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .slider{position:relative;height:48px;margin:2px 8px 0;cursor:ew-resize;touch-action:none}
 .slider .track{position:absolute;left:0;right:0;top:12px;height:2px;border-radius:2px;background:rgba(255,255,255,.12)}
@@ -90,90 +97,219 @@ h1{--fs:60;font-size:calc(var(--fs) * 1px * var(--k,1));line-height:1.02;letter-
 .slider .knob{position:absolute;top:5px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.2),0 2px 6px rgba(0,0,0,.4);translate:-8px 0}
 .slider .lbl{position:absolute;top:28px;translate:-50% 0;font-size:10.5px;color:var(--ink3);transition:color .15s ease-out}
 .slider .lbl.on{color:var(--ink)}
-
-/* the "saved" note, as in Tovi */
-.toast{position:absolute;right:0;top:-92px;display:flex;align-items:center;gap:14px;padding:10px 10px 10px 14px;border-radius:12px;background:var(--raised);box-shadow:0 0 0 1px var(--edge),0 16px 40px rgba(0,0,0,.45);font-size:13.5px;opacity:0;translate:0 8px;transition:opacity .25s ease-out,translate .25s ease-out;pointer-events:none;max-width:min(440px,100%)}
+.toast{position:absolute;right:0;top:-92px;display:flex;align-items:center;gap:14px;padding:10px 10px 10px 14px;border-radius:12px;background:var(--raised);box-shadow:0 0 0 1px var(--line),0 16px 40px rgba(0,0,0,.45);font-size:13.5px;opacity:0;translate:0 8px;transition:opacity .25s ease-out,translate .25s ease-out;pointer-events:none;max-width:min(440px,100%)}
 .toast.on{opacity:1;translate:0 0;pointer-events:auto}
-.toast .code{display:block;font:400 12px/1.5 'JetBrains Mono',monospace;color:var(--ink2);margin-top:2px}
-.toast .code em{font-style:normal;color:#9BE3B7}
-.toast .undo{height:28px;padding:0 10px;border-radius:8px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px var(--edge2);font-size:12.5px;border:0;cursor:pointer}
-
+.code{display:block;font:400 12px/1.5 'JetBrains Mono',monospace;color:var(--ink2);margin-top:2px}
+.code em{font-style:normal;color:#9BE3B7}
+.undo{height:28px;padding:0 10px;border-radius:8px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px var(--line2);font-size:12.5px;border:0;cursor:pointer}
 .cursor{position:absolute;left:0;top:0;z-index:5;pointer-events:none;transition:translate .7s cubic-bezier(.3,0,.2,1),opacity .3s;opacity:0}
 .cursor.on{opacity:1}
 .cursor svg{filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
 
-/* product window */
-.window{margin-top:96px;border-radius:18px;padding:8px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03));box-shadow:0 0 0 1px rgba(0,0,0,.6),0 50px 120px rgba(0,0,0,.55)}
-.window img{border-radius:10px;outline:1px solid rgba(255,255,255,.1);outline-offset:-1px}
-.caption{display:flex;justify-content:space-between;gap:20px;color:var(--ink3);font-size:13.5px;margin-top:14px;padding:0 4px}
+/* ---------- the Tovi window ---------- */
+.showcase{position:relative;padding:56px 40px 64px;overflow:hidden}
+.showcase::before{content:"";position:absolute;left:8%;right:8%;bottom:-30%;height:80%;background:radial-gradient(50% 50% at 35% 50%,rgba(138,87,188,.45),transparent 70%),radial-gradient(45% 50% at 70% 55%,rgba(252,189,221,.22),transparent 70%),radial-gradient(40% 45% at 85% 70%,rgba(222,150,106,.18),transparent 70%);filter:blur(40px);pointer-events:none}
+.tvwrap{position:relative;width:100%;height:calc(var(--S,1) * 760px)}
+.tv{position:absolute;left:0;top:0;width:1240px;height:760px;transform:scale(var(--S,1));transform-origin:0 0;border-radius:14px;background:#1B1B1E;box-shadow:0 0 0 1px rgba(255,255,255,.12),0 0 0 2px rgba(0,0,0,.6),0 60px 140px rgba(0,0,0,.6);overflow:hidden;font:400 12px/1.4 'Mona Sans',system-ui,sans-serif;color:#EDEDF0;user-select:none}
+.tv *{transition-timing-function:cubic-bezier(.2,0,0,1)}
+.tv-top{display:flex;align-items:center;height:44px;padding:0 12px;gap:12px;background:#1B1B1E;box-shadow:inset 0 -1px 0 #2C2C31}
+.tv-dots{display:flex;gap:7px;margin-right:8px}.tv-dots i{width:11px;height:11px;border-radius:50%;background:#FF5F57}.tv-dots i:nth-child(2){background:#FEBC2E}.tv-dots i:nth-child(3){background:#28C840}
+.tv-crumb{color:#8B8B95}.tv-crumb b{color:#EDEDF0;font-weight:500}
+.tv-seg{margin:0 auto;display:flex;gap:2px;padding:3px;border-radius:8px;background:#26262B}
+.tv-seg span{padding:3px 10px;border-radius:6px;color:#8B8B95}.tv-seg span.on{background:#3A3A40;color:#EDEDF0}
+.tv-zoom{color:#8B8B95}
+.tv-hand{position:relative;display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:7px;background:#8A57BC;color:#fff;font-weight:500}
+.tv-hand .n{min-width:16px;height:16px;border-radius:8px;background:rgba(255,255,255,.22);font-size:10.5px;display:grid;place-items:center;padding:0 4px;font-variant-numeric:tabular-nums}
+.tv-body{display:grid;grid-template-columns:280px 1fr 268px;height:716px}
+.tv-left{box-shadow:inset -1px 0 0 #2C2C31;display:flex;flex-direction:column;min-height:0}
+.tv-tabs{display:flex;gap:4px;padding:10px 12px;box-shadow:inset 0 -1px 0 #2C2C31}
+.tv-tabs span{padding:4px 10px;border-radius:6px;color:#8B8B95}.tv-tabs span.on{background:#26262B;color:#EDEDF0}
+.tv-chat{flex:1;padding:14px 14px 8px;display:flex;flex-direction:column;justify-content:flex-end;gap:12px;overflow:hidden}
+.tv-empty{margin:auto;text-align:center;color:#8B8B95;max-width:200px;transition:opacity .3s}
+.tv-empty b{display:block;color:#EDEDF0;font-size:13.5px;font-weight:500;margin:10px 0 4px}
+.tv-av{width:40px;height:40px;margin:0 auto;border-radius:50%;background:radial-gradient(circle at 35% 30%,#E7C6F4,#A770D0 55%,#7A49AC);box-shadow:0 6px 16px rgba(138,87,188,.4)}
+.tv-msg{opacity:0;translate:0 6px;transition:opacity .3s,translate .3s}
+.tv-msg.on{opacity:1;translate:0 0}
+.tv-you{align-self:flex-end;max-width:85%;padding:9px 12px;border-radius:12px 12px 4px 12px;background:#2D2D32;font-size:12.5px}
+.tv-status{display:flex;align-items:center;gap:8px;color:#8B8B95}
+.tv-status .tv-av{width:16px;height:16px;margin:0;box-shadow:none}
+.tv-shim{background:linear-gradient(100deg,#8B8B95 30%,#F4D7E8 50%,#8B8B95 70%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:tvshim 1.4s linear infinite}
+@keyframes tvshim{to{background-position:-200% 0}}
+.tv-reply{font-size:12.5px;color:#D8D7DD}
+.tv-card{margin-top:8px;border-radius:10px;box-shadow:0 0 0 1px #2C2C31;padding:9px 10px;display:flex;align-items:center;gap:8px;color:#B0B0BA}
+.tv-card .ok{width:14px;height:14px;border-radius:50%;background:#7FD3A2;display:grid;place-items:center}
+.tv-card .u{margin-left:auto;color:#EDEDF0}
+.tv-compose{margin:8px 12px 12px;border-radius:12px;background:#232327;box-shadow:0 0 0 1px #2C2C31;padding:9px 10px 8px}
+.tv-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;background:rgba(138,87,188,.18);color:#D9C2F0;box-shadow:inset 0 0 0 1px rgba(138,87,188,.4);font-size:11.5px;transition:opacity .2s}
+.tv-input{min-height:34px;padding:8px 2px 4px;color:#EDEDF0;font-size:12.5px}
+.tv-input:empty::before{content:"Describe a change, or follow up…";color:#6E6E78}
+.tv-input .car{display:inline-block;width:1.5px;height:14px;background:#B693FF;vertical-align:-2px;margin-left:1px;animation:tvblink 1s steps(1) infinite}
+@keyframes tvblink{50%{opacity:0}}
+.tv-crow{display:flex;justify-content:space-between;align-items:center;color:#8B8B95}
+.tv-send{width:24px;height:24px;border-radius:50%;background:#3A3A40;display:grid;place-items:center;transition:background .2s}
+.tv-send.go{background:#8A57BC}
+.tv-canvas{position:relative;background-color:#141416;background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1.2px);background-size:18px 18px;overflow:hidden}
+.tv-label{position:absolute;left:28px;top:16px;color:#8B8B95}.tv-label b{color:#EDEDF0;font-weight:500;margin-right:6px}
+.tv-frame{position:absolute;left:28px;top:38px;width:636px;height:600px;overflow:hidden;border-radius:2px;box-shadow:0 0 0 1px #2C2C31,0 20px 50px rgba(0,0,0,.45)}
+.tv-bar{position:absolute;left:50%;bottom:16px;translate:-50% 0;display:flex;gap:2px;padding:5px;border-radius:12px;background:#26262B;box-shadow:0 0 0 1px #34343A,0 10px 30px rgba(0,0,0,.4)}
+.tv-bar span{width:32px;height:30px;border-radius:8px;display:grid;place-items:center;color:#B0B0BA}
+.tv-bar span.on{background:#8A57BC;color:#fff}
+.tv-bar i{width:1px;margin:5px 3px;background:#3A3A40}
+/* the app inside: Aster at 1024px, scaled into the frame */
+.aster{width:1024px;transform:scale(.62109);transform-origin:0 0;transition:translate .9s cubic-bezier(.2,0,0,1);background:#090A0E;color:#F0F2F7;font-family:Inter,system-ui,sans-serif}
+.a-nav{position:absolute;left:0;right:0;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:22px 40px}
+.a-logo{font:400 30px 'Instrument Serif',serif}
+.a-links{display:flex;gap:30px;font-size:14px;color:rgba(240,242,247,.8)}
+.a-book{padding:9px 16px;border-radius:99px;background:#F0F2F7;color:#090A0E;font-size:13px;font-weight:500}
+.a-hero{position:relative;height:610px;display:flex;align-items:flex-end;overflow:hidden}
+.a-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.a-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,#090A0E,rgba(9,10,14,.4) 45%,transparent)}
+.a-hc{position:relative;z-index:1;padding:0 40px 56px}
+.a-eye{font-size:11.5px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:#84F0BA}
+.a-h1{font:400 72px/.95 'Instrument Serif',serif;margin-top:16px;transition:font-size .9s cubic-bezier(.2,0,0,1);display:inline-block}
+.a-p{margin-top:18px;max-width:520px;font-size:16.5px;line-height:1.55;color:rgba(240,242,247,.8)}
+.a-btns{display:flex;gap:10px;margin-top:26px}
+.a-btns span{padding:12px 20px;border-radius:99px;background:#84F0BA;color:#090A0E;font-size:14px;font-weight:500}
+.a-btns span+span{background:transparent;color:#F0F2F7;box-shadow:inset 0 0 0 1px rgba(240,242,247,.2)}
+.a-places{padding:56px 40px 60px}
+.a-h2{font:400 46px/1.05 'Instrument Serif',serif;margin-top:10px}
+.a-eye.v{color:#C49CFF}
+.a-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:30px}
+.a-card{background:#11131A;border-radius:14px;overflow:hidden;transition:border-radius .8s,background .8s,box-shadow .8s}
+.a-card img{width:100%;height:170px;object-fit:cover;transition:height .8s}
+.a-cb{padding:16px;transition:padding .8s}
+.a-ct{font-size:16px;font-weight:600;transition:font-size .8s}
+.a-cd{font-size:13px;color:#9298AA;margin-top:4px}
+.a-grid.premium .a-card{border-radius:22px;background:#151824;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.a-grid.premium .a-card img{height:200px}
+.a-grid.premium .a-cb{padding:20px 20px 22px}
+.a-grid.premium .a-ct{font:400 25px/1.1 'Instrument Serif',serif}
+/* overlays */
+.tv-sel{position:absolute;z-index:4;box-shadow:inset 0 0 0 1.5px #2B66D9;pointer-events:none;opacity:0;transition:opacity .2s}
+.tv-sel.on{opacity:1}
+.tv-sel .h{width:7px;height:7px}
+.tv-sel .h.tl{left:-3px;top:-3px}.tv-sel .h.tr{right:-3px;top:-3px}.tv-sel .h.bl{left:-3px;bottom:-3px}.tv-sel .h.br{right:-3px;bottom:-3px}
+.tv-tag{position:absolute;left:-1px;bottom:calc(100% + 4px);height:18px;padding:0 6px;border-radius:4px;background:#2B66D9;color:#fff;font-size:10.5px;line-height:18px;white-space:nowrap;font-weight:500}
+.tv-dim{position:absolute;left:50%;top:calc(100% + 5px);translate:-50% 0;height:16px;padding:0 5px;border-radius:4px;background:#2B66D9;color:#fff;font-size:10px;line-height:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tv-hover{position:absolute;z-index:3;box-shadow:inset 0 0 0 1px rgba(43,102,217,.8);pointer-events:none;opacity:0;transition:opacity .15s}
+.tv-hover.on{opacity:1}
+.tv-pk{position:absolute;z-index:4;box-shadow:inset 0 0 0 1.5px #FCBDDD;border-radius:6px;pointer-events:none;opacity:0;transition:opacity .25s,left .8s,top .8s,width .8s,height .8s}
+.tv-pk.on{opacity:1}
+.tv-pk .tv-tag{background:#FCBDDD;color:#3A1730}
+/* right panel */
+.tv-right{box-shadow:inset 1px 0 0 #2C2C31;padding:0;position:relative}
+.tv-pstate{position:absolute;inset:0;padding:14px;transition:opacity .25s}
+.tv-hint{margin:6px 0 0;padding:16px;border-radius:10px;box-shadow:inset 0 0 0 1px #2C2C31;text-align:center;color:#8B8B95}
+.tv-hint b{display:block;color:#EDEDF0;font-weight:500;margin-bottom:4px}
+.tv-sec{padding:12px 0;box-shadow:inset 0 -1px 0 #2C2C31}
+.tv-sec h4{font-weight:500;font-size:12px;margin-bottom:10px}
+.tv-name{display:flex;align-items:center;gap:6px;font-weight:500;padding-bottom:12px;box-shadow:inset 0 -1px 0 #2C2C31}
+.tv-f{display:flex;align-items:center;gap:6px;height:28px;padding:0 8px;border-radius:7px;background:#26262B;color:#EDEDF0;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tv-f .k{color:#8B8B95}
+.tv-f .s{margin-left:auto;font:400 10px 'JetBrains Mono',monospace;padding:1px 5px;border-radius:4px;background:#141416;color:#B0B0BA}
+.tv-f.hot{box-shadow:0 0 0 1px #8A57BC}
+.tv-g2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tv-l{font-size:10.5px;color:#77767E;margin:8px 0 4px}
+.tv-sw{width:12px;height:12px;border-radius:3px;background:#F0F2F7;box-shadow:inset 0 0 0 1px rgba(0,0,0,.3)}
+.tv-seg2{display:flex;gap:2px;padding:2px;border-radius:7px;background:#26262B;margin-bottom:10px}.tv-seg2 span{flex:1;text-align:center;padding:4px;border-radius:5px;color:#8B8B95}.tv-seg2 span.on{background:#3A3A40;color:#EDEDF0}
+/* toast, popover, cursors */
+.tv-toast{position:absolute;left:50%;top:58px;translate:-50% -6px;z-index:8;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 12px;border-radius:10px;background:#2D2D32;box-shadow:0 0 0 1px #3A3A40,0 12px 30px rgba(0,0,0,.45);opacity:0;transition:opacity .25s,translate .25s;font-size:12px}
+.tv-toast.on{opacity:1;translate:-50% 0}
+.tv-toast .code{font-size:11px}
+.tv-toast .undo{height:24px;font-size:11.5px}
+.tv-pr{position:absolute;right:12px;top:50px;z-index:8;width:300px;padding:14px;border-radius:12px;background:#232327;box-shadow:0 0 0 1px #3A3A40,0 20px 50px rgba(0,0,0,.5);opacity:0;translate:0 -6px;transition:opacity .25s,translate .25s}
+.tv-pr.on{opacity:1;translate:0 0}
+.tv-pr .hd{display:flex;align-items:center;gap:8px;font-weight:500;font-size:13px}
+.tv-pr .hd i{width:18px;height:18px;border-radius:50%;background:#7FD3A2;display:grid;place-items:center}
+.tv-pr p{color:#B0B0BA;margin:8px 0 10px}
+.tv-pr .fl{font:400 11px/1.7 'JetBrains Mono',monospace;color:#8B8B95}
+.tv-pr .fl em{font-style:normal;color:#9BE3B7}
+.tv-cur{position:absolute;left:0;top:0;z-index:10;pointer-events:none;transition:translate .75s cubic-bezier(.3,0,.2,1),opacity .3s,scale .12s;opacity:0}
+.tv-cur.on{opacity:1}.tv-cur.press{scale:.88}
+.tv-tov{position:absolute;left:0;top:0;z-index:9;pointer-events:none;transition:translate .9s cubic-bezier(.3,0,.2,1),opacity .3s;opacity:0;display:flex;align-items:flex-start;gap:2px}
+.tv-tov.on{opacity:1}
+.tv-tov b{margin-top:14px;padding:2px 7px;border-radius:5px;background:#FCBDDD;color:#3A1730;font-size:10.5px;font-weight:600}
 
-/* who it's for (where Wonder shows logos) */
-.for{display:grid;grid-template-columns:repeat(3,1fr);margin-top:96px}
-.for div{padding:20px 28px 0 0;box-shadow:inset 0 1px 0 var(--edge2)}
-.for div+div{padding-left:28px}
-.for h3{font-size:16.5px;margin-bottom:4px}
-.for p{font-size:15px;color:var(--ink2)}
+/* ---------- sections ---------- */
+.sec{padding-top:120px;padding-bottom:120px}
+.sec.tight{padding-top:96px;padding-bottom:96px}
+h2{font-size:clamp(32px,3.8vw,46px);line-height:1.08;letter-spacing:-.03em;font-variation-settings:'wdth' 104}
+.sub{color:var(--ink2);font-size:18px;max-width:560px;margin-top:18px}
+.center{text-align:center}.center h2,.center .sub{margin-left:auto;margin-right:auto}
 
-/* sections */
-section{padding:170px 0 0}
-h2{font-size:clamp(34px,4.2vw,50px);line-height:1.06;letter-spacing:-.03em;font-variation-settings:'wdth' 104;max-width:780px}
-.sub{color:var(--ink2);font-size:18.5px;max-width:560px;margin-top:20px}
+/* logos marquee */
+.marquee{padding:30px 0;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.mtrack{display:flex;gap:64px;width:max-content;animation:mq 40s linear infinite}
+.mtrack span{display:flex;align-items:center;gap:10px;color:#8E8D95;font-size:17px;font-weight:500;white-space:nowrap}
+.mtrack svg{width:22px;height:22px;fill:currentColor}
+@keyframes mq{to{translate:-50% 0}}
+.mlabel{text-align:center;color:var(--ink3);font-size:13.5px;padding-top:34px}
 
-/* bring your AI */
-.ai{display:grid;grid-template-columns:5fr 6fr;gap:72px;align-items:center}
-.models{border-radius:18px;background:var(--frame);box-shadow:0 0 0 1px var(--edge),0 30px 80px rgba(0,0,0,.4);padding:8px}
-.model{display:flex;align-items:center;gap:14px;padding:14px 14px;border-radius:12px}
-.model+.model{box-shadow:inset 0 1px 0 var(--edge);border-radius:0}
-.model .mk{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-weight:600;font-size:14px}
-.model .nm{font-weight:500}
-.model .ds{font-size:14px;color:var(--ink3)}
-.model .st{margin-left:auto;font-size:13px;color:var(--ink2);display:flex;align-items:center;gap:7px}
-.model .st i{width:7px;height:7px;border-radius:50%;background:#7FD3A2}
-.model.on{background:rgba(255,255,255,.04)}
-.models .foot{padding:12px 14px 6px;font-size:13.5px;color:var(--ink3)}
+/* AI band: a composer that types, providers, a warm glow */
+.aiband{position:relative;overflow:hidden;padding:110px 0 120px}
+.aiband::after{content:"";position:absolute;left:0;right:0;bottom:-22%;height:70%;background:radial-gradient(45% 60% at 22% 85%,rgba(138,87,188,.7),transparent 72%),radial-gradient(40% 55% at 58% 95%,rgba(252,189,221,.3),transparent 72%),radial-gradient(38% 55% at 86% 88%,rgba(222,150,106,.45),transparent 72%);filter:blur(28px);pointer-events:none}
+.compose{position:relative;z-index:1;width:min(520px,100%);margin:0 auto;padding:14px 14px 12px;border-radius:16px;background:#1C1C20;box-shadow:0 0 0 1px var(--line2),0 30px 80px rgba(0,0,0,.5)}
+.compose .txt{min-height:52px;font-size:16px;color:var(--ink)}
+.compose .txt .car{display:inline-block;width:2px;height:18px;background:#B693FF;vertical-align:-3px;margin-left:1px;animation:tvblink 1s steps(1) infinite}
+.compose .row2{display:flex;align-items:center;gap:10px;color:var(--ink2);font-size:14px}
+.compose .model{display:flex;align-items:center;gap:7px}
+.compose .model svg{width:16px;height:16px}
+.compose .go{margin-left:auto;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(#9663C9,#7A49AC)}
+.provs{position:relative;z-index:1;display:flex;justify-content:center;margin:64px 0 26px}
+.provs span{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:#1E1E22;box-shadow:0 0 0 1px var(--line2),0 0 0 6px var(--col);margin-left:-12px}
+.provs span:first-child{margin-left:0}
+.provs svg{width:26px;height:26px}
+.aiband .center{position:relative;z-index:1}
 
-/* the flow: a real sequence */
-.steps{display:grid;grid-template-columns:repeat(4,1fr);margin-top:64px;counter-reset:s}
-.step{padding:22px 28px 0 0;box-shadow:inset 0 1px 0 var(--edge2)}
-.step+.step{padding-left:28px;box-shadow:inset 0 1px 0 var(--edge2),inset 1px 0 0 var(--edge)}
-.step::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.06);font-size:13px;font-weight:500;color:var(--ink2);margin-bottom:28px}
-.step h3{font-size:20px;letter-spacing:-.015em;margin-bottom:8px}
-.step p{color:var(--ink2);font-size:15.5px}
+/* grid cells, Wonder-style */
+.cells{display:grid;box-shadow:0 1px 0 var(--line),0 -1px 0 var(--line)}
+.cells>*{padding:36px 40px 40px;box-shadow:1px 0 0 var(--line)}
+.cells>*:last-child{box-shadow:none}
+.c4{grid-template-columns:repeat(4,1fr)}.c3{grid-template-columns:repeat(3,1fr)}
+.num{display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.06);font-size:13px;font-weight:500;color:var(--ink2);margin-bottom:40px}
+.cells h3{font-size:19px;letter-spacing:-.015em;margin-bottom:8px}
+.cells p{color:var(--ink2);font-size:15.5px}
 
+.kit{grid-template-columns:repeat(3,1fr)}
+.kit>*{box-shadow:1px 0 0 var(--line),0 1px 0 var(--line)}
+.kit>*:nth-child(3n){box-shadow:0 1px 0 var(--line)}
+.kit>*:nth-last-child(-n+3){box-shadow:1px 0 0 var(--line)}
+.kit>*:last-child{box-shadow:none}
+@media (max-width:900px){.kit>*,.kit>*:nth-child(3n),.kit>*:nth-last-child(-n+3){box-shadow:0 1px 0 var(--line)}}
+.kit .fi{width:40px;height:40px;padding:9px;border-radius:11px;color:var(--pink);background:rgba(252,189,221,.07);box-shadow:inset 0 0 0 1px rgba(252,189,221,.14);margin-bottom:30px}
+.kit h3{font-size:18px}
 /* feature rows */
-.row{display:grid;grid-template-columns:5fr 7fr;gap:72px;align-items:center;margin-top:128px}
-.row.flip{grid-template-columns:7fr 5fr}
-.row.flip .text{order:2}
-.text h3{font-size:30px;line-height:1.12;letter-spacing:-.025em;font-variation-settings:'wdth' 104}
-.text p{color:var(--ink2);margin-top:16px;max-width:430px}
-.view .label{font-size:12.5px;color:var(--ink3);margin:0 0 10px 2px;display:flex;justify-content:space-between}
-.crop{position:relative;overflow:hidden;border-radius:14px;background:var(--frame);box-shadow:0 0 0 1px var(--edge),0 30px 80px rgba(0,0,0,.4)}
+.frow{display:grid;grid-template-columns:5fr 7fr;align-items:stretch;box-shadow:0 1px 0 var(--line)}
+.frow.flip{grid-template-columns:7fr 5fr}
+.frow.flip .ftext{order:2;box-shadow:-1px 0 0 var(--line)}
+.ftext{padding:56px 40px;display:flex;flex-direction:column;justify-content:center;box-shadow:1px 0 0 var(--line)}
+.ftext h3{font-size:28px;line-height:1.14;letter-spacing:-.025em;font-variation-settings:'wdth' 104}
+.ftext p{color:var(--ink2);margin-top:14px;max-width:420px}
+.fview{padding:28px}
+.fview .label{font-size:12.5px;color:var(--ink3);margin:0 0 10px 2px;display:flex;justify-content:space-between}
+.fview .bd{position:relative;height:100%;min-height:360px;border-radius:18px;overflow:hidden;background-size:cover;background-position:center;padding:40px 40px 0;display:flex;align-items:flex-end;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.fview .bd::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(0,0,0,.25));pointer-events:none}
+.fview .bd .crop{position:relative;width:100%;border-radius:12px 12px 0 0;box-shadow:0 0 0 1px rgba(255,255,255,.18),0 -10px 40px rgba(0,0,0,.25),0 30px 80px rgba(0,0,0,.5)}
+.crop{position:relative;overflow:hidden;border-radius:12px;background:#0E0E10;box-shadow:0 0 0 1px var(--line2),0 24px 60px rgba(0,0,0,.45)}
 .crop img{position:absolute;max-width:none}
-.crop::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);pointer-events:none}
 
 /* code */
-.band{display:grid;grid-template-columns:5fr 7fr;gap:72px;align-items:center}
-.diff{border-radius:16px;background:var(--frame);box-shadow:0 0 0 1px var(--edge),0 30px 80px rgba(0,0,0,.4);overflow:hidden;font:400 14px/1.85 'JetBrains Mono',ui-monospace,monospace}
-.diff .bar{display:flex;align-items:center;justify-content:space-between;height:46px;padding:0 18px;box-shadow:inset 0 -1px 0 var(--edge);font-size:12.5px;color:var(--ink3)}
+.band2{display:grid;grid-template-columns:5fr 7fr;gap:56px;align-items:center}
+.diff{border-radius:14px;background:#0E0E10;box-shadow:0 0 0 1px var(--line2),0 30px 80px rgba(0,0,0,.4);overflow:hidden;font:400 14px/1.85 'JetBrains Mono',ui-monospace,monospace}
+.diff .bar{display:flex;align-items:center;justify-content:space-between;height:44px;padding:0 18px;box-shadow:inset 0 -1px 0 var(--line);font-size:12.5px;color:var(--ink3)}
 .diff .bar b{font-weight:400;color:var(--ink2)}
 .diff pre{margin:0;padding:18px 0;overflow-x:auto}
 .diff .l{display:block;padding:0 22px;white-space:pre}
-.diff .dim{color:var(--ink3)}
-.diff .del{background:rgba(240,106,95,.09);color:#F3A39B}
-.diff .add{background:rgba(127,211,162,.09);color:#9BE3B7}
+.diff .dim{color:var(--ink3)}.diff .del{background:rgba(240,106,95,.09);color:#F3A39B}.diff .add{background:rgba(127,211,162,.09);color:#9BE3B7}
 
 /* shipped */
-.head{display:flex;justify-content:space-between;align-items:end;gap:32px}
-.log{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:56px}
-.entry{padding:24px;border-radius:16px;background:var(--frame);box-shadow:0 0 0 1px var(--edge)}
 .entry time{font-size:13px;color:var(--ink3)}
-.entry h3{font-size:19px;letter-spacing:-.01em;margin:36px 0 8px}
-.entry p{font-size:15px;color:var(--ink2)}
+.entry h3{margin-top:36px}
 
 /* faq */
-.faq{display:grid;grid-template-columns:4fr 7fr;gap:72px}
-.faq .sub a{color:var(--ink);box-shadow:inset 0 -1px 0 var(--edge2)}
-details{box-shadow:inset 0 -1px 0 var(--edge)}
+.faq{display:grid;grid-template-columns:4fr 7fr;gap:56px}
+.faq .sub a{color:var(--ink);box-shadow:inset 0 -1px 0 var(--line2)}
+details{box-shadow:inset 0 -1px 0 var(--line)}
 summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:22px 0;cursor:pointer;font-size:18px;font-weight:500}
 summary::-webkit-details-marker{display:none}
 summary::after{content:"";width:11px;height:11px;flex:0 0 11px;background:linear-gradient(var(--ink2),var(--ink2)) center/11px 1.5px no-repeat,linear-gradient(var(--ink2),var(--ink2)) center/1.5px 11px no-repeat;transition:rotate .2s ease-out}
@@ -181,61 +317,62 @@ details[open] summary::after{rotate:45deg}
 details p{color:var(--ink2);padding:0 40px 24px 0;max-width:640px}
 
 /* closing */
-.close{padding:200px 0 160px;text-align:center}
-.close h2{margin:0 auto}
-.close .sub{margin:18px auto 36px}
-form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-input{height:44px;width:300px;max-width:100%;padding:0 16px;border-radius:12px;border:0;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--edge2);color:var(--ink);font:400 15px 'Mona Sans',system-ui,sans-serif;outline:none;transition:box-shadow .15s ease-out}
+.close{position:relative;overflow:hidden;padding:150px 0 160px}
+.close::after{content:"";position:absolute;left:10%;right:10%;bottom:-45%;height:90%;background:radial-gradient(40% 60% at 35% 70%,rgba(138,87,188,.5),transparent 70%),radial-gradient(35% 50% at 70% 80%,rgba(252,189,221,.22),transparent 70%);filter:blur(30px);pointer-events:none}
+.close .in{position:relative;z-index:1}
+form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+input{height:44px;width:300px;max-width:100%;padding:0 16px;border-radius:12px;border:0;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--line2);color:var(--ink);font:400 15px 'Mona Sans',system-ui,sans-serif;outline:none}
 input::placeholder{color:var(--ink3)}
 input:focus{box-shadow:inset 0 0 0 1.5px var(--sel)}
 .thanks{min-height:24px;margin-top:16px;color:var(--pink);font-size:15px}
-footer{box-shadow:0 -1px 0 var(--edge);padding:30px 0;color:var(--ink3);font-size:14px;background:var(--canvas)}
-footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+footer .in{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:28px;padding-bottom:28px;color:var(--ink3);font-size:14px}
 
-@media (max-width:1100px){.panel{position:relative;right:auto;top:auto;margin-top:48px;width:100%;max-width:340px}.toast{top:-80px;right:auto;left:0}.steps{grid-template-columns:1fr 1fr}.step:nth-child(3){padding-left:0;box-shadow:inset 0 1px 0 var(--edge2)}.step{padding-bottom:32px}}
+@media (max-width:1180px){.panel{position:relative;right:auto;top:auto;margin-top:48px;width:100%;max-width:340px}.toast{top:-80px;right:auto;left:0}}
 @media (max-width:900px){
+  :root{--ruler:0px}
+  .rx,.ry,.corner{display:none}
+  .in{padding:0 22px}
   h1{--k:.72}
   .links{display:none}
-  .row,.row.flip,.band,.ai,.faq{grid-template-columns:1fr;gap:32px}
-  .row,.row.flip{margin-top:100px}
-  .row.flip .text{order:0}
-  .steps,.for,.log{grid-template-columns:1fr}
-  .step,.step+.step,.step:nth-child(3){padding:22px 0 28px;box-shadow:inset 0 1px 0 var(--edge2)}
-  .for div,.for div+div{padding:20px 0 24px}
-  .head{flex-direction:column;align-items:start}
-  section{padding-top:130px}
+  .c4,.c3,.frow,.frow.flip,.band2,.faq{grid-template-columns:1fr}
+  .cells>*{box-shadow:0 1px 0 var(--line)}
+  .frow.flip .ftext{order:0;box-shadow:none}
+  .ftext{padding:44px 22px 20px;box-shadow:none}
+  .fview{padding:20px 22px 40px}
+  .showcase{padding:32px 16px 40px}
+  .sec{padding-top:90px;padding-bottom:90px}
 }
-@media (max-width:560px){
-  h1{--k:.5}
-  .hero{padding-top:120px}
-  .pill{margin-bottom:48px}
-  .wrap{padding:0 20px}
-  .caption{flex-direction:column;gap:4px}
-}
-@media (prefers-reduced-motion:reduce){h1,.toast,.cursor{transition:none}}
+@media (max-width:560px){h1{--k:.5}.hero{padding-top:64px}.pill{margin-bottom:48px}}
+@media (prefers-reduced-motion:reduce){h1,.toast,.cursor{transition:none}.mtrack{animation:none}}
 </style>
 </head>
 <body>
+<div class="corner"></div>
+<div class="rx" id="rx"></div>
+<div class="ry" id="ry"><div class="ticks" id="ryt"></div></div>
 
-<header class="nav" id="nav">
-  <div class="wrap">
+<div class="shell">
+<div class="col">
+
+<header class="nav band" id="nav">
+  <div class="in">
     <a href="#" class="logo" aria-label="Tovi home"><svg width="22" height="22" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="#8A57BC"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="#FCBDDD"/></svg>Tovi</a>
-    <nav class="links" aria-label="Sections"><a href="#how">How it works</a><a href="#features">Features</a><a href="#shipped">What's new</a><a href="#faq">Questions</a></nav>
+    <nav class="links" aria-label="Sections"><a href="#how">How it works</a><a href="#toolkit">Features</a><a href="#ai">AI</a><a href="#faq">Questions</a></nav>
     <a href="#invite" class="btn brand sm">Request an invite</a>
   </div>
 </header>
 
 <main>
-  <div class="hero">
-    <div class="wrap">
+  <div class="band hero">
+    <div class="in">
       <span class="pill"><b>Beta</b>Now open to React and Tailwind teams</span>
       <div class="stage" id="stage">
-        <div class="toast" id="toast" role="status" aria-live="polite"><div><span id="tMsg">Heading, size 72</span><span class="code" id="tCode">Saved to Hero.jsx · text-6xl → <em>text-7xl</em></span></div><button class="undo" id="undo" type="button">Undo</button></div>
-        <div class="sel" id="sel">
+        <div class="toast" id="toast" role="status" aria-live="polite"><div><span id="tMsg">Heading, size 72</span><span class="code" id="tCode"></span></div><button class="undo" id="undo" type="button">Undo</button></div>
+        <div class="sel">
           <span class="tag"><svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4h10M8 4v9" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>Heading</span>
           <h1 id="h1">Edit your live product.</h1>
           <i class="h tl"></i><i class="h tr"></i><i class="h bl"></i><i class="h br"></i>
-          <span class="dims" id="dims">812 × 60</span>
+          <span class="dims" id="dims">571 × 60</span>
         </div>
         <aside class="panel" id="panel" aria-label="Try it: change the headline size">
           <div class="t">Typography <span>Mona Sans</span></div>
@@ -244,128 +381,133 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
             <div><div class="pl">Size</div><div class="field"><span class="ic">T</span><span class="v" id="sizeV">60</span><span class="stp" id="stepV">6xl</span></div></div>
           </div>
           <div class="pl">Drag to resize. It snaps to your scale.</div>
-          <div class="slider" id="slider" role="slider" tabindex="0" aria-label="Headline size" aria-valuemin="36" aria-valuemax="96" aria-valuenow="60">
-            <span class="track"></span><span class="fill" id="fill"></span><span class="knob" id="knob"></span>
-            
-          </div>
+          <div class="slider" id="slider" role="slider" tabindex="0" aria-label="Headline size" aria-valuemin="36" aria-valuemax="96" aria-valuenow="60"><span class="track"></span><span class="fill" id="fill"></span><span class="knob" id="knob"></span></div>
         </aside>
         <div class="cursor" id="cursor" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
       </div>
       <p class="lead">Tovi opens the app your team already built, so you can fix it by hand, the way you would in Figma. Every edit lands in your code as you make it, and goes to developers as one pull request.</p>
       <div class="cta"><a href="#invite" class="btn brand">Request an invite</a><a href="#how" class="btn quiet">See how it works</a></div>
+    </div>
+  </div>
 
-      <div class="window"><img src="img/select-text.jpg" alt="Tovi editing a live website: a paragraph is selected, and its font, size and colour show in the panel on the right" width="2400" height="1500" loading="eager"></div>
-      <div class="caption"><span>Tovi editing Aster, a React and Tailwind site, running live.</span><span>Every value in the panel is read from the code.</span></div>
-
-      <div class="for">
-        <div><h3>Product designers</h3><p>Fix what shipped yourself, instead of filing a ticket and waiting for a sprint.</p></div>
-        <div><h3>Founders and builders</h3><p>Make the product look considered, with guardrails that keep you on your design system.</p></div>
-        <div><h3>Developers</h3><p>Get small, readable pull requests instead of screenshots that say “move this 4px”.</p></div>
+  <div class="band hatch showcase" aria-label="Tovi at work: editing a live website">
+    <div class="tvwrap" id="tvwrap">
+      <div class="tv" id="tv" aria-hidden="true">
+        <div class="tv-top">
+          <div class="tv-dots"><i></i><i></i><i></i></div>
+          <span class="tv-crumb">aster / <b>Home</b></span>
+          <div class="tv-seg"><span class="on">Desktop</span><span>Tablet</span><span>Phone</span></div>
+          <span class="tv-zoom">62%</span>
+          <span class="tv-hand" id="tvHand">Hand off <span class="n" id="tvN">0</span></span>
+        </div>
+        <div class="tv-body">
+          <aside class="tv-left">
+            <div class="tv-tabs"><span class="on">Chat</span><span>Layers</span></div>
+            <div class="tv-chat" id="tvChat">
+              <div class="tv-empty" id="tvEmpty"><div class="tv-av"></div><b>What should change?</b>Select something, or ask about the whole screen.</div>
+            </div>
+            <div class="tv-compose">
+              <span class="tv-chip" id="tvChip">Whole screen</span>
+              <div class="tv-input" id="tvInput"></div>
+              <div class="tv-crow"><span>On system</span><span class="tv-send" id="tvSend"><svg width="12" height="12" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+            </div>
+          </aside>
+          <div class="tv-canvas" id="tvCanvas">
+            <span class="tv-label"><b>Desktop</b>1024</span>
+            <div class="tv-frame" id="tvFrame">
+              <div class="aster">
+                <div class="a-nav"><span class="a-logo">Aster</span><span class="a-links"><span>Places</span><span>Stays</span><span>Journal</span><span>About</span></span><span class="a-book">Book a night</span></div>
+                <div class="a-hero"><img src="img/aster/hero.jpg" alt=""><div class="a-hc"><div class="a-eye">Winter 2026, Arctic Norway</div><div class="a-h1" id="aH1">Nights under the northern sky</div><p class="a-p">Glass cabins, fjords and hot springs, far from the city lights. Small stays, picked for the darkest skies.</p><div class="a-btns"><span>Find your stay</span><span>Watch the film</span></div></div></div>
+                <div class="a-places"><div class="a-eye v">Places</div><div class="a-h2">Where the sky does the work</div>
+                  <div class="a-grid" id="aGrid">
+                    <div class="a-card"><img src="img/aster/lofoten.jpg" alt=""><div class="a-cb"><div class="a-ct">Lofoten</div><div class="a-cd">Fishing villages under the aurora</div></div></div>
+                    <div class="a-card"><img src="img/aster/fjord.jpg" alt=""><div class="a-cb"><div class="a-ct">Geiranger</div><div class="a-cd">Quiet fjords and steep green walls</div></div></div>
+                    <div class="a-card"><img src="img/aster/lagoon.jpg" alt=""><div class="a-cb"><div class="a-ct">Reykjanes</div><div class="a-cd">Warm lagoons in the snow</div></div></div>
+                    <div class="a-card"><img src="img/aster/dunes.jpg" alt=""><div class="a-cb"><div class="a-ct">Wadi Rum</div><div class="a-cd">Desert stars, a warmer night</div></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tv-bar"><span><svg width="16" height="16" viewBox="0 0 16 16"><path d="M6.5 8.5V3.2a1.1 1.1 0 0 1 2.2 0v4.3m0-1.1a1.1 1.1 0 0 1 2.2 0v1.3m0-.4a1.1 1.1 0 0 1 2.1 0V10a4 4 0 0 1-4 4H8.6a3.6 3.6 0 0 1-2.9-1.5L3.4 9.4a1.1 1.1 0 0 1 1.7-1.3l1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="on"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M7.2 2.6H4.1a1.5 1.5 0 0 0-1.5 1.5v7.8a1.5 1.5 0 0 0 1.5 1.5h7.8a1.5 1.5 0 0 0 1.5-1.5V8.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M12.1 1.9a1.35 1.35 0 0 1 1.95 1.9L8.6 9.3l-2.6.7.7-2.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span><i></i><span><svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span><span><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4.2 13.6l.7-2.9 6.4-6.4a1.5 1.5 0 0 1 2.1 2.1l-6.4 6.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M4.6 1.2c.2 1.3.6 1.7 1.9 1.9-1.3.2-1.7.6-1.9 1.9-.2-1.3-.6-1.7-1.9-1.9 1.3-.2 1.7-.6 1.9-1.9z" fill="currentColor"/></svg></span><i></i><span><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 6h6a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M6.5 3.5L4 6l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+          </div>
+          <aside class="tv-right">
+            <div class="tv-pstate" id="tvP0"><div class="tv-hint"><b>Select something to edit it</b>Click any element in your app, or pick it in Layers.</div></div>
+            <div class="tv-pstate" id="tvP1" style="opacity:0">
+              <div class="tv-name"><svg width="12" height="12" viewBox="0 0 16 16"><path d="M3 4h10M8 4v9" stroke="#EDEDF0" stroke-width="1.6" stroke-linecap="round"/></svg>Title “Nights under the…”</div>
+              <div class="tv-sec"><div class="tv-seg2"><span class="on">All sizes</span><span>Desktop only</span></div><h4>Content</h4><div class="tv-f">Nights under the northern sky</div></div>
+              <div class="tv-sec"><h4>Typography</h4><div class="tv-f">Instrument Serif</div>
+                <div class="tv-g2"><div><div class="tv-l">Weight</div><div class="tv-f">Regular</div></div><div><div class="tv-l">Size</div><div class="tv-f" id="tvSize"><span class="k">T</span><span id="tvSizeV">72</span><span class="s" id="tvStep">7xl</span></div></div></div>
+                <div class="tv-g2"><div><div class="tv-l">Line height</div><div class="tv-f"><span class="k">↕</span>0.95</div></div><div><div class="tv-l">Letter spacing</div><div class="tv-f"><span class="k">↔</span>0 %</div></div></div>
+              </div>
+              <div class="tv-sec"><h4>Text color</h4><div class="tv-f"><span class="tv-sw"></span>F0F2F7<span class="s">content</span></div></div>
+            </div>
+            <div class="tv-pstate" id="tvP2" style="opacity:0">
+              <div class="tv-name"><svg width="12" height="12" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="#EDEDF0" stroke-width="1.3"/></svg>Card “Lofoten”</div>
+              <div class="tv-sec"><div style="display:flex;justify-content:space-between;align-items:center;color:#8B8B95">4 look alike<span class="tv-seg2" style="margin:0;width:120px"><span class="on">All 4</span><span>This one</span></span></div></div>
+              <div class="tv-sec"><h4>Appearance</h4><div class="tv-g2"><div><div class="tv-l">Opacity</div><div class="tv-f">100 %</div></div><div><div class="tv-l">Corner radius</div><div class="tv-f" id="tvRad">14<span class="s" id="tvRadS">xl</span></div></div></div></div>
+              <div class="tv-sec"><h4>Fill</h4><div class="tv-f"><span class="tv-sw" style="background:#11131A"></span><span id="tvFill">11131A</span><span class="s">surface</span></div></div>
+            </div>
+          </aside>
+        </div>
+        <div class="tv-toast" id="tvToast"><div><span id="tvTM">Title, size 96</span><span class="code" id="tvTC"></span></div><span class="undo">Undo</span></div>
+        <div class="tv-pr" id="tvPR"><div class="hd"><i><svg width="10" height="10" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="#0B2A18" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i>Pull request opened</div><p>“Design updates from Tovi” is ready for review.</p><div class="fl">src/sections/Hero.jsx <em>+1 −1</em><br>src/sections/Places.jsx <em>+4 −4</em></div></div>
+        <div class="tv-sel" id="tvSel"><span class="tv-tag" id="tvSelT">Title</span><i class="h tl"></i><i class="h tr"></i><i class="h bl"></i><i class="h br"></i><span class="tv-dim" id="tvSelD"></span></div>
+        <div class="tv-hover" id="tvHov"></div>
+        <div class="tv-pk" id="pk0"><span class="tv-tag">Tovi · changing</span></div><div class="tv-pk" id="pk1"></div><div class="tv-pk" id="pk2"></div><div class="tv-pk" id="pk3"></div>
+        <div class="tv-tov" id="tvTov"><svg width="20" height="20" viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#FCBDDD" stroke="#3A1730" stroke-width="1.1" stroke-linejoin="round"/></svg><b>Tovi</b></div>
+        <div class="tv-cur" id="tvCur"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
       </div>
     </div>
   </div>
 
-  <section id="ai">
-    <div class="wrap ai">
-      <div>
-        <h2>Bring the AI you already use</h2>
-        <p class="sub">Connect Claude, OpenAI or Gemini with your own key and pick any model it can use. Your requests go straight to the provider you chose. No credits to buy, and nothing added on top.</p>
-      </div>
-      <div class="models">
-        <div class="model on"><span class="mk" style="background:#2A1E1A"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="#D97757" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg></span><div><div class="nm">Claude</div><div class="ds">Anthropic</div></div><span class="st"><i></i>Connected</span></div>
-        <div class="model"><span class="mk" style="background:#F2F1EE"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#0B0B0B" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg></span><div><div class="nm">OpenAI</div><div class="ds">GPT models</div></div><span class="st">Add key</span></div>
-        <div class="model"><span class="mk" style="background:#1A1D2B"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4285F4"/><stop offset=".55" stop-color="#9B72CB"/><stop offset="1" stop-color="#D96570"/></linearGradient></defs><path fill="url(#gm)" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg></span><div><div class="nm">Gemini</div><div class="ds">Google</div></div><span class="st">Add key</span></div>
-        <p class="foot">Switch providers or models any time in Settings.</p>
-      </div>
+  <div class="band">
+    <p class="mlabel">Works with the tools your team already uses</p>
+    <div class="marquee"><div class="mtrack"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z"/></svg>React</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z"/></svg>Tailwind CSS</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.286 10.578.512-8.657a.306.306 0 0 1 .247-.282L17.377.006a.306.306 0 0 1 .353.385l-1.558 5.403a.306.306 0 0 0 .352.385l2.388-.46a.306.306 0 0 1 .332.438l-6.79 13.55-.123.19a.294.294 0 0 1-.252.14c-.177 0-.35-.152-.305-.369l1.095-5.301a.306.306 0 0 0-.388-.355l-1.433.435a.306.306 0 0 1-.389-.354l.69-3.375a.306.306 0 0 0-.37-.36l-2.32.536a.306.306 0 0 1-.374-.316zm14.976-7.926L17.284 3.74l-.544 1.887 2.077-.4a.8.8 0 0 1 .84.369.8.8 0 0 1 .034.783L12.9 19.93l-.013.025-.015.023-.122.19a.801.801 0 0 1-.672.37.826.826 0 0 1-.634-.302.8.8 0 0 1-.16-.67l1.029-4.981-1.12.34a.81.81 0 0 1-.86-.262.802.802 0 0 1-.165-.67l.63-3.08-2.027.468a.808.808 0 0 1-.768-.233.81.81 0 0 1-.217-.6l.389-6.57-7.44-1.33a.612.612 0 0 0-.64.906L11.58 23.691a.612.612 0 0 0 1.066-.004l11.26-20.135a.612.612 0 0 0-.644-.9z"/></svg>Vite</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></svg>Next.js</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>GitHub</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>Claude</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>OpenAI</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg>Gemini</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z"/></svg>React</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z"/></svg>Tailwind CSS</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.286 10.578.512-8.657a.306.306 0 0 1 .247-.282L17.377.006a.306.306 0 0 1 .353.385l-1.558 5.403a.306.306 0 0 0 .352.385l2.388-.46a.306.306 0 0 1 .332.438l-6.79 13.55-.123.19a.294.294 0 0 1-.252.14c-.177 0-.35-.152-.305-.369l1.095-5.301a.306.306 0 0 0-.388-.355l-1.433.435a.306.306 0 0 1-.389-.354l.69-3.375a.306.306 0 0 0-.37-.36l-2.32.536a.306.306 0 0 1-.374-.316zm14.976-7.926L17.284 3.74l-.544 1.887 2.077-.4a.8.8 0 0 1 .84.369.8.8 0 0 1 .034.783L12.9 19.93l-.013.025-.015.023-.122.19a.801.801 0 0 1-.672.37.826.826 0 0 1-.634-.302.8.8 0 0 1-.16-.67l1.029-4.981-1.12.34a.81.81 0 0 1-.86-.262.802.802 0 0 1-.165-.67l.63-3.08-2.027.468a.808.808 0 0 1-.768-.233.81.81 0 0 1-.217-.6l.389-6.57-7.44-1.33a.612.612 0 0 0-.64.906L11.58 23.691a.612.612 0 0 0 1.066-.004l11.26-20.135a.612.612 0 0 0-.644-.9z"/></svg>Vite</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></svg>Next.js</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>GitHub</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>Claude</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>OpenAI</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg>Gemini</span></div></div>
+  </div>
+
+  <div class="band alt aiband" id="ai">
+    <div class="compose" aria-hidden="true"><div class="txt" id="ctxt"></div><div class="row2"><span>+</span><span class="model"><svg viewBox="0 0 24 24"><path fill="#D97757" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>Claude Opus 5.5</span><span class="go"><svg width="13" height="13" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+    <div class="provs"><span title="Claude"><svg viewBox="0 0 24 24"><path fill="#D97757" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg></span><span title="OpenAI"><svg viewBox="0 0 24 24"><path fill="#F2F1EE" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg></span><span title="Gemini"><svg viewBox="0 0 24 24"><defs><linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4285F4"/><stop offset=".55" stop-color="#9B72CB"/><stop offset="1" stop-color="#D96570"/></linearGradient></defs><path fill="url(#gm)" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg></span></div>
+    <div class="in center"><h2>Bring the AI you already use</h2><p class="sub">Connect Claude, OpenAI or Gemini with your own key and pick any model it can use. Requests go straight to the provider you chose. No credits to buy, and nothing added on top.</p></div>
+  </div>
+
+  <div class="band" id="how">
+    <div class="in sec tight" style="padding-bottom:56px"><h2>From live product to pull request</h2><p class="sub">No mockups to keep in sync and no handoff file. You work on the product itself, and the result is code your team can review.</p></div>
+    <div class="cells c4">
+      <div><span class="num">1</span><h3>Connect your repository</h3><p>Paste a GitHub link or pick a folder on your Mac. Tovi installs the app, starts it and opens it with its real pages, data and components.</p></div>
+      <div><span class="num">2</span><h3>Edit the running app</h3><p>Select anything and change spacing, type, colour, layout, gradients or shadows. Each edit is written to the right file as you make it.</p></div>
+      <div><span class="num">3</span><h3>Ask Tovi, or let it review</h3><p>Describe a change, mark spots on the page, or let Diagnose review the product. You approve what it does, and it checks its own work.</p></div>
+      <div><span class="num">4</span><h3>Hand off</h3><p>One click commits everything to a new branch and opens a pull request. Tovi makes sure the app still builds first.</p></div>
     </div>
-  </section>
+  </div>
 
-  <section id="how">
-    <div class="wrap">
-      <h2>From live product to pull request</h2>
-      <p class="sub">No mockups to keep in sync and no handoff file. You work on the product itself, and the result is code your team can review.</p>
-      <div class="steps">
-        <div class="step"><h3>Connect your repository</h3><p>Paste a GitHub link or pick a folder on your Mac. Tovi installs the app, starts it and opens it with its real pages, data and components.</p></div>
-        <div class="step"><h3>Edit the running app</h3><p>Select anything and change spacing, type, colour, layout, gradients or shadows. Each edit is written to the right file as you make it.</p></div>
-        <div class="step"><h3>Ask Tovi, or let it review</h3><p>Describe a change, mark spots on the page, or let Diagnose review the product. You approve what it does, and it checks its own work.</p></div>
-        <div class="step"><h3>Hand off</h3><p>One click commits everything to a new branch and opens a pull request. Tovi makes sure the app still builds first.</p></div>
-      </div>
+  <div class="band alt" id="toolkit">
+    <div class="in sec tight" style="padding-bottom:56px"><h2>Everything you need to polish a product</h2><p class="sub">The tools you reach for in Figma, working on real components and real code.</p></div>
+    <div class="cells c3 kit"><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M8 9h8M8 12h8M8 15h5"/></svg><h3>Auto layout</h3><p>Direction, gap, padding, hug and fill, the way you set them in Figma.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="13" height="10" rx="1.5"/><rect x="17" y="8" width="4.5" height="10" rx="1.2"/><path d="M6 19h6"/></svg><h3>Every screen size</h3><p>Edit for all sizes at once, or just for desktop, tablet or phone.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19L10.5 5h1L17 19M7.4 13.5h7.2"/><path d="M19 9v10"/></svg><h3>Type and Google Fonts</h3><p>Weight, size, spacing and any Google Font, added to your project in one step.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor" stroke="none" opacity=".35"/></svg><h3>Colour, gradients, shadows</h3><p>Figma-style pickers that write your colour tokens, not raw hex codes.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><circle cx="7" cy="17" r="3"/><circle cx="17" cy="17" r="3"/></svg><h3>Your design tokens</h3><p>Change a colour in the palette and every screen that uses it updates.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5h16v2M12 5v14M9 19h6"/></svg><h3>Text, in place</h3><p>Double-click any text on the page and type. The new words land in the code.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/><rect x="3" y="3" width="18" height="18" rx="3" opacity=".5"/></svg><h3>Add and rearrange</h3><p>Insert elements, drag them into a new order, or wrap a group in a frame.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8.5"/></svg><h3>Images</h3><p>Swap any image, or search free Unsplash photos without leaving the canvas.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg><h3>Layers</h3><p>The page's real structure, with names that make sense: Header, Card, Button.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 18.5l1-3.9 8.6-8.6a2 2 0 0 1 2.8 2.8l-8.6 8.6z"/><path d="M6 2.5c.3 1.6.8 2.1 2.4 2.4-1.6.3-2.1.8-2.4 2.4-.3-1.6-.8-2.1-2.4-2.4 1.6-.3 2.1-.8 2.4-2.4z" fill="currentColor" stroke="none"/></svg><h3>Mark for Tovi</h3><p>Draw on the page, leave notes where things are off, and apply them all at once.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l3 3-3 3-3-3zM6 9l3 3-3 3-3-3zM18 9l3 3-3 3-3-3zM12 15l3 3-3 3-3-3z"/></svg><h3>Components and variants</h3><p>Change one use of a component, one variant, or every instance.</p></div><div><svg class="fi" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg><h3>Present</h3><p>Click through your product full screen to check every change like a visitor would.</p></div></div>
+  </div>
+
+  <div class="band" id="features">
+    <div class="in sec tight" style="padding-bottom:56px"><h2>What makes Tovi different</h2><p class="sub">Tovi isn't a copy of your product on a canvas. It's the product itself, and it understands the code behind it.</p></div>
+    <div style="box-shadow:0 -1px 0 var(--line)">
+      <div class="frow"><div class="ftext"><h3>Every copy at once</h3><p>Tovi knows which elements come from the same code. Change one card and the other three follow. Change a shared button and choose whether it applies to this one, to every primary button, or to all of them.</p></div><div class="fview"><div class="bd" style="background-image:url(img/bg/dunes.jpg)"><div class="crop" style="aspect-ratio:1.62"><img src="img/lookalike.jpg" alt="Four look-alike cards selected together, with the panel offering All 4 or This one" style="width:128.2%;left:-28.2%;top:-4%"></div></div></div></div>
+      <div class="frow flip"><div class="ftext"><h3>Speaks your design system</h3><p>Colours show their token names, and every number shows its step on your scale. Values snap to that scale as you drag, and anything off it is flagged, so a quick fix never quietly adds a new grey. Tovi also warns you when text gets hard to read.</p></div><div class="fview"><div class="bd" style="background-image:url(img/bg/pink-aurora.jpg)"><div class="crop" style="aspect-ratio:1.45"><img src="img/component.jpg" alt="A shared button selected, with its variant and size options in the panel" style="width:128.2%;left:-28.2%;top:-3%"></div></div></div></div>
+      <div class="frow"><div class="ftext"><h3>Ask when it's quicker to say it</h3><p>“Make this heading feel more editorial.” Tovi looks at the screen and reads the code behind what you selected, then makes the change. A second look checks the result, and every change can be undone.</p></div><div class="fview"><div class="bd" style="background-image:url(img/bg/fjord.jpg)"><div class="crop" style="aspect-ratio:1.45"><img src="img/chat-done.jpg" alt="Tovi's chat restyling the hero heading, with the change listed" style="width:166%;left:0;top:-7%"></div></div></div></div>
+      <div class="frow flip"><div class="ftext"><h3>A second pair of eyes</h3><p>Diagnose reviews a page section by section, or every page of the product, and pins a note wherever hierarchy, spacing, contrast or consistency slips. Keep the notes you agree with, edit the rest, then apply. Simple fixes land instantly, and Tovi checks each one with a screenshot.</p></div><div class="fview"><div class="bd" style="background-image:url(img/bg/sand.jpg)"><div class="crop" style="aspect-ratio:1.45"><img src="img/diagnose.jpg" alt="Diagnose notes pinned across the page, listed in the chat" style="width:166%;left:0;top:-14%"></div></div></div></div>
+      <div class="frow" style="box-shadow:none"><div class="ftext"><h3>Nothing is lost</h3><p>Tovi saves versions as you work and names who made each change. Compare before and after, restore a version, or undo a single edit.</p></div><div class="fview"><div class="bd" style="background-image:url(img/bg/green-aurora.jpg)"><div class="crop" style="aspect-ratio:1.45"><img src="img/history.jpg" alt="Version history listing each change with before and after values" style="width:128.2%;left:-28.2%;top:-3%"></div></div></div></div>
     </div>
-  </section>
+  </div>
 
-  <section id="features">
-    <div class="wrap">
-      <h2>Design on the real thing, not a copy of it</h2>
-      <p class="sub">The editing you know from Figma, on the product your customers actually use.</p>
-
-      <div class="row">
-        <div class="text">
-          <h3>Every copy at once</h3>
-          <p>Tovi knows which elements come from the same code. Change one card and the other three follow. Change a shared button and choose whether it applies to this one, to every primary button, or to all of them.</p>
-        </div>
-        <div class="view"><p class="label"><span>Places</span><span>4 look alike</span></p><div class="crop" style="aspect-ratio:1.62"><img src="img/lookalike.jpg" alt="Four look-alike cards selected together, with the panel offering All 4 or This one" style="width:128.2%;left:-28.2%;top:-4%"></div></div>
-      </div>
-
-      <div class="row flip">
-        <div class="text">
-          <h3>Speaks your design system</h3>
-          <p>Colours show their token names, and every number shows its step on your scale. Values snap to that scale as you drag, and anything off it is flagged, so a quick fix never quietly adds a new grey. Tovi also warns you when text gets hard to read.</p>
-        </div>
-        <div class="view"><p class="label"><span>Button “Find your stay”</span><span>Variant primary</span></p><div class="crop" style="aspect-ratio:1.45"><img src="img/component.jpg" alt="A shared button selected, with its variant and size options in the panel" style="width:128.2%;left:-28.2%;top:-3%"></div></div>
-      </div>
-
-      <div class="row">
-        <div class="text">
-          <h3>Ask when it's quicker to say it</h3>
-          <p>“Make this heading feel more editorial.” Tovi looks at the screen and reads the code behind what you selected, then makes the change. A second look checks the result, and every change can be undone.</p>
-        </div>
-        <div class="view"><p class="label"><span>Chat</span><span>1 change applied</span></p><div class="crop" style="aspect-ratio:1.45"><img src="img/chat-done.jpg" alt="Tovi's chat restyling the hero heading, with the change listed" style="width:166%;left:0;top:-7%"></div></div>
-      </div>
-
-      <div class="row flip">
-        <div class="text">
-          <h3>A second pair of eyes</h3>
-          <p>Diagnose reviews a page section by section, or every page of the product, and pins a note wherever hierarchy, spacing, contrast or consistency slips. Keep the notes you agree with, edit the rest, then apply. Simple fixes land instantly, and Tovi checks each one with a screenshot.</p>
-        </div>
-        <div class="view"><p class="label"><span>Diagnose</span><span>14 notes</span></p><div class="crop" style="aspect-ratio:1.45"><img src="img/diagnose.jpg" alt="Diagnose notes pinned across the page, listed in the chat" style="width:166%;left:0;top:-14%"></div></div>
-      </div>
-
-      <div class="row">
-        <div class="text">
-          <h3>Nothing is lost</h3>
-          <p>Tovi saves versions as you work and names who made each change. Compare before and after, restore a version, or undo a single edit.</p>
-        </div>
-        <div class="view"><p class="label"><span>Version history</span><span>Current version</span></p><div class="crop" style="aspect-ratio:1.45"><img src="img/history.jpg" alt="Version history listing each change with before and after values" style="width:128.2%;left:-28.2%;top:-3%"></div></div>
-      </div>
+  <div class="band alt" id="code">
+    <div class="in sec band2">
+      <div><h2>Every edit is real code</h2><p class="sub">Tovi maps each element on the screen to its exact place in your source, and changes it the way a careful developer would: one class here, one value there, using your own tokens. No inline styles, no wrapper divs, no generated mess.</p></div>
+      <div class="diff"><div class="bar"><b>src/sections/Hero.jsx</b><span>1 line changed</span></div>
+<pre><span class="l dim">&lt;section className="relative min-h-[760px]"&gt;</span><span class="l del">-  &lt;h1 className="font-display text-7xl text-content"&gt;</span><span class="l add">+  &lt;h1 className="font-display text-8xl text-content"&gt;</span><span class="l dim">     Nights under the northern sky</span><span class="l dim">   &lt;/h1&gt;</span></pre></div>
     </div>
-  </section>
+  </div>
 
-  <section id="code">
-    <div class="wrap band">
-      <div>
-        <h2>Every edit is real code</h2>
-        <p class="sub">Tovi maps each element on the screen to its exact place in your source, and changes it the way a careful developer would: one class here, one value there, using your own tokens. No inline styles, no wrapper divs, no generated mess.</p>
-      </div>
-      <div class="diff">
-        <div class="bar"><b>src/sections/Hero.jsx</b><span>1 line changed</span></div>
-<pre><span class="l dim">&lt;section className="relative min-h-[760px]"&gt;</span><span class="l del">-  &lt;h1 className="font-display text-6xl text-content"&gt;</span><span class="l add">+  &lt;h1 className="font-display text-7xl text-content"&gt;</span><span class="l dim">     Nights under the northern sky</span><span class="l dim">   &lt;/h1&gt;</span></pre>
-      </div>
-    </div>
-  </section>
 
-  <section id="shipped">
-    <div class="wrap">
-      <div class="head"><h2>Shipped recently</h2><p class="sub" style="margin:0;max-width:380px">Tovi improves every week. Here's what landed most recently.</p></div>
-      <div class="log">
-        <article class="entry"><time datetime="2026-10-31">October 31</time><h3>A calmer properties panel</h3><p>Labels on every field, your design scale beside each number, colour opacity, and a note showing exactly what changed in the code.</p></article>
-        <article class="entry"><time datetime="2026-10-30">October 30</time><h3>Diagnose</h3><p>Tovi reviews every section of a page, or the whole product, and pins notes where things slip. Simple fixes now apply instantly.</p></article>
-        <article class="entry"><time datetime="2026-10-30">October 30</time><h3>Google Fonts</h3><p>Search and preview any Google Font. Picking one adds it to your project as a single change you can undo.</p></article>
-      </div>
-    </div>
-  </section>
-
-  <section id="faq">
-    <div class="wrap faq">
+  <div class="band alt" id="faq">
+    <div class="in sec faq">
       <div><h2>Questions</h2><p class="sub">Something else on your mind? Write to <a href="mailto:hello@usetovi.com">hello@usetovi.com</a>.</p></div>
       <div>
         <details open><summary>What is Tovi?</summary><p>A design editor for your real product. You open the app your team built, edit it by hand like in Figma, and Tovi turns your edits into code and a pull request.</p></details>
@@ -377,10 +519,10 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
         <details><summary>Does it replace Figma?</summary><p>No. Figma is still the place to explore new ideas. Tovi is for the product once it's built.</p></details>
       </div>
     </div>
-  </section>
+  </div>
 
-  <div class="close" id="invite">
-    <div class="wrap">
+  <div class="band close" id="invite">
+    <div class="in center">
       <h2>Tovi is in private beta</h2>
       <p class="sub">We're inviting a small group of designers and teams to try it and help shape it. Leave your email and we'll be in touch.</p>
       <form id="form"><label for="email" class="vh">Email</label><input id="email" type="email" required placeholder="you@company.com" autocomplete="email"><button class="btn brand" type="submit">Request an invite</button></form>
@@ -389,84 +531,10 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
   </div>
 </main>
 
-<footer><div class="wrap"><span>© 2026 Tovi</span><span>usetovi.com</span></div></footer>
+<footer class="band"><div class="in"><span>© 2026 Tovi</span><span>usetovi.com</span></div></footer>
+</div>
+</div>
 
-<script>
-(() => {
-  const $ = (id) => document.getElementById(id);
-  const nav = $('nav');
-  addEventListener('scroll', () => nav.classList.toggle('on', scrollY > 8), { passive: true });
-
-  // The headline is a live, selected element. Its size snaps to Tailwind's scale, like in Tovi.
-  const STEPS = [[36, '4xl'], [48, '5xl'], [60, '6xl'], [72, '7xl'], [96, '8xl']];
-  const MIN = 36, MAX = 96;
-  const h1 = $('h1'), slider = $('slider'), knob = $('knob'), fill = $('fill'), toast = $('toast'), cursor = $('cursor'), stage = $('stage');
-  let size = 60, saved = 60, toastT, dimsT;
-  const stepOf = (v) => STEPS.reduce((a, b) => (Math.abs(b[0] - v) < Math.abs(a[0] - v) ? b : a));
-  const pct = (v) => (v - MIN) / (MAX - MIN);
-  STEPS.forEach(([v, n]) => { const t = document.createElement('span'); t.className = 'tick'; t.style.left = pct(v) * 100 + '%'; slider.insertBefore(t, knob); const l = document.createElement('span'); l.className = 'lbl'; l.dataset.v = v; l.textContent = n; l.style.left = pct(v) * 100 + '%'; slider.appendChild(l); });
-  const k = () => parseFloat(getComputedStyle(h1).getPropertyValue('--k')) || 1;
-  function paint(v, snap) {
-    const s = stepOf(v), shown = snap ? s[0] : Math.round(v);
-    h1.style.setProperty('--fs', shown);
-    $('sizeV').textContent = shown;
-    $('stepV').textContent = snap || Math.abs(shown - s[0]) < 2 ? s[1] : 'custom';
-    knob.style.left = fill.style.width = pct(shown) * 100 + '%';
-    slider.setAttribute('aria-valuenow', shown);
-    slider.querySelectorAll('.lbl').forEach((l) => l.classList.toggle('on', +l.dataset.v === s[0]));
-    clearTimeout(dimsT);
-    dimsT = setTimeout(() => { $('dims').textContent = `${Math.round(h1.getBoundingClientRect().width / k())} × ${shown}`; }, 580);
-  }
-  function note(msg, code, ms = 3200) { $('tMsg').textContent = msg; $('tCode').innerHTML = code; toast.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove('on'), ms); }
-  function save(v) {
-    const from = stepOf(saved)[1], to = stepOf(v)[1];
-    saved = stepOf(v)[0];
-    if (from !== to) note(`Heading, size ${saved}`, `Saved to Hero.jsx · text-${from} → <em>text-${to}</em>`);
-  }
-  paint(60, true);
-
-  let dragging = false, demo = true;
-  const fromX = (x) => { const r = slider.getBoundingClientRect(); return MIN + Math.min(1, Math.max(0, (x - r.left) / r.width)) * (MAX - MIN); };
-  slider.addEventListener('pointerdown', (e) => { stopDemo(); dragging = true; slider.setPointerCapture(e.pointerId); size = fromX(e.clientX); paint(size); });
-  slider.addEventListener('pointermove', (e) => { if (dragging) { size = fromX(e.clientX); paint(size); } });
-  const release = () => { if (!dragging) return; dragging = false; size = stepOf(size)[0]; paint(size, true); save(size); };
-  slider.addEventListener('pointerup', release); slider.addEventListener('pointercancel', release);
-  slider.addEventListener('keydown', (e) => {
-    const i = STEPS.findIndex(([v]) => v === stepOf(size)[0]);
-    const j = ['ArrowRight', 'ArrowUp'].includes(e.key) ? Math.min(STEPS.length - 1, i + 1) : ['ArrowLeft', 'ArrowDown'].includes(e.key) ? Math.max(0, i - 1) : -1;
-    if (j < 0) return; e.preventDefault(); stopDemo(); size = STEPS[j][0]; paint(size, true); save(size);
-  });
-  $('undo').addEventListener('click', () => { stopDemo(); const was = stepOf(saved)[1]; size = saved = 60; paint(60, true); note('Undone', `Hero.jsx · text-${was} → <em>text-6xl</em>`, 2200); });
-
-  // Opening demo: a cursor drags the size from 60 to 72, Tovi saves it, then undoes. Stops as soon as you touch it.
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const rel = (el, fx, fy) => { const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect(); return [r.left - s.left + r.width * fx, r.top - s.top + r.height * fy]; };
-  const move = (x, y) => { cursor.style.translate = `${x}px ${y}px`; };
-  const onKnob = () => { const r = slider.getBoundingClientRect(), s = stage.getBoundingClientRect(); move(r.left - s.left + pct(size) * r.width - 3, r.top - s.top + 6); };
-  function stopDemo() { demo = false; cursor.classList.remove('on'); }
-  function glide(from, to, ms) {
-    const t0 = performance.now();
-    return new Promise((res) => { const f = (t) => { if (!demo) return res(); const x = Math.min(1, (t - t0) / ms), e = x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; size = from + (to - from) * e; paint(size); onKnob(); x < 1 ? requestAnimationFrame(f) : res(); }; requestAnimationFrame(f); });
-  }
-  async function run() {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    await wait(1200);
-    while (demo) {
-      if (getComputedStyle($('panel')).position !== 'absolute') { await wait(4000); continue; }
-      move(...rel($('panel'), 0.2, 1.4)); cursor.classList.add('on'); await wait(700); if (!demo) break;
-      onKnob(); await wait(800); if (!demo) break;
-      await glide(60, 74, 1100); if (!demo) break;
-      size = 72; paint(72, true); save(72); await wait(3400); if (!demo) break;
-      move(...rel($('undo'), 0.4, 0.55)); await wait(900); if (!demo) break;
-      const was = stepOf(saved)[1]; size = saved = 60; paint(60, true); note('Undone', `Hero.jsx · text-${was} → <em>text-6xl</em>`, 1600);
-      await wait(1400); move(...rel($('panel'), 0.9, 1.6)); await wait(500); cursor.classList.remove('on'); await wait(2800);
-    }
-  }
-  run();
-
-  // No sign-up service is connected yet: the form only confirms on the page.
-  $('form').addEventListener('submit', (e) => { e.preventDefault(); $('thanks').textContent = "Thanks. You're on the list."; e.target.reset(); });
-})();
-</script>
+<script src="site.js"></script>
 </body>
 </html>
