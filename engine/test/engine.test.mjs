@@ -457,3 +457,25 @@ test('a gradient only on tablet prefixes every part of it', () => {
   assert.ok(out.includes('md:bg-gradient-to-r') && out.includes('md:from-surface') && out.includes('md:to-primary'), out);
   assert.ok(!/(^| )from-surface( |$)/.test(out) && !/(^| )to-primary( |$)/.test(out), out);
 });
+
+test('hide, clip, text case and decoration switch their class on and off', () => {
+  const on = (cls, op) => applyOps(cls.split(' '), [op], th).classes.join(' ');
+  assert.equal(on('flex gap-2', { prop: 'hide', value: 'on' }), 'flex gap-2 hidden');
+  assert.equal(on('flex gap-2 hidden', { prop: 'hide', value: 'off' }), 'flex gap-2');
+  assert.equal(on('rounded-xl', { prop: 'clip', value: 'on' }), 'rounded-xl overflow-hidden');
+  assert.equal(on('rounded-xl overflow-hidden', { prop: 'clip', value: 'off' }), 'rounded-xl');
+  assert.equal(on('text-sm', { prop: 'case', value: 'upper' }), 'text-sm uppercase');
+  assert.equal(on('text-sm uppercase', { prop: 'case', value: 'none' }), 'text-sm');
+  assert.equal(on('text-sm', { prop: 'decor', value: 'underline' }), 'text-sm underline');
+  assert.equal(on('text-sm underline', { prop: 'decor', value: 'strike' }), 'text-sm line-through');
+  assert.equal(on('text-sm line-through', { prop: 'decor', value: 'none' }), 'text-sm');
+});
+
+test('grid columns change on the screen size being edited only', () => {
+  // From tablet up: the phone layout (one column) stays as it is.
+  const out = rsp('grid gap-14 md:grid-cols-2', [{ prop: 'cols', value: 3 }], { mode: 'only', start: 'md', end: null });
+  assert.ok(out.includes('md:grid-cols-3') && !out.includes('md:grid-cols-2'), out);
+  assert.ok(!/(^| )grid-cols-3( |$)/.test(out), out);
+  // Every screen: one value everywhere.
+  assert.equal(rsp('grid md:grid-cols-2', [{ prop: 'cols', value: 3 }], { mode: 'all' }), 'grid grid-cols-3');
+});

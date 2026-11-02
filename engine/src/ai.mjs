@@ -14,7 +14,7 @@ import { checkSnippet } from './structure.mjs';
 
 const ENV = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env');
 
-export const PROPS = ['bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity', 'shadow', 'mT', 'mB', 'fontFamily', 'fit', 'gradient', 'clipText', 'mX', 'mY', 'w', 'h', 'layout', 'alignItems', 'justify', 'wrap'];
+export const PROPS = ['hide', 'clip', 'case', 'decor', 'cols', 'bg', 'color', 'borderC', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'align', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity', 'shadow', 'mT', 'mB', 'fontFamily', 'fit', 'gradient', 'clipText', 'mX', 'mY', 'w', 'h', 'layout', 'alignItems', 'justify', 'wrap'];
 const NUMERIC = new Set(['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'gap', 'borderW', 'opacity']);
 const COLOR = new Set(['bg', 'color', 'borderC']);
 
@@ -107,7 +107,7 @@ const Proposal = z.object({
     z.object({
       loc: z.string().describe('Exactly one of the element ids you were given'),
       note: z.number().int().nullable().describe('When the request has numbered notes: the note this edit answers; otherwise null'),
-      ops: z.array(z.object({ prop: z.enum(PROPS), value: z.string().describe('For w/h: hug, fill or px. For layout: row, col or none. A number for sizes (px; % for opacity and letterSpacing; 100-900 for fontWeight), a color token name or #RRGGBB for colors, a shadow key or "none", left/center/right/justify for align, a font family key for fontFamily') })),
+      ops: z.array(z.object({ prop: z.enum(PROPS), value: z.string().describe('For hide and clip: on or off (hide removes the element from view; clip cuts off what overflows a frame). For case: upper, lower, title or none. For decor: underline, strike or none. For cols (a grid): the number of columns. For w/h: hug, fill or px. For layout: row, col or none. A number for sizes (px; % for opacity and letterSpacing; 100-900 for fontWeight), a color token name or #RRGGBB for colors, a shadow key or "none", left/center/right/justify for align, a font family key for fontFamily') })),
       text: z.string().nullable().describe('New text, only when the element’s text is editable and the request asks to change wording; otherwise null'),
       props: z.array(z.object({ name: z.string(), value: z.string() })).describe('Component property changes, only names listed as editable for that element, with one of its allowed values; [] if none'),
       target: z.string().nullable().describe('For style edits: where to make the change. null lets Tovi choose (where the property is set now). Otherwise one of the element’s listed style targets: "element" (only this element), "table:NAME:KEY" (that entry of a style table, so every element using it), "table:NAME:*" (every entry), "css:NAME" (that CSS class everywhere), "const:NAME"'),
@@ -311,6 +311,14 @@ export function cleanOps(ops, theme) {
       if (['cover', 'contain', 'fill', 'none', 'scale-down'].includes(v)) out.push({ prop, value: v });
     } else if (prop === 'fontFamily') {
       if ((theme.keys?.fontFamily || []).includes(v)) out.push({ prop, value: v });
+    } else if (prop === 'hide' || prop === 'clip') {
+      out.push({ prop, value: /^(on|true|yes|hidden|clip)$/i.test(v) ? 'on' : 'off' });
+    } else if (prop === 'case') {
+      if (['upper', 'lower', 'title', 'none'].includes(v)) out.push({ prop, value: v });
+    } else if (prop === 'decor') {
+      if (['underline', 'strike', 'none'].includes(v)) out.push({ prop, value: v });
+    } else if (prop === 'cols') {
+      const n = Math.round(parseFloat(v)); if (n >= 1 && n <= 12) out.push({ prop, value: n });
     } else if (prop === 'align') {
       if (['left', 'center', 'right', 'justify'].includes(v)) out.push({ prop, value: v });
     }

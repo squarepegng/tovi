@@ -1545,3 +1545,20 @@ aside.side.r{border-left-color:var(--chromeLine)}
 #panel .sec.empty:hover .secH .ib{color:var(--ink)}
 /* Section titles at 12px, the panel's working size; weight and colour carry the hierarchy (Paper). */
 #panel .secH{font-size:12px;line-height:16px}
+#panel .togs{display:flex;gap:0;padding:1px;height:24px;border-radius:7px;background:rgba(var(--hi),.05);justify-self:start}
+#panel .togs .ib{width:30px;height:22px;border-radius:6px;color:rgba(var(--hi),.575)}
+#panel .togs .ib.on{color:var(--ink)}
+:root[data-theme="light"] #panel .togs{background:rgba(0,0,0,.05)}
+#panel .chkRow{display:flex;align-items:center;gap:8px;height:24px;padding:0;border:0;background:none;color:var(--ink);font:400 12px/1 var(--ui);cursor:pointer;justify-content:flex-start}
+#panel .chkRow .mk.cbox{width:14px;height:14px;border-radius:4px;display:grid;place-items:center}
+
+/* Sliders (Paper): a soft track that fills to the value, a small white pill thumb, the number beside it. */
+#panel .slRow{display:grid;grid-template-columns:minmax(0,1fr) 76px;gap:8px;align-items:center}
+#panel .slRow.b{grid-template-columns:minmax(0,1fr) 76px 24px}
+#panel .slRow .ib{width:24px;height:24px}
+#panel .sl{-webkit-appearance:none;appearance:none;width:100%;height:16px;margin:0;border-radius:8px;background:linear-gradient(to right,rgba(var(--hi),.22) 0 var(--p),rgba(var(--hi),.07) var(--p) 100%);cursor:pointer}
+#panel .sl::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:14px;border-radius:7px;background:#F2F2F2;box-shadow:0 0 0 .5px rgba(0,0,0,.45),0 1px 2px rgba(0,0,0,.4);cursor:grab}
+#panel .sl:active::-webkit-slider-thumb{cursor:grabbing}
+#panel .sl:focus-visible{outline:2px solid #2B66D9;outline-offset:1px}
+:root[data-theme="light"] #panel .sl{background:linear-gradient(to right,rgba(0,0,0,.2) 0 var(--p),rgba(0,0,0,.07) var(--p) 100%)}
+:root[data-theme="light"] #panel .sl::-webkit-slider-thumb{background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.15),0 1px 2px rgba(0,0,0,.15)}

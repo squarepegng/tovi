@@ -137,6 +137,12 @@ export function matcher(prop, th) {
     case 'rTR': return corner('tr');
     case 'rBR': return corner('br');
     case 'rBL': return corner('bl');
+    // Show or hide the element (display:none), clip what overflows, text case and decoration, grid columns.
+    case 'hide': return (c) => c === 'hidden';
+    case 'clip': return (c) => /^overflow-(hidden|clip|visible|auto|scroll)$/.test(c);
+    case 'case': return (c) => /^(uppercase|lowercase|capitalize|normal-case)$/.test(c);
+    case 'decor': return (c) => /^(underline|overline|line-through|no-underline)$/.test(c);
+    case 'cols': return (c) => /^grid-cols-/.test(c);
     default: throw new Error(`Unknown property: ${prop}`);
   }
 }
@@ -206,6 +212,11 @@ export function classFor(prop, v, th) {
       return out.join(' ');
     }
     case 'clipText': return 'bg-clip-text text-transparent';
+    case 'hide': return 'hidden';
+    case 'clip': return 'overflow-hidden';
+    case 'case': return { upper: 'uppercase', lower: 'lowercase', title: 'capitalize' }[v] || 'normal-case';
+    case 'decor': return { underline: 'underline', strike: 'line-through' }[v] || 'no-underline';
+    case 'cols': { const n = Math.round(Number(v)); return n >= 1 && n <= 12 ? `grid-cols-${n}` : `grid-cols-[repeat(${Math.max(1, n)},minmax(0,1fr))]`; }
     case 'bg': case 'color': case 'borderC': {
       const pre = { bg: 'bg', color: 'text', borderC: 'border' }[prop];
       if (String(v).startsWith('#')) return `${pre}-[${v}]`;
@@ -233,6 +244,8 @@ export function applyOps(list, ops, th) {
     if (also) out = out.filter((c) => !(base0(c) && also(c) && removed.push(c)));
     if (prop === 'color') out = out.filter((c) => !(base0(c) && c === 'text-transparent' && removed.push(c)));
     if ((prop === 'gradient' || prop === 'clipText') && (value === 'none' || value === 'off' || value === false)) value = null;
+    // Switches: "off" (or "none") takes the class away instead of writing an opposite one.
+    if (['hide', 'clip', 'case', 'decor'].includes(prop) && (value === 'off' || value === 'none' || value === false)) value = null;
     const m = matcher(prop, th);
     const base = (c) => !c.includes(':');
     // p-5 sets both axes: changing one axis splits it so the other is kept.
@@ -316,6 +329,11 @@ export function valueOfClass(prop, cls, th) {
   if (prop === 'shadow') return c === 'shadow' ? 'default' : c.replace(/^shadow-/, '');
   if (prop === 'align') return c.replace(/^text-/, '');
   if (prop === 'fit') return c.replace(/^object-/, '');
+  if (prop === 'hide') return 'hidden';
+  if (prop === 'clip') return c === 'overflow-hidden' || c === 'overflow-clip' ? 'clipped' : c.replace(/^overflow-/, '');
+  if (prop === 'case') return { uppercase: 'UPPERCASE', lowercase: 'lowercase', capitalize: 'Title Case', 'normal-case': 'as typed' }[c] || c;
+  if (prop === 'decor') return { underline: 'underline', 'line-through': 'strikethrough', overline: 'overline', 'no-underline': 'none' }[c] || c;
+  if (prop === 'cols') { const m = c.match(/^grid-cols-(\d+)$/); return m ? `${m[1]} columns` : c; }
   if (prop === 'alignItems') return c.replace(/^items-/, '');
   if (prop === 'justify') return c.replace(/^justify-/, '');
   if (prop === 'wrap') return c === 'flex-wrap' ? 'wrap' : 'no wrap';
