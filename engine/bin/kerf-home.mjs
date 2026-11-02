@@ -25,13 +25,15 @@ let job = null;
 
 // Every project you've opened, newest first: the editor records each one as it opens (see src/recent.mjs);
 // older copies of GitHub repos in ~/Kerf/projects are listed too.
+// The editor keeps a small picture of each app in its .kerf folder; its time tells the page when it changed.
+const thumbAt = (root) => { try { return Math.round(fs.statSync(path.join(root, '.kerf', 'thumb.jpg')).mtimeMs); } catch { return 0; } };
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 function recent() {
   const seen = new Set(), out = [];
   for (const r of readRecent()) {
     if (seen.has(r.root) || !fs.existsSync(r.root)) continue;
     seen.add(r.root);
-    out.push({ id: r.root, source: r.source, name: r.name, url: r.pid && alive(r.pid) ? r.url : null, at: r.at });
+    out.push({ id: r.root, source: r.source, name: r.name, url: r.pid && alive(r.pid) ? r.url : null, at: r.at, thumb: thumbAt(r.root) });
   }
   if (fs.existsSync(PROJECTS_DIR)) for (const e of fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })) {
     if (!e.isDirectory()) continue;
@@ -41,7 +43,7 @@ function recent() {
     try { remote = fs.readFileSync(path.join(dir, '.git/config'), 'utf8').match(/url = (.+)/)?.[1] || ''; } catch {}
     const running = projects.get(e.name);
     const source = remote.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '') || dir;
-    out.push({ id: dir, source, name: path.basename(source), url: running?.proc?.exitCode === null ? running.url : null, at: fs.statSync(dir).mtimeMs });
+    out.push({ id: dir, source, name: path.basename(source), url: running?.proc?.exitCode === null ? running.url : null, at: fs.statSync(dir).mtimeMs, thumb: thumbAt(dir) });
   }
   return out.sort((a, b) => b.at - a.at);
 }
@@ -108,6 +110,14 @@ http.createServer(async (req, res) => {
     return send(res, 200, savePrefs(JSON.parse(body || '{}')));
   }
   if (req.method === 'GET' && req.url === '/api/recent') return send(res, 200, recent());
+  // Only pictures of projects in the list are served.
+  if (req.method === 'GET' && req.url.startsWith('/api/thumb?')) {
+    const id = new URL(req.url, 'http://x').searchParams.get('id');
+    const file = id && recent().some((r) => r.id === id) ? path.join(id, '.kerf', 'thumb.jpg') : null;
+    if (!file || !fs.existsSync(file)) return send(res, 404, { error: 'No picture yet.' });
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'max-age=31536000' });
+    return fs.createReadStream(file).pipe(res);
+  }
   if (req.method === 'GET' && req.url === '/api/about') return send(res, 200, { version: VERSION, projectsDir: PROJECTS_DIR.replace(process.env.HOME || '', '~') });
   if (req.method === 'POST' && req.url === '/api/open') {
     let body = '';
@@ -152,7 +162,8 @@ nav a svg{flex:0 0 auto;color:var(--ink3)}
 nav a.on svg{color:var(--ink)}
 nav .sp{flex:1}
 nav .ver{padding:0 10px;color:var(--ink3);font-size:11px}
-main{min-width:0;padding:56px 48px 64px;max-width:760px;width:100%;margin:0 auto}
+main{min-width:0;padding:40px 48px 72px;max-width:1240px;width:100%;margin:0 auto}
+#v-settings,#v-help{max-width:720px}
 .view{display:none;flex-direction:column;gap:32px}
 .view.on{display:flex}
 h1{margin:0;font-size:26px;line-height:32px;font-weight:600;letter-spacing:-.02em}
@@ -178,16 +189,6 @@ button:disabled{opacity:.5;cursor:default}
 pre{margin:0;max-height:180px;overflow:auto;padding:10px;background:var(--canvas);border-radius:8px;color:var(--ink3);font:400 11px/16px 'Geist Mono',ui-monospace,monospace;white-space:pre-wrap}
 details.logs summary{cursor:pointer;color:var(--ink3);font-size:12px}details.logs pre{margin-top:8px}
 .secH{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.proj{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;white-space:normal;gap:14px;padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;cursor:pointer;text-align:left;height:auto;color:var(--ink);font:inherit;transition:border-color .12s,background .12s}
-.proj:hover{border-color:rgba(var(--hi),.2);background:var(--raised)}
-.proj .thumb{display:grid;place-items:center;height:88px;border-radius:10px;background:linear-gradient(135deg,var(--raised),var(--panel));color:var(--ink3);font:600 22px/1 Geist,system-ui,sans-serif;letter-spacing:-.02em}
-.proj b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.proj .src{display:block;color:var(--ink3);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.proj .meta{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--ink3);font-size:12px}
-.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;background:var(--raised);color:var(--ink2);font-size:11px;font-weight:500}
-.pill.run{background:rgba(111,211,154,.12);color:var(--ok)}
-.pill.run::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--ok)}
 .empty{padding:28px;border:1px dashed var(--line);border-radius:14px;color:var(--ink3);text-align:center}
 .rows{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .srow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid rgba(var(--hi),.06)}
@@ -212,12 +213,70 @@ table.keys{border-collapse:collapse;width:100%}
 table.keys td{padding:9px 0;border-bottom:1px solid rgba(var(--hi),.06);color:var(--ink2)}
 table.keys td:last-child{text-align:right}
 kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;background:var(--raised);color:var(--ink);font:500 11px/16px Geist,system-ui,sans-serif;text-align:center}
+/* Start page, after Framer, Figma and Wonder: a quiet sidebar with search, one primary action, filters and big previews. */
+:root{--side:#141416}:root[data-theme="light"]{--side:#FAFAFB}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--side:#FAFAFB}}
+nav{background:var(--side);border-right-color:rgba(var(--hi),.06);padding:14px 10px}
+.brand{padding:4px 8px 14px}
+nav a{height:32px;padding:0 10px;font-weight:500;font-size:13px}
+nav a.on{background:rgba(var(--hi),.08)}
+.nsearch{display:flex;align-items:center;gap:8px;height:32px;margin:0 0 10px;padding:0 6px 0 10px;border-radius:8px;background:rgba(var(--hi),.06);color:var(--ink3)}
+.nsearch input{height:30px;padding:0;border:0;background:none;border-radius:0;font-size:13px}
+.nsearch input:focus{box-shadow:none}
+.nsearch kbd{background:rgba(var(--hi),.07);color:var(--ink3)}
+.phead{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.phead h1{font-size:20px;line-height:28px;font-weight:600;letter-spacing:-.01em}
+.pri{height:34px;padding:0 14px 0 12px;border-radius:9px;background:linear-gradient(180deg,#fff,#E7E6E2);color:#111113;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.4)}
+:root[data-theme="light"] .pri{background:linear-gradient(180deg,#2A2A2F,#141416);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 1px 2px rgba(0,0,0,.25)}
+.pri:active{scale:.97}
+.openCard{display:flex;flex-direction:column;gap:14px;padding:20px;border-radius:14px;background:var(--panel);box-shadow:0 0 0 1px rgba(var(--hi),.07),0 12px 32px rgba(0,0,0,.25)}
+.openCard h2{font-size:15px;line-height:20px}
+.openCard p{margin-top:4px}
+.openCard input{height:38px}
+.openCard button#go{height:38px}
+.ptools{display:flex;align-items:center;gap:10px}
+.ptools .sp{flex:1}
+.seg{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:rgba(var(--hi),.05);box-shadow:inset 0 1px 2px rgba(0,0,0,.25)}
+.seg button{height:28px;padding:0 10px;border-radius:7px;background:transparent;color:var(--ink2);font:500 12.5px/1 Geist,system-ui,sans-serif}
+.seg button span{margin-left:4px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.seg button.on{background:#3A3A41;color:var(--ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.45)}
+:root[data-theme="light"] .seg{box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
+:root[data-theme="light"] .seg button.on{background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.1)}
+.seg.vt button{width:30px;padding:0;color:var(--ink3)}
+.seg.vt button.on{color:var(--ink)}
+.ptools select{height:32px;min-width:0;padding:0 28px 0 10px;background-position:right 9px center;border-color:transparent;background-color:transparent;color:var(--ink2);font-size:12.5px}
+.ptools select:hover{background-color:rgba(var(--hi),.05)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:28px 20px}
+.proj{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:12px;height:auto;padding:0;border-radius:0;background:none;color:var(--ink);text-align:left;white-space:normal;font:inherit}
+.shot{position:relative;display:block;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px rgba(var(--hi),.07);transition:box-shadow .16s cubic-bezier(.2,0,0,1),translate .16s cubic-bezier(.2,0,0,1)}
+.shot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.shot .ph{position:absolute;inset:0;display:grid;place-items:center;opacity:.22;filter:grayscale(1)}
+.proj:hover .shot{translate:0 -2px;box-shadow:0 0 0 1px rgba(var(--hi),.16),0 10px 28px rgba(0,0,0,.3)}
+.proj:focus-visible{outline:none}.proj:focus-visible .shot{box-shadow:0 0 0 2px #2B66D9}
+.info{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:0 2px}
+.info .tx{display:flex;flex-direction:column;min-width:0}
+.info b{font-weight:500;font-size:14px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.info .when{color:var(--ink3);font-size:12.5px;line-height:18px}
+.info .src{display:none;color:var(--ink3);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.run{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;height:22px;margin-top:-1px;padding:0 8px;border-radius:6px;background:rgba(111,211,154,.1);color:var(--ok);font-size:11.5px;font-weight:500}
+.run::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.grid.list{display:flex;flex-direction:column;gap:2px}
+.grid.list .proj{flex-direction:row;align-items:center;gap:14px;padding:8px;border-radius:10px}
+.grid.list .proj:hover{background:rgba(var(--hi),.04)}
+.grid.list .shot{flex:0 0 80px;width:80px;border-radius:6px}
+.grid.list .proj:hover .shot{translate:none;box-shadow:0 0 0 1px rgba(var(--hi),.1)}
+.grid.list .info{flex:1;align-items:center}
+.grid.list .src{display:block}
+#v-projects{gap:24px}
+#job:empty{display:none}
+input:focus,select:focus{border-color:rgba(43,102,217,.75);box-shadow:0 0 0 3px rgba(43,102,217,.16)}
 @media (max-width:760px){.app{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px}.brand{padding:0 8px 0 4px}nav .sp,nav .ver{display:none}main{padding:28px 16px 48px}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 </style></head>
 <body><div class="app">
 <nav aria-label="Tovi">
   <div class="brand"><svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoA)"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoB)"/></svg>Tovi</div>
+  <label class="nsearch"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="q" placeholder="Search" autocomplete="off" spellcheck="false" aria-label="Search projects"><kbd>/</kbd></label>
   <a href="#projects" data-v="projects"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>Projects</a>
   <a href="#settings" data-v="settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a>
   <a href="#help" data-v="help"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="currentColor"/></svg>Help</a>
@@ -226,15 +285,22 @@ kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;backgr
 </nav>
 <main>
   <section class="view" id="v-projects" aria-labelledby="pT">
-    <div class="lead">
-      <div><h1 id="pT">Open a project</h1><p>Paste a GitHub link or a folder on this computer. Tovi runs your app and opens it with the editor on top. Your code only changes when you edit.</p></div>
+    <div class="phead"><h1 id="pT">Projects</h1><button class="pri" id="openBtn" aria-expanded="false" aria-controls="openCard"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Open project</button></div>
+    <div class="openCard" id="openCard" hidden>
+      <div><h2 id="oT">Open a project</h2><p>Paste a GitHub link or a folder on this computer. Tovi runs your app and opens it with the editor on top. Your code only changes when you edit.</p></div>
       <form class="openf" id="f"><input id="src" placeholder="github.com/team/app  or  ~/code/app" autocomplete="off" spellcheck="false" aria-label="GitHub link or folder"><button id="go">Open</button></form>
       <label class="chk"><input type="checkbox" id="diagOn" checked><span>Check my product for design issues when it opens <span class="hint">Tovi reviews each page and leaves notes on what to fix.</span></span></label>
       <span class="hint">React apps built with Vite or Next.js 13+, styled with Tailwind CSS v3. Private repos use your GitHub sign-in on this Mac.</span>
-      <div class="banner" id="keyBanner" hidden><span>Add your Anthropic key to use Tovi’s AI.</span><a class="btn ghost sm" href="#settings">Add key</a></div>
     </div>
+    <div class="banner" id="keyBanner" hidden><span>Add your Anthropic key to use Tovi’s AI.</span><a class="btn ghost sm" href="#settings">Add key</a></div>
     <div id="job"></div>
-    <div><div class="secH"><h2>Recent projects</h2><span class="hint" id="pdir"></span></div><div class="grid" id="recent"></div></div>
+    <div class="ptools" id="ptools" hidden>
+      <div class="seg" role="group" aria-label="Show"><button class="on" data-f="all">All<span id="nAll"></span></button><button data-f="run">Running<span id="nRun"></span></button></div>
+      <span class="sp"></span>
+      <select id="sort" aria-label="Sort by"><option value="at">Last opened</option><option value="name">Name</option></select>
+      <div class="seg vt" role="group" aria-label="View"><button data-view="grid" class="on" aria-label="Grid" title="Grid"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></svg></button><button data-view="list" aria-label="List" title="List"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h.01M3 12h.01M3 19h.01M8 5h13M8 12h13M8 19h13"/></svg></button></div>
+    </div>
+    <div class="grid" id="recent"></div>
   </section>
 
   <section class="view" id="v-settings" aria-labelledby="sT">
@@ -319,10 +385,28 @@ async function poll(){
   polling=setTimeout(poll,700);
 }
 const ago=t=>{const s=(Date.now()-t)/1000;return s<3600?Math.max(1,Math.round(s/60))+' min ago':s<86400?Math.round(s/3600)+' h ago':Math.round(s/86400)+' d ago'};
-async function loadRecent(){
-  const list=await (await fetch('/api/recent')).json();
-  $('recent').innerHTML=list.length?list.map(p=>{const name=p.name||String(p.source).split('/').filter(Boolean).pop();return '<button class="proj" data-src="'+esc(p.source)+'"'+(p.url?' data-url="'+esc(p.url)+'"':'')+'><span class="thumb">'+esc(name.slice(0,2).toUpperCase())+'</span><span><b>'+esc(name)+'</b><span class="src">'+esc(p.source)+'</span></span><span class="meta"><span class="pill'+(p.url?' run':'')+'">'+(p.url?'Running':'Not running')+'</span><span>'+ago(p.at)+'</span></span></button>'}).join(''):'<div class="empty">Projects you open appear here.</div>';
+// Projects: All or Running, sorted, as big previews or a list. The card shows the app as it last looked in Tovi.
+let LIST=[],F='all',Q='',VIEW='grid';try{VIEW=localStorage.getItem('kerf.view')==='list'?'list':'grid'}catch{}
+const LOGO='<svg width="44" height="44" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="currentColor"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="currentColor"/></svg>';
+const nm=p=>p.name||String(p.source).split('/').filter(Boolean).pop();
+function card(p){return '<button class="proj" data-src="'+esc(p.source)+'"'+(p.url?' data-url="'+esc(p.url)+'"':'')+'><span class="shot"><span class="ph">'+LOGO+'</span>'+(p.thumb?'<img src="/api/thumb?id='+encodeURIComponent(p.id)+'&t='+p.thumb+'" alt="" loading="lazy" onerror="this.remove()">':'')+'</span><span class="info"><span class="tx"><b>'+esc(nm(p))+'</b><span class="src">'+esc(p.source)+'</span><span class="when">Opened '+ago(p.at)+'</span></span>'+(p.url?'<span class="run">Running</span>':'')+'</span></button>'}
+function showOpen(on,first){const c=$('openCard');c.hidden=!on;$('openBtn').setAttribute('aria-expanded',on);$('openBtn').hidden=!!first;$('oT').textContent=first?'Open your first project':'Open a project';if(on&&!first)setTimeout(()=>$('src').focus(),0)}
+function renderList(){
+  const has=LIST.length;$('ptools').hidden=!has;if(!has)showOpen(true,true);else $('openBtn').hidden=false;
+  $('nAll').textContent=has;$('nRun').textContent=LIST.filter(p=>p.url).length;
+  let l=LIST.filter(p=>F==='all'||p.url).filter(p=>!Q||(nm(p)+' '+p.source).toLowerCase().includes(Q));
+  if($('sort').value==='name')l=[...l].sort((a,b)=>nm(a).localeCompare(nm(b)));
+  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('on',b.dataset.view===VIEW));
+  $('recent').className='grid'+(VIEW==='list'?' list':'');
+  $('recent').innerHTML=l.length?l.map(card).join(''):has?'<div class="empty">'+(Q?'No projects match “'+esc(Q)+'”.':'Nothing is running right now.')+'</div>':'';
 }
+async function loadRecent(){LIST=await (await fetch('/api/recent')).json();renderList()}
+$('openBtn').addEventListener('click',()=>showOpen($('openCard').hidden));
+document.querySelector('.seg[aria-label="Show"]').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;F=b.dataset.f;b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));renderList()});
+document.querySelector('.seg.vt').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(!b)return;VIEW=b.dataset.view;try{localStorage.setItem('kerf.view',VIEW)}catch{}renderList()});
+$('sort').addEventListener('change',renderList);
+$('q').addEventListener('input',e=>{Q=e.target.value.trim().toLowerCase();if(location.hash&&location.hash!=='#projects')location.hash='#projects';renderList()});
+addEventListener('keydown',e=>{if(e.key==='/'&&!e.target.closest('input,textarea,select')){e.preventDefault();$('q').focus()}else if(e.key==='Escape'&&!$('openCard').hidden&&LIST.length)showOpen(false)});
 $('f').addEventListener('submit',e=>{e.preventDefault();const v=$('src').value.trim();if(v)open(v)});
 $('recent').addEventListener('click',e=>{const b=e.target.closest('[data-src]');if(!b)return;if(b.dataset.url){location.href=b.dataset.url;return}$('src').value=b.dataset.src;open(b.dataset.src)});
 async function loadKey(){const s=await (await fetch('/api/key-status')).json();
@@ -331,7 +415,7 @@ async function loadKey(){const s=await (await fetch('/api/key-status')).json();
   AI=s;if(!vp)vp=s.provider;renderAI();
   $('ustat').innerHTML=s.unsplash?'<span class="ok">Saved.</span> Photo search is on.':'Not set: photo search is off.';
   $('keyBanner').hidden=s.provider==='anthropic'?!!s.set:!!s[s.provider];}
-async function loadAbout(){try{const a=await (await fetch('/api/about')).json();$('ver').textContent='Version '+a.version;$('aver').textContent=a.version;$('adir').textContent=a.projectsDir+' (Tovi’s copies of the repos you open)';$('pdir').textContent='Newest first';}catch{}}
+async function loadAbout(){try{const a=await (await fetch('/api/about')).json();$('ver').textContent='Version '+a.version;$('aver').textContent=a.version;$('adir').textContent=a.projectsDir+' (Tovi’s copies of the repos you open)';}catch{}}
 $('uf').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/unsplash-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('uin').value})});const j=await r.json();if(!r.ok){$('uerr').textContent=j.error;return}$('uin').value='';$('uerr').textContent='';loadKey()});
 $('kf').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('kin').value})});const j=await r.json();if(!r.ok){$('kerr').textContent=j.error;return}$('kin').value='';$('kerr').textContent='';loadKey()});
 document.querySelectorAll('.aif').forEach(f=>f.addEventListener('submit',async e=>{e.preventDefault();const i=f.querySelector('input'),er=f.parentNode.querySelector('.err');const r=await fetch('/api/ai-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:f.dataset.p,key:i.value})});const j=await r.json();if(!r.ok){er.textContent=j.error;return}i.value='';er.textContent='';loadKey()}));

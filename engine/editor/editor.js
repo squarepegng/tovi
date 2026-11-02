@@ -754,7 +754,7 @@
   const ico = (n, s = 14) => LU[n]
     ? `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${(LINE * 24 / s).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LU[n]}</svg>`
     : `<svg width="${s}" height="${s}" viewBox="0 0 16 16" stroke-width="${(LINE * 16 / s).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${String(IC[n] || '').replace(/ stroke-width="[\d.]+"/g, '')}</svg>`;
-  const cornerIco = (deg) => `<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><g transform="rotate(${deg} 8 8)">${IC.rad}</g></svg>`;
+  const cornerIco = (deg) => `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><g transform="rotate(${deg} 8 8)">${IC.rad}</g></svg>`;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const tip = (label, key) => `<span class="tip">${label}${key ? `<span class="k">${key}</span>` : ''}</span>`;
   const hb = (act, icon, title, v = '', extra = '') => `<button class="ib sm" data-act="${act}" data-v="${v}" ${extra} title="${title}" aria-label="${title}">${ico(icon)}</button>`;
@@ -1158,7 +1158,7 @@
 
   /* ---------- design panel ---------- */
   const val = (p) => read(p, S.sel?.el);
-  const nf = (p, icon, title, unit) => { const st = ''; return `<label class="inp${info()?.sized?.includes(p) ? ' sized' : ''}" title="${title}${st ? ` · ${st === 'custom' ? 'off your design scale' : `scale step ${st}`}` : ''}${info()?.sized?.includes(p) ? ' · different on other screen sizes' : ''}"><span class="ic" data-scrub="${p}">${icon.startsWith('<') ? icon : ico(icon, 12)}</span><input type="text" inputmode="decimal" data-prop="${p}" value="${esc(val(p))}" aria-label="${title}">${st ? `<span class="u step${st === 'custom' ? ' off' : ''}">${st === 'custom' ? 'off' : esc(st)}</span>` : ''}${unit ? `<span class="u">${unit}</span>` : ''}</label>`; };
+  const nf = (p, icon, title, unit) => { const st = ''; return `<label class="inp${info()?.sized?.includes(p) ? ' sized' : ''}" title="${title}${st ? ` · ${st === 'custom' ? 'off your design scale' : `scale step ${st}`}` : ''}${info()?.sized?.includes(p) ? ' · different on other screen sizes' : ''}"><span class="ic" data-scrub="${p}">${icon.startsWith('<') ? icon : ico(icon, 16)}</span><input type="text" inputmode="decimal" data-prop="${p}" value="${esc(val(p))}" aria-label="${title}">${st ? `<span class="u step${st === 'custom' ? ' off' : ''}">${st === 'custom' ? 'off' : esc(st)}</span>` : ''}${unit ? `<span class="u">${unit}</span>` : ''}</label>`; };
   // A field with its name above it, like Figma's labelled fields.
   const lf = (label, field) => `<div class="fl"><span class="flab">${label}</span>${field}</div>`;
   // The design-system step behind a number (p-4 → "4", rounded-lg → "lg", text-xl → "xl"); "custom" when off the scale.
@@ -1728,9 +1728,15 @@
   }
   // Versions save themselves: after a few minutes of edits, when you move to another page, or when you present.
   S.verAt = 0;
+  // The project's card on the start page shows the app as it looks now: a small picture a few seconds after it
+  // opens, and again with each saved version.
+  let thumbT;
+  const saveThumb = (ms = 0) => { clearTimeout(thumbT); thumbT = setTimeout(() => captureScreen().then((x) => x && api('/thumb', { data: x.data })).catch(() => {}), ms); };
+  frame.addEventListener('load', () => saveThumb(6000));
   function saveVersion() {
     if (!S.count || S.count === S.verAt || S.versions.peeking) return;
     S.verAt = S.count;
+    saveThumb(1500);
     api('/version', { kind: 'auto' }).then((v) => { S.versions = v; renderTop(); if (S.side === 'history') renderPanel(); }).catch(() => {});
   }
   setInterval(saveVersion, 3 * 60 * 1000);

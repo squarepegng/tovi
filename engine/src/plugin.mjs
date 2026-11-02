@@ -136,6 +136,14 @@ export async function createKerf(webRoot) {
           return send(200, { ok: true });
         }
         if (route === '/chat') { session.setChat(body); return send(200, { ok: true }); }
+        // A small picture of the app for its card on Tovi's start page (kept in .kerf/, never committed).
+        if (route === '/thumb') {
+          const d = String(body?.data || '');
+          if (!/^[A-Za-z0-9+/=]{100,4000000}$/.test(d)) return send(400, { error: 'Not an image.' });
+          fs.mkdirSync(path.join(webRoot, '.kerf'), { recursive: true });
+          fs.writeFileSync(path.join(webRoot, '.kerf', 'thumb.jpg'), Buffer.from(d, 'base64'));
+          return send(200, { ok: true });
+        }
         if (route === '/direction') { const d = session.setDirection(body); return send(200, d ? { ...d, refs: d.refs.map(({ data, ...r }) => r) } : null); }
         // Every change is saved to .kerf/ so a restart keeps undo, versions and chat.
         const s0 = send;
