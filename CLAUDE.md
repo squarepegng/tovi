@@ -87,12 +87,12 @@ One dark theme for now (light theme and core components still to do).
 | ink | #EDEDF0 |
 | ink-2 | #B0B0BA |
 | ink-3 | #8B8B95 |
-| brand (purple, `--select`) | #8A57BC |
+| brand / action (`--select`) | ivory #F2F1EE in dark (text on it #111113), near-black #1B1B1E in light |
 | selection (blue, `--sel`) | #2B66D9 |
-| intent (Tovi pink) | #FCBDDD (light theme #C2508A) |
+| Tovi pink (brand, `--intent`) | #FCBDDD (light theme #C2508A); logo two-tone #E9A3C6 + #FCBDDD |
 | danger | #F06A5F |
 
-**Core colour rule (brand colours set October 2026): purple is the Tovi brand** (buttons, active tools, focus, the Hand off / Create PR button). **Blue means "what you're touching" on the canvas** (selection outlines, handles, drop line, the Layers highlight), kept blue like Figma so it never blends into a design. **Pink means Tovi itself** (its cursor and name tag, guides, rule prompts, change markers, AI proposals). Light and dark themes both exist (Settings → Appearance); dark is the default for everyone.
+**Core colour rule (changed November 2026): Tovi pink is the brand** (the logo, Tovi's cursor and name tag, guides, rule prompts, change markers, AI proposals). Purple is gone (it read too close to Wonder). **Buttons and active states are ivory** in the dark theme and near-black in the light theme (Hand off, active tool, toggles). **Blue means "what you're touching" on the canvas** (selection outlines, handles, drop line, the Layers highlight), like Figma. In dark theme the top bar and side panels sit darker than the canvas (#111113), Framer-style. Icons are Lucide (1.25px lines at any size) plus a few of Tovi's own field icons. Light and dark themes both exist; dark is the default.
 
 Type: Geist for the interface (12px is the workhorse size), Geist Mono for code paths. Spacing: 4 / 8 / 12 / 16. Radii: 4 / 6 / 10.
 

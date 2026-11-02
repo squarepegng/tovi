@@ -1,7 +1,7 @@
-:root{--canvas:#1B1B1E;--panel:#232327;--raised:#2D2D32;--line:#3A3A40;--ink:#EDEDF0;--ink2:#B0B0BA;--ink3:#8B8B95;--select:#8A57BC;--sel:#2B66D9;--intent:#FCBDDD;--danger:#F06A5F;--hi:255,255,255;--menu:#1E1E21;--deep:#141416;--blueTx:#9DBBF5;--amberTx:#FCBDDD;--purpleTx:#B693FF;--greenTx:#7FD3A2;--redTx:#F3A39B;color-scheme:dark}
+:root{--canvas:#1B1B1E;--panel:#232327;--raised:#2D2D32;--line:#3A3A40;--ink:#EDEDF0;--ink2:#B0B0BA;--ink3:#8B8B95;--select:#F2F1EE;--onSelect:#111113;--logoA:#E9A3C6;--logoB:#FCBDDD;--sel:#2B66D9;--intent:#FCBDDD;--danger:#F06A5F;--hi:255,255,255;--menu:#1E1E21;--deep:#141416;--blueTx:#9DBBF5;--amberTx:#FCBDDD;--purpleTx:#B693FF;--greenTx:#7FD3A2;--redTx:#F3A39B;color-scheme:dark}
 /* Dark is the default. Light when Settings picks it, or when it picks System and the Mac is light. */
-@media (prefers-color-scheme: light){:root[data-theme="system"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#8A57BC;--sel:#2B66D9;--intent:#C2508A;--danger:#D93F33;--hi:0,0,0;--menu:#FFFFFF;--deep:#E6E6EA;--blueTx:#2459C4;--amberTx:#B33F7B;--purpleTx:#6E3FD6;--greenTx:#1E8A4F;--redTx:#C23A2E;color-scheme:light}}
-:root[data-theme="light"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#8A57BC;--sel:#2B66D9;--intent:#C2508A;--danger:#D93F33;--hi:0,0,0;--menu:#FFFFFF;--deep:#E6E6EA;--blueTx:#2459C4;--amberTx:#B33F7B;--purpleTx:#6E3FD6;--greenTx:#1E8A4F;--redTx:#C23A2E;color-scheme:light}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#1B1B1E;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--sel:#2B66D9;--intent:#C2508A;--danger:#D93F33;--hi:0,0,0;--menu:#FFFFFF;--deep:#E6E6EA;--blueTx:#2459C4;--amberTx:#B33F7B;--purpleTx:#6E3FD6;--greenTx:#1E8A4F;--redTx:#C23A2E;color-scheme:light}}
+:root[data-theme="light"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#1B1B1E;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--sel:#2B66D9;--intent:#C2508A;--danger:#D93F33;--hi:0,0,0;--menu:#FFFFFF;--deep:#E6E6EA;--blueTx:#2459C4;--amberTx:#B33F7B;--purpleTx:#6E3FD6;--greenTx:#1E8A4F;--redTx:#C23A2E;color-scheme:light}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--canvas);color:var(--ink);font:400 12px/16px Geist,ui-sans-serif,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -25,7 +25,7 @@ button{cursor:pointer}
 .icon{width:28px;height:28px;display:grid;place-items:center;background:transparent;border:0;border-radius:6px;color:var(--ink2);position:relative}
 .icon:hover,.icon.on{background:var(--raised);color:var(--ink)}
 .badgeDot{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:4px;background:var(--intent);box-shadow:0 0 0 2px var(--panel)}
-.primary{display:flex;align-items:center;gap:8px;height:28px;padding:0 6px 0 10px;background:var(--select);border:0;border-radius:6px;color:#fff;font-weight:500;white-space:nowrap}
+.primary{display:flex;align-items:center;gap:8px;height:28px;padding:0 6px 0 10px;background:var(--select);border:0;border-radius:6px;color:var(--onSelect);font-weight:500;white-space:nowrap}
 .primary .count{min-width:18px;height:18px;padding:0 5px;display:grid;place-items:center;border-radius:4px;background:rgba(255,255,255,.18);font-size:11px}
 .primary.solo{padding:0 14px;height:32px}
 .primary[disabled]{opacity:.5;cursor:default}
@@ -65,8 +65,8 @@ aside[hidden]{display:none!important}
 .modes{display:flex;gap:2px;padding:2px;background:var(--canvas);border-radius:10px}
 .tb{display:grid;place-items:center;width:40px;height:40px;background:transparent;border:0;border-radius:8px;color:var(--ink2);position:relative}
 .tb:hover{background:var(--line);color:var(--ink)}
-.tb.on{background:var(--select);color:#fff}
-.modes .tb.on{background:var(--select);color:#fff}
+.tb.on{background:var(--select);color:var(--onSelect)}
+.modes .tb.on{background:var(--select);color:var(--onSelect)}
 .tb[disabled]{opacity:.35;cursor:default}
 .tb.sm{width:30px;height:32px}
 .tip{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:var(--ink);color:var(--canvas);font:500 12px/16px Geist,system-ui,sans-serif;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s}
@@ -271,10 +271,10 @@ details.code[open] summary::before{content:'⌄ '}
 
 /* composer: Ask, replies, chat and notes */
 .kc{position:relative;display:flex;flex-direction:column;gap:6px;padding:10px 10px 8px;background:var(--raised);border:1px solid var(--line);border-radius:14px;transition:border-color .12s,box-shadow .12s}
-.kc:focus-within{border-color:var(--select);box-shadow:0 0 0 3px rgba(138,87,188,.18)}
+.kc:focus-within{border-color:var(--select);box-shadow:0 0 0 3px rgba(var(--hi),.18)}
 .kc.big{padding:12px 12px 8px;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
-.kc.big:focus-within{box-shadow:0 12px 40px rgba(0,0,0,.4),0 0 0 3px rgba(138,87,188,.18)}
-.kc.drop{border-color:var(--select);border-style:dashed;background:rgba(138,87,188,.08)}
+.kc.big:focus-within{box-shadow:0 12px 40px rgba(0,0,0,.4),0 0 0 3px rgba(var(--hi),.18)}
+.kc.drop{border-color:var(--select);border-style:dashed;background:rgba(var(--hi),.08)}
 .kcRow{display:flex;align-items:flex-start;gap:8px}
 .kcRow .spark{height:20px}
 .kc textarea{flex:1;min-width:0;width:100%;min-height:20px;max-height:168px;padding:0 2px;background:transparent;border:0;outline:none;resize:none;overflow-y:auto;color:var(--ink);font:400 13px/20px Geist,system-ui,sans-serif}
@@ -313,7 +313,7 @@ details.code[open] summary::before{content:'⌄ '}
 .ng:hover{box-shadow:inset 0 0 0 1px rgba(252,189,221,.5)}
 .ng.off{opacity:.5}
 .ngH{display:flex;align-items:center;gap:8px;min-width:0}
-.nNum{flex:0 0 auto;display:grid;place-items:center;width:20px;height:20px;border-radius:10px 10px 10px 2px;background:var(--select);color:#fff;font:600 11px/1 Geist,system-ui,sans-serif}
+.nNum{flex:0 0 auto;display:grid;place-items:center;width:20px;height:20px;border-radius:10px 10px 10px 2px;background:var(--select);color:var(--onSelect);font:600 11px/1 Geist,system-ui,sans-serif}
 .nNum.other{background:var(--line);border-radius:10px}
 .ngQ{flex:1;min-width:0;color:var(--ink2);line-height:16px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .ngH{align-items:flex-start}
@@ -424,7 +424,7 @@ body.minUI #layers,body.minUI #panel{display:none!important}
 /* menus (Tovi, pages, zoom, right-click) */
 .menu{position:fixed;z-index:60;min-width:220px;max-width:320px;padding:4px;background:var(--menu);border:1px solid rgba(var(--hi),.08);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .menu .mi{display:flex;align-items:center;gap:8px;width:100%;height:28px;padding:0 8px 0 4px;border:0;border-radius:6px;background:transparent;color:var(--ink);text-align:left;white-space:nowrap}
-.menu .mi:hover:not([disabled]){background:var(--select);color:#fff}
+.menu .mi:hover:not([disabled]){background:var(--select);color:var(--onSelect)}
 .menu .mi:hover:not([disabled]) .mk{color:rgba(255,255,255,.75)}
 .menu .mi[disabled]{color:var(--ink3);cursor:default}
 .menu .mi.danger{color:var(--redTx)}
@@ -459,7 +459,7 @@ body.minUI #layers,body.minUI #panel{display:none!important}
 .lchanges:hover{color:var(--ink);background:rgba(var(--hi),.03)}
 
 /* values that differ by screen size (Framer-style override marker) */
-.inp.sized{position:relative;box-shadow:inset 0 0 0 1px rgba(138,87,188,.55)}
+.inp.sized{position:relative;box-shadow:inset 0 0 0 1px rgba(var(--hi),.55)}
 .inp.sized::after{content:'';position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:3px;background:var(--select)}
 .palette .tn{font:400 12px/16px Geist,system-ui,sans-serif;color:var(--ink)}
 
@@ -617,7 +617,7 @@ body.minUI #layers,body.minUI #panel{display:none!important}
 .iconPop .igrid.p{grid-template-columns:repeat(4,minmax(0,1fr));max-height:none;overflow:visible}
 .iconPop .icell{height:auto;padding:8px 2px 6px;flex-direction:column;gap:5px;background:transparent;border:1px solid transparent}
 .iconPop .icell:hover{background:var(--raised);border-color:rgba(var(--hi),.08)}
-.iconPop .icell.on{border-color:var(--select);background:rgba(138,87,188,.12)}
+.iconPop .icell.on{border-color:var(--select);background:rgba(var(--hi),.12)}
 .iconPop .icell img{width:18px;height:18px}
 .iconPop .icell span{display:block;font-size:10px;line-height:12px;color:var(--ink3);max-width:100%}
 .ipFoot{border-top:1px solid rgba(var(--hi),.06);padding-top:6px}
@@ -666,19 +666,19 @@ body.minUI #layers,body.minUI #panel{display:none!important}
 .kcMode{display:inline-flex;align-items:center;gap:5px;max-width:190px;height:24px;margin-left:4px;padding:0 8px;border:0;border-radius:999px;background:rgba(var(--hi),.05);color:var(--ink2);font:500 11px/14px Geist,system-ui,sans-serif;white-space:nowrap}
 .kcMode span{overflow:hidden;text-overflow:ellipsis}
 .kcMode:hover{background:rgba(var(--hi),.09);color:var(--ink)}
-.kcMode.improve{background:rgba(138,87,188,.16);color:var(--blueTx)}
+.kcMode.improve{background:rgba(var(--hi),.16);color:var(--blueTx)}
 .kcMode.explore{background:rgba(252,189,221,.12);color:var(--amberTx)}
 .kcMode svg{flex:0 0 auto}
 /* "Improve the system instead →" */
-.kSuggest{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:10px 12px;border-radius:12px;background:rgba(138,87,188,.08);border:1px solid rgba(138,87,188,.25)}
+.kSuggest{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:10px 12px;border-radius:12px;background:rgba(var(--hi),.08);border:1px solid rgba(var(--hi),.25)}
 .kSuggest span{color:var(--ink2);font-size:12px;line-height:17px}
 .kSuggest button{border:0;background:transparent;padding:0;color:var(--blueTx);font:500 12px/16px Geist,system-ui,sans-serif}
 .kSuggest button:hover{color:var(--blueTx);text-decoration:underline}
 /* Improve card: the design system section */
-.edits.sys{border-color:rgba(138,87,188,.3)}
+.edits.sys{border-color:rgba(var(--hi),.3)}
 .edits.sys .edH{gap:6px}
 .pvBtn{margin-left:auto;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border:1px solid rgba(var(--hi),.1);border-radius:6px;background:transparent;color:var(--ink2);font:500 11px/14px Geist,system-ui,sans-serif}
-.pvBtn.on{background:var(--select);border-color:var(--select);color:#fff}
+.pvBtn.on{background:var(--select);border-color:var(--select);color:var(--onSelect)}
 .swd{display:inline-flex;align-items:center;gap:5px}
 .swd i{width:14px;height:14px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(var(--hi),.18)}
 .swd svg{color:var(--ink3)}
@@ -689,7 +689,7 @@ body.minUI #layers,body.minUI #panel{display:none!important}
 .dirCard{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px;border:1px solid rgba(var(--hi),.08);border-radius:12px;background:rgba(var(--hi),.02);color:var(--ink);text-align:left}
 .dirCard span{color:var(--ink3);font-size:11px;line-height:15px}
 .dirCard:hover{background:var(--raised)}
-.dirCard.on{border-color:var(--select);background:rgba(138,87,188,.1)}
+.dirCard.on{border-color:var(--select);background:rgba(var(--hi),.1)}
 .dirRefs{display:flex;gap:8px;margin-top:6px}
 .dirAdd{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:52px;height:52px;border:1px dashed rgba(var(--hi),.2);border-radius:8px;background:transparent;color:var(--ink3);font-size:10px}
 .dirAdd:hover{color:var(--ink);border-color:rgba(var(--hi),.35)}
@@ -818,7 +818,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 #layers[data-left="layers"] .lhead{border-bottom:0;height:36px}
 /* the chat's "what Tovi will look at" chip sits above the message, like Figma's */
 .kcTop{display:flex;min-width:0;margin:-2px 0 2px}
-.kcTop .kcCtx{max-width:100%;border:1px solid rgba(138,87,188,.6);background:rgba(138,87,188,.12);color:var(--blueTx);border-radius:6px}
+.kcTop .kcCtx{max-width:100%;border:1px solid rgba(var(--hi),.6);background:rgba(var(--hi),.12);color:var(--blueTx);border-radius:6px}
 .kcTop .kcCtx svg{color:var(--blueTx)}
 .devLabel{pointer-events:auto;cursor:default;border-radius:4px;padding:2px 4px;margin:-2px -4px}
 .devLabel:hover b{color:var(--ink)}
@@ -827,7 +827,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 /* Design panel with nothing selected: how to start, then the page */
 .selHint{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;margin:12px;padding:20px 16px;border:1px dashed rgba(var(--hi),.12);border-radius:12px;color:var(--ink3);line-height:18px}
 .selHint b{color:var(--ink);font-weight:600;font-size:13px}
-.shIc{display:grid;place-items:center;width:36px;height:36px;margin-bottom:4px;border-radius:10px;background:rgba(138,87,188,.14);color:var(--blueTx)}
+.shIc{display:grid;place-items:center;width:36px;height:36px;margin-bottom:4px;border-radius:10px;background:rgba(var(--hi),.14);color:var(--blueTx)}
 .pgRow{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:26px;color:var(--ink3)}
 .pgRow span:last-child{color:var(--ink2)}
 .pgRow .linkBtn{align-self:auto}
@@ -893,7 +893,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .agent.flip .agLbl,.agent.flip .agSay{left:auto;right:6px}
 .agent.flip .agSay{border-radius:12px 4px 12px 12px}
 /* when Tovi needs pictures to finish: one clear step */
-.pickBar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 10px 10px 12px;border-radius:12px;background:rgba(138,87,188,.1);border:1px solid rgba(138,87,188,.35)}
+.pickBar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 10px 10px 12px;border-radius:12px;background:rgba(var(--hi),.1);border:1px solid rgba(var(--hi),.35)}
 .pickBar span{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
 .pickBar span svg{color:var(--blueTx)}
 /* Settings */
@@ -938,7 +938,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .vTitle{color:var(--ink);font-weight:600;font-size:12px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vSub{color:var(--ink3);font-size:11px;line-height:15px}
 .vWho{display:flex;align-items:center;gap:6px;margin-top:3px;color:var(--ink2);font-size:11px;line-height:16px}
-.vAv{display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--select);color:#fff;font:600 8px/1 Geist,system-ui,sans-serif;font-style:normal;letter-spacing:.02em}
+.vAv{display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--select);color:var(--onSelect);font:600 8px/1 Geist,system-ui,sans-serif;font-style:normal;letter-spacing:.02em}
 .vMore{position:absolute;top:6px;right:4px;width:24px;height:24px;display:grid;place-items:center;border:0;border-radius:4px;background:none;color:var(--ink3);opacity:0}
 .vItem:hover .vMore,.vItem.sel .vMore,.vMore:focus-visible{opacity:1}
 .vMore:hover{background:rgba(var(--hi),.08);color:var(--ink)}
@@ -1014,7 +1014,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .gName{flex:1;color:var(--ink)}
 .shRow .inp{flex:1}
 .shIco i{display:block;width:12px;height:12px;border-radius:3px;background:var(--panel);box-shadow:1px 2px 0 rgba(var(--hi),.35),inset 0 0 0 1.5px var(--ink2)}
-.shIco.on{background:rgba(138,87,188,.18)}
+.shIco.on{background:rgba(var(--hi),.18)}
 .cr.shRow{grid-template-columns:auto minmax(0,1fr)}
 
 /* Chat empty state: Tovi's picture, no badge behind it */
@@ -1025,7 +1025,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .fpTypes{display:flex;gap:4px;padding-bottom:8px;border-bottom:1px solid rgba(var(--hi),.08)}
 .fpType{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:6px;background:none;color:var(--ink2)}
 .fpType:hover{background:rgba(var(--hi),.06)}
-.fpType.on{box-shadow:inset 0 0 0 1.5px var(--select);background:rgba(138,87,188,.12)}
+.fpType.on{box-shadow:inset 0 0 0 1.5px var(--select);background:rgba(var(--hi),.12)}
 .fpType i{display:block;width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1.5px currentColor}
 .fpType .tSolid{background:currentColor;opacity:.85}
 .fpType .tGrad{background:linear-gradient(to right,transparent,currentColor)}
@@ -1045,7 +1045,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .gBar2{height:36px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(var(--hi),.1);margin-top:2px}
 .gStopsH{display:flex;align-items:center;justify-content:space-between;padding-top:4px;font-weight:600}
 .gRow2{display:grid;grid-template-columns:56px minmax(0,1fr) 24px;gap:4px;align-items:center;margin:0 -10px;padding:3px 10px;cursor:default}
-.gRow2.on{background:rgba(138,87,188,.14)}
+.gRow2.on{background:rgba(var(--hi),.14)}
 .gRow2 .inp input{min-width:0}
 .gCol input[data-ghex]{flex:1;font-family:'Geist Mono',ui-monospace,monospace}
 .gCol input[data-galpha]{width:26px;text-align:right}
@@ -1067,7 +1067,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .fHead{padding:8px 8px 4px;color:var(--ink3);font-size:11px;font-weight:600}
 .fontRow{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-height:32px;padding:6px 8px;border:0;border-radius:6px;background:none;color:var(--ink);text-align:left;cursor:pointer}
 .fontRow:hover{background:rgba(var(--hi),.06)}
-.fontRow.on{background:rgba(138,87,188,.16)}
+.fontRow.on{background:rgba(var(--hi),.16)}
 .fontRow.busy{opacity:.6;pointer-events:none}
 .fName{font-size:15px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fSub{flex:0 0 auto;color:var(--ink3);font-size:11px}
@@ -1172,3 +1172,9 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .side .sec{border-bottom-color:var(--chromeLine)}
 #panel .inp,#panel .ibs,#panel .seg{background:var(--field)}
 #panel .inp:hover,#panel .inp:focus-within{background:rgba(var(--hi),.1)}
+
+/* Brand: Tovi pink is the logo and Tovi itself; buttons and active states are ivory (dark) or near-black (light). */
+.primary .count{background:rgba(0,0,0,.12)}
+.mk.cbox{color:var(--onSelect)}
+.mk.cbox.some b{background:var(--onSelect)}
+.switch.on i{background:var(--onSelect)}
