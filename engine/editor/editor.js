@@ -930,6 +930,8 @@
       { label: 'Add next to it…', kbd: 'I', run: act('insertMenu') },
       '-',
       { label: 'Delete', kbd: '⌫', danger: true, run: () => deleteSelected() },
+      '-',
+      { label: 'Copy code location', run: () => { const l = activeLoc(); if (l) navigator.clipboard?.writeText(l).then(() => toast('Copied the code location')).catch(() => {}); } },
     ], at);
   }
   function shortcuts() {
@@ -1405,7 +1407,7 @@
     const el = s.el, inf = info();
     const name = (activeLoc() === s.use ? s.useInfo?.tag : s.defInfo?.tag) || nameOf(el);
     const loc = activeLoc();
-    let h = `<div class="sec head"><div class="secH"><span class="nm">${ico(layerIcon(el))}${esc(dName(el))}</span><span class="hbs">${hb('copyLoc', 'code', `Code: ${loc.replace(/:(\d+):\d+$/, ':$1')} (click to copy)`)}${hb('parent', 'up', 'Select parent')}</span></div>
+    let h = `<div class="sec head"><div class="secH"><span class="nm">${ico(layerIcon(el))}${esc(dName(el))}</span><span class="hbs">${hb('parent', 'up', 'Select parent')}</span></div>
       ${scopeSentence(s, name, inf)}
       ${sourceHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}
