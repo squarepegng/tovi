@@ -324,7 +324,9 @@ export function applyResponsive(list, ops, th, bp) {
     classes = classes.filter((c) => { const p = parse(c); if (p && rank(p.bp) > lo && rank(p.bp) < hi && m(p.cls)) { summary.removed.push(c); return false; } return true; });
     // Apply the op at the start level.
     const levelCls = at(s);
-    const r = applyOps(levelCls, [op], th);
+    const r0 = applyOps(levelCls, [op], th);
+    // Some values are several classes at once (a gradient is direction + stops): split them so each gets the prefix.
+    const r = { ...r0, classes: [...new Set(r0.classes.flatMap((c) => String(c).split(/\s+/)).filter(Boolean))] };
     const pre = (c) => (s == null ? c : `${s}:${c}`);
     const keep = new Set(r.classes);
     const gone = levelCls.filter((c) => !keep.has(c)).map(pre), fresh = r.classes.filter((c) => !levelCls.includes(c)).map(pre);
@@ -337,7 +339,7 @@ export function applyResponsive(list, ops, th, bp) {
     summary.changes.push(...r.changes);
     // Keep the old value from the end screen up.
     if (e && !at(e).some(m) && oldAtEnd.length && fresh.length) {
-      const back = oldAtEnd.map((c) => `${e}:${c}`);
+      const back = oldAtEnd.flatMap((c) => String(c).split(/\s+/)).filter(Boolean).map((c) => `${e}:${c}`);
       classes.push(...back);
       summary.added.push(...back);
     }

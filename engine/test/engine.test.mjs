@@ -452,3 +452,8 @@ test('a Google Font is named in tailwind.config, in the file’s own style', () 
   const noFonts = "export default {\n  theme: {\n    extend: {\n      colors: { a: '#fff' },\n    },\n  },\n};\n";
   assert.match(configWithFont(noFonts, 'tailwind.config.js', 'lora', 'Lora', 'serif'), /colors: \{ a: '#fff' \},\n      fontFamily: \{\n        lora: \['"Lora"', 'serif'\],\n      \},\n/);
 });
+test('a gradient only on tablet prefixes every part of it', () => {
+  const out = rsp('mt-6 bg-surface', [{ prop: 'gradient', value: 'r surface primary' }], { mode: 'only', start: 'md', end: 'lg' });
+  assert.ok(out.includes('md:bg-gradient-to-r') && out.includes('md:from-surface') && out.includes('md:to-primary'), out);
+  assert.ok(!/(^| )from-surface( |$)/.test(out) && !/(^| )to-primary( |$)/.test(out), out);
+});
