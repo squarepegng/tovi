@@ -4087,7 +4087,8 @@
     if (!row) return;
     const list = row.parentElement;
     if (!list) return;
-    list.classList.add('glides');
+    // Measure rows against the list itself, without moving lists that already float (menus are fixed).
+    if (!list.classList.contains('glides')) { list.classList.add('glides'); if (getComputedStyle(list).position === 'static') list.style.position = 'relative'; }
     let g = list.querySelector(':scope > .glide');
     const place = () => { g.style.transform = `translate(${row.offsetLeft}px, ${row.offsetTop}px)`; g.style.width = row.offsetWidth + 'px'; g.style.height = row.offsetHeight + 'px'; };
     if (!g) { g = document.createElement('span'); g.className = 'glide'; list.prepend(g); g.style.transition = 'none'; place(); g.offsetWidth; g.style.transition = ''; }
