@@ -1178,3 +1178,28 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .mk.cbox{color:var(--onSelect)}
 .mk.cbox.some b{background:var(--onSelect)}
 .switch.on i{background:var(--onSelect)}
+/* Raised selected states, like Framer: a lighter fill, a hairline of light on the top edge, a hairline edge
+   and a soft shadow underneath, so what's selected sits up off its track. Ivory buttons get the same depth. */
+:root{
+  --onFill:#3A3A41;
+  --onEdge:inset 0 1px 0 rgba(255,255,255,.09),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.45),0 3px 8px -3px rgba(0,0,0,.5);
+  --ivFill:linear-gradient(180deg,#FFFFFF,#E7E6E2);
+  --ivEdge:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(0,0,0,.08),0 0 0 .5px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.45),0 3px 8px -3px rgba(0,0,0,.5);
+}
+:root[data-theme="light"]{
+  --onFill:#FFFFFF;
+  --onEdge:0 0 0 .5px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.12),0 2px 6px -3px rgba(0,0,0,.15);
+  --ivFill:linear-gradient(180deg,#2E2E34,#151517);
+  --ivEdge:inset 0 1px 0 rgba(255,255,255,.14),0 0 0 .5px rgba(0,0,0,.6),0 1px 2px rgba(0,0,0,.25),0 3px 8px -3px rgba(0,0,0,.3);
+}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{
+  --onFill:#FFFFFF;
+  --onEdge:0 0 0 .5px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.12),0 2px 6px -3px rgba(0,0,0,.15);
+  --ivFill:linear-gradient(180deg,#2E2E34,#151517);
+  --ivEdge:inset 0 1px 0 rgba(255,255,255,.14),0 0 0 .5px rgba(0,0,0,.6),0 1px 2px rgba(0,0,0,.25),0 3px 8px -3px rgba(0,0,0,.3);
+}}
+.seg button.on,.ib.on,.icon.on,.ptabs button.on,.bps button.on,.cpTabs button.on,.shIco.on,
+#panel .ib.on,#panel .seg button.on,#panel .ibs .ib.on,
+:root[data-theme="light"] #panel .seg button.on,:root[data-theme="light"] #panel .ibs .ib.on{background:var(--onFill);color:var(--ink);box-shadow:var(--onEdge)}
+.tb.on,.modes .tb.on,.primary,.pvBtn.on{background:var(--ivFill);color:var(--onSelect);box-shadow:var(--ivEdge)}
+.primary:hover{filter:brightness(1.03)}
