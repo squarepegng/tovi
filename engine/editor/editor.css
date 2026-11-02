@@ -1396,3 +1396,33 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .ltabs .seg button.on{font-weight:500}
 .ltabs .seg .kbd{background:transparent;padding:0;color:inherit;opacity:.7}
 .has-pill>.pill{border-radius:6px}
+/* Inside fields, like Paper: even-width digits and case-aligned signs; labels and icons at 40% white. */
+#panel .inp input,#panel .inp select{font-variant-numeric:tabular-nums;font-feature-settings:"case"}
+:root:not([data-theme="light"]) #panel .inp .ic,:root:not([data-theme="light"]) #panel .inp .tg,:root:not([data-theme="light"]) #panel .inp .u{color:rgba(255,255,255,.4);opacity:1}
+
+/* The scope chip ("every screen ▾") is a control like the fields: Paper's fill, shadow, size and text. */
+.scW{height:24px;padding:0 6px 0 8px;border-radius:6px;background:rgba(var(--hi),.055);font:400 12px/1 var(--ui);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+.scW:hover{background:rgba(var(--hi),.075)}
+:root:not([data-theme="light"]) .scW{color:rgba(255,255,255,.9)}
+:root:not([data-theme="light"]) .scW svg{color:rgba(255,255,255,.4)}
+:root[data-theme="light"] .scW{background:#F9F9F9}
+
+/* Tovi's list of changes in the chat: one soft raised surface like the panel's controls (no outline, 8px corners),
+   a quiet header, hairline rows, small tinted state marks, details kept to two lines, and the result (Applied ·
+   Undo) sitting right under it as part of the same block. */
+.edits{border:0;border-radius:8px;background:rgba(var(--hi),.035);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa;overflow:hidden}
+.edits.sys{box-shadow:inset 0 0 0 1px rgba(252,189,221,.3),0 0 3px -1px #000000aa}
+.edH{padding:7px 12px;font:500 12px/16px var(--ui);color:rgba(var(--hi),.575);border-bottom:1px solid rgba(var(--hi),.06)}
+.edits .ed{padding:9px 12px;gap:10px;border-top:1px solid rgba(var(--hi),.05)}
+.edits .edH+.ed{border-top:0}
+.ed .edT{font-size:12px;line-height:17px}
+.ed .edT b{font-weight:500}
+.ed .edT .mono{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:rgba(var(--hi),.575)}
+.edB>span:not(.edT){font-size:12px;line-height:17px;color:rgba(var(--hi),.42)}
+.mk{width:16px;height:16px;margin-top:0}
+.mk.ok{background:rgba(111,211,154,.14);color:var(--greenTx)}
+.mk.bad{background:rgba(240,106,95,.16)}
+.mk.todo{border:1px solid rgba(var(--hi),.25)}
+.mk.skip{border:1px dashed rgba(var(--hi),.2)}
+.kDone{margin-top:-4px;padding:0 4px 0 12px;height:28px}
+.kDone .kStatus{font-size:12px}
