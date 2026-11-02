@@ -1319,7 +1319,10 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .cpDots button{width:18px;height:18px;padding:0;border:0;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(var(--hi),.14);cursor:pointer;transition:scale var(--t-fast) var(--ease)}
 .cpDots button:hover{scale:1.15}
 
-/* Dictating: the red mic's halo follows your voice (--lv, 0 to 1), and breathes slowly when you're quiet. */
-.kcB.rec{--lv:0;animation:micBreathe 2.4s ease-in-out infinite;box-shadow:0 0 0 calc(2px + var(--lv)*9px) rgba(240,106,95,calc(.32 - var(--lv)*.14)),0 0 calc(6px + var(--lv)*14px) rgba(240,106,95,calc(.18 + var(--lv)*.3));transition:box-shadow 60ms linear}
+/* Dictating: the mic turns Tovi pink (Tovi is listening; red stays for errors). Its halo follows your voice
+   (--lv, 0 to 1) and breathes slowly when you're quiet. */
+.kcB.rec{--lv:0;--mc:252,189,221;color:#111113;background:var(--intent);animation:micBreathe 2.4s ease-in-out infinite;box-shadow:0 0 0 calc(2px + var(--lv)*9px) rgba(var(--mc),calc(.3 - var(--lv)*.12)),0 0 calc(6px + var(--lv)*14px) rgba(var(--mc),calc(.16 + var(--lv)*.3));transition:box-shadow 60ms linear}
 .kcB.rec svg{scale:calc(1 + var(--lv)*.12);transition:scale 60ms linear}
-@keyframes micBreathe{50%{background:#F27C72}}
+@keyframes micBreathe{50%{filter:brightness(1.06)}}
+:root[data-theme="light"] .kcB.rec{--mc:194,80,138;color:#fff}
+@media (prefers-color-scheme: light){:root[data-theme="system"] .kcB.rec{--mc:194,80,138;color:#fff}}
