@@ -1522,3 +1522,15 @@ aside.side.r{border-left-color:var(--chromeLine)}
 #kerf .col:has(>aside[hidden])>#top,body.minUI #kerf .col>#top{position:absolute;top:8px;left:8px;height:36px;padding:0 4px;border-radius:10px;background:var(--chrome);box-shadow:0 0 0 1px rgba(var(--hi),.08),0 6px 20px rgba(0,0,0,.3);white-space:nowrap}
 :root[data-theme="light"] #kerf .col:has(>aside[hidden])>#top{box-shadow:0 0 0 1px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.08)}
 #kerf:has(#canvas.present) .col>#top{display:none}
+
+/* Panel headers sit on a hairline, like every section below them. */
+#kerf #top,.phd.r{border-bottom:1px solid var(--chromeLine)}
+#kerf .col:has(>aside[hidden])>#top,body.minUI #kerf .col>#top,.col:has(>aside[hidden])>.phd.r,body.minUI .col>.phd.r{border-bottom:0}
+/* The frame's label is the screen-size switch. */
+.topC{display:none}
+.devLabel{pointer-events:auto}
+.devBtn{display:inline-flex;align-items:center;gap:5px;height:22px;margin-left:-6px;padding:0 6px;border:0;border-radius:6px;background:transparent;color:var(--ink2);font:500 11px/1 var(--ui);cursor:pointer}
+.devBtn b{font-weight:600;color:var(--ink2)}
+.devBtn svg{color:var(--ink3)}
+.devBtn:hover{background:rgba(var(--hi),.07)}
+.devBtn:hover b{color:var(--ink)}
