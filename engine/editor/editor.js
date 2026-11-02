@@ -2835,7 +2835,7 @@
     const history = historyFor();
     const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? ctxName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
     if (!opts.review) S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
-    const m = { role: 'kerf', second: !!opts.review, checkLabel: opts.notes ? (opts.round > 1 ? 'Final check' : 'Checking the fixes') : opts.round > 1 ? 'Final check' : null, busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
+    const m = { role: 'kerf', batch: !!opts.notes, second: !!opts.review, checkLabel: opts.notes ? (opts.round > 1 ? 'Final check' : 'Checking the fixes') : opts.round > 1 ? 'Final check' : null, busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
     S.chat.push(m);
     S.card = m;
     workOn(opts.notes ? uniq(opts.notes.flatMap((n) => n.locs || [])) : scopeLocs(), opts.review ? 'Checking' : 'Looking');
@@ -3030,8 +3030,9 @@
     document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = liveText(+el.dataset.since); });
     document.querySelectorAll('[data-secs]').forEach((el) => { el.textContent = `${Math.max(0, Math.round((Date.now() - +el.dataset.secs) / 1000))}s`; });
   }, 1000);
-  // While Tovi works, a soft pink light circles the rim of the message box (fades in and out, never switches).
-  setInterval(() => document.body.classList.toggle('aiWorking', S.chat.some((m) => m.busy)), 200);
+  // While Tovi works through Apply all (and checks those fixes), a soft pink light circles the rim of the message
+  // box. Only then: chat replies keep their thinking dots, and Diagnose has its own sweep.
+  setInterval(() => document.body.classList.toggle('aiWorking', S.chat.some((m) => m.busy && (m.steps || m.batch))), 200);
   /* Tovi's floating card: drag it by its header, or collapse it to a slim bar so the page stays visible */
   S.cardPos = {};
   S.cardMin = false;
