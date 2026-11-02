@@ -453,7 +453,7 @@
     chatCtx();
     S.sel.ready = loadInfo();
     await S.sel.ready;
-    if (S.pendingInsert && S.sel?.el === el) { S.pendingInsert = false; $('toast').hidden = true; S.insertPos = defaultPos(); openInsert(); }
+    if (S.pendingInsert && S.sel?.el === el) { S.pendingInsert = false; pickHint(false); S.insertPos = defaultPos(); openInsert(); }
   }
   // The chat box says what Tovi will look at: the selection, or the whole screen.
   // What a request is about, in words: the element's name plus its first bit of text when the name alone is vague
@@ -1889,7 +1889,7 @@
       if (!$('modal').hidden) { $('modal').hidden = true; }
       else if (S.cpick) { S.cpick = S.cp = null; renderPanel(); }
       else if (S.noteDraft) { S.noteDraft = null; renderMarks(); }
-      else if (S.pendingInsert) { S.pendingInsert = false; $('toast').hidden = true; }
+      else if (S.pendingInsert) { S.pendingInsert = false; pickHint(false); }
       else if (S.card && !S.card.busy && S.card.where !== 'chat') { S.card = null; S.amber = []; renderAll(); }
       else if (S.askOpen) { S.askOpen = false; S.amber = []; renderAsk(); renderBar(); }
       else if (S.changesOpen) { S.changesOpen = false; renderChanges(); }
@@ -3480,7 +3480,7 @@
     S.tool = t;
     S.noteDraft = null;
     S.hintSeen = true;
-    if (t !== 'select') { S.hover = null; S.pendingInsert = false; }
+    if (t !== 'select') { S.hover = null; S.pendingInsert = false; pickHint(false); }
     if (t === 'interact') S.pageSel = false;
     // Interacting or moving around isn't editing: let go of the selection so the outline and handles go away.
     if (t === 'interact' && (S.sel || S.multi.length)) { S.multi = []; select(null); }
@@ -3810,12 +3810,20 @@
   const defaultPos = () => (S.sel && S.sel.el.children.length && !['p', 'span', 'button', 'a', 'label', 'svg'].includes(S.sel.el.tagName.toLowerCase()) ? 'inside' : 'after');
   // Add from anywhere: it switches to Select (clicks must pick a spot, not use the app), and if nothing is
   // selected yet, the next click picks where the new element goes and opens Add right there.
+  // An instruction, not news: one quiet pill at the top of the canvas that stays until you pick a spot or press Esc.
+  function pickHint(on) {
+    let h = $('pickHint');
+    if (!on) { if (h) h.hidden = true; return; }
+    if (!h) { h = document.createElement('div'); h.id = 'pickHint'; h.className = 'pickHint'; h.setAttribute('role', 'status'); $('toast').after(h); }
+    h.innerHTML = `${ico('addEl', 14)}<span>Click where the new element should go</span><span class="kbd">Esc</span>`;
+    h.hidden = false;
+  }
   function startInsert() {
     if (S.mode === 'preview') setMode('edit');
     if (S.tool !== 'select') setTool('select');
     if (!S.sel) {
       S.pendingInsert = true;
-      toast('Click where the new element should go', 'Add opens as soon as you pick a spot. Esc to cancel.');
+      pickHint(true);
       return;
     }
     S.insertPos = defaultPos();
