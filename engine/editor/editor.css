@@ -1534,9 +1534,3 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .devBtn svg{color:var(--ink3)}
 .devBtn:hover{background:rgba(var(--hi),.07)}
 .devBtn:hover b{color:var(--ink)}
-
-/* One grid for the whole panel (Wonder): every row is field · field · a 24px icon column, so fields line up from
-   top to bottom whether or not the row has an end button. */
-#panel .r2,#panel .r2c{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 24px;column-gap:8px}
-#panel .r2c>.ib,#panel .r2>.ib{width:24px;height:24px;align-self:end;border-radius:6px}
-#panel .r2c>.ib.on{background:rgba(var(--hi),.08);color:var(--ink)}

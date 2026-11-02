@@ -709,12 +709,11 @@
     alR: '<path d="M3 4h10M7 8h6M5 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     corners: '<path d="M3 6V4.5A1.5 1.5 0 0 1 4.5 3H6M10 3h1.5A1.5 1.5 0 0 1 13 4.5V6M13 10v1.5a1.5 1.5 0 0 1-1.5 1.5H10M6 13H4.5A1.5 1.5 0 0 1 3 11.5V10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
     rad: '<path d="M4 12V8a4 4 0 0 1 4-4h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
-    opaSq: '<rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><path d="M8 5.25h2.75V8H8zM10.75 8h2.75v2.75h-2.75zM5.25 8H8v2.75H5.25zM8 10.75h2.75v2.75H8z" fill="currentColor" opacity=".55"/>',
+    opa: '<rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><path d="M8 5.25h2.75V8H8zM10.75 8h2.75v2.75h-2.75zM5.25 8H8v2.75H5.25zM8 10.75h2.75v2.75H8z" fill="currentColor" opacity=".55"/>',
     radAll: '<path d="M2.75 6V4.25a1.5 1.5 0 0 1 1.5-1.5H6M10 2.75h1.75a1.5 1.5 0 0 1 1.5 1.5V6M13.25 10v1.75a1.5 1.5 0 0 1-1.5 1.5H10M6 13.25H4.25a1.5 1.5 0 0 1-1.5-1.5V10" fill="none" stroke="currentColor" stroke-linecap="round"/>',
     marH: '<path d="M2.5 3v10M13.5 3v10" stroke="currentColor" stroke-linecap="round"/><rect x="5.25" y="4.5" width="5.5" height="7" rx="1.25" fill="none" stroke="currentColor"/>',
     marT: '<path d="M3 2.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="5.25" width="7" height="8" rx="1.25" fill="none" stroke="currentColor"/>',
     marB: '<path d="M3 13.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="2.75" width="7" height="8" rx="1.25" fill="none" stroke="currentColor"/>',
-    marSides: '<rect x="5" y="5" width="6" height="6" rx="1.25" fill="none" stroke="currentColor"/><path d="M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5" stroke="currentColor" stroke-linecap="round"/>',
     marV: '<path d="M3 2.5h10M3 13.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="5.25" width="7" height="5.5" rx="1.25" fill="none" stroke="currentColor"/>',
     gap: '<path d="M3 3v10M13 3v10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M6 8h4M7 6.5L5.5 8 7 9.5M9 6.5l1.5 1.5L9 9.5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>',
     padH: '<rect x="2.5" y="3.5" width="11" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M5 6v4M11 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
@@ -1563,14 +1562,14 @@
       h += layoutSections(el);
       if (el.tagName.toLowerCase() === 'svg') {
         h += sec('Icon color', colorRow('color', 'Icon color'));
-        h += sec('Appearance', `<div class="r2">${lf('Opacity', nf('opacity', 'opaSq', 'Opacity', '%'))}<span></span></div>`);
+        h += sec('Appearance', `<div class="r2">${lf('Opacity', nf('opacity', 'opa', 'Opacity', '%'))}<span></span></div>`);
         const st0 = p.querySelector('.scroll')?.scrollTop || 0;
         p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
         p.querySelector('.scroll').scrollTop = st0;
         return;
       }
       const indep = S.corners;
-      h += sec('Appearance', `<div class="r2c lab">${lf('Opacity', nf('opacity', 'opaSq', 'Opacity', '%'))}${lf('Corner radius', nf('radius', 'radAll', 'Corner radius'))}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>
+      h += sec('Appearance', `<div class="r2c lab">${lf('Opacity', nf('opacity', 'opa', 'Opacity', '%'))}${lf('Corner radius', nf('radius', 'radAll', 'Corner radius'))}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>
         ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}`);
       const g = gradOf();
       const hasFill = g || (val('bg') && val('bg') !== 'transparent');
@@ -2110,13 +2109,6 @@
       case 'left': S.left = v; try { localStorage.setItem('kerf.left', v); } catch {} renderLeft(v === 'chat'); break;
       case 'device': S.device = v; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); break;
       // The frame's label is the screen-size switch (like Framer's breakpoint labels): no bar over the canvas.
-      case 'marSplit': {
-        const el = S.sel?.el; if (!el) break;
-        // Never edits by itself: while top and bottom differ it stays split (type the same value in both to merge).
-        if ((+val('mT') || 0) !== (+val('mB') || 0)) { toast('Top and bottom margins are different. Type the same value in both to join them.'); break; }
-        S.marSplit = S.marSplit === el ? null : el; renderPanel();
-        break;
-      }
       case 'deviceMenu': { const r = a.getBoundingClientRect(); openMenu([...Object.keys(DEVICES).map((d) => ({ label: DEV_LABEL[d], icon: d, sub: devRange(d), on: S.device === d, run: () => { S.device = d; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); } }))], { x: r.left, y: r.bottom + 6 }); break; }
       case 'zoom': setZoom(v); break;
       case 'kerfMenu': kerfMenu(below(a)); break;
@@ -4209,13 +4201,7 @@
     let h = '';
     const shown = (k) => S.reveal?.el === el && S.reveal[k];
     const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = ['mX', 'mT', 'mB'].some((k) => (+val(k) || 0) !== 0);
-    // Like Wonder: Horizontal and Vertical side by side; the button at the end splits Vertical into Top and Bottom
-    // (it opens split by itself when they already differ).
-    const marDiff = (+val('mT') || 0) !== (+val('mB') || 0), marSplit = S.marSplit === el || marDiff;
-    const marSides = `<button class="ib${marSplit ? ' on' : ''}" data-act="marSplit" title="${marDiff ? 'Top and bottom are different' : marSplit ? 'Same top and bottom' : 'Top and bottom separately'}" aria-pressed="${marSplit}"${marDiff ? ' aria-disabled="true"' : ''}>${ico('marSides')}</button>`;
-    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? (marSplit
-      ? `<div class="r2c lab">${lf('Top', nf('mT', 'marT', 'Top margin'))}${lf('Bottom', nf('mB', 'marB', 'Bottom margin'))}${marSides}</div><div class="r2">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}</div>`
-      : `<div class="r2c lab">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}${lf('Vertical', nf('mY', 'marV', 'Vertical margin'))}${marSides}</div>`) : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
+    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}<span></span></div><div class="r2">${lf('Top', nf('mT', 'marT', 'Top margin'))}${lf('Bottom', nf('mB', 'marB', 'Bottom margin'))}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
     // Like Figma: one field per axis, "W 468" with Fixed / Hug / Fill inside it. Typing a number makes it fixed.
     const MODES = [['fixed', 'Fixed'], ['hug', 'Hug'], ['fill', 'Fill'], ['auto', 'Auto']];
     const sizeField = (axis) => {
