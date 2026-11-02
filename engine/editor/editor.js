@@ -709,7 +709,7 @@
     alR: '<path d="M3 4h10M7 8h6M5 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     corners: '<path d="M3 6V4.5A1.5 1.5 0 0 1 4.5 3H6M10 3h1.5A1.5 1.5 0 0 1 13 4.5V6M13 10v1.5a1.5 1.5 0 0 1-1.5 1.5H10M6 13H4.5A1.5 1.5 0 0 1 3 11.5V10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
     rad: '<path d="M4 12V8a4 4 0 0 1 4-4h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
-    opa: '<rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><path d="M8 5.25h2.75V8H8zM10.75 8h2.75v2.75h-2.75zM5.25 8H8v2.75H5.25zM8 10.75h2.75v2.75H8z" fill="currentColor" opacity=".55"/>',
+    opaSq: '<rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><path d="M8 5.25h2.75V8H8zM10.75 8h2.75v2.75h-2.75zM5.25 8H8v2.75H5.25zM8 10.75h2.75v2.75H8z" fill="currentColor" opacity=".55"/>',
     radAll: '<path d="M2.75 6V4.25a1.5 1.5 0 0 1 1.5-1.5H6M10 2.75h1.75a1.5 1.5 0 0 1 1.5 1.5V6M13.25 10v1.75a1.5 1.5 0 0 1-1.5 1.5H10M6 13.25H4.25a1.5 1.5 0 0 1-1.5-1.5V10" fill="none" stroke="currentColor" stroke-linecap="round"/>',
     marH: '<path d="M2.5 3v10M13.5 3v10" stroke="currentColor" stroke-linecap="round"/><rect x="5.25" y="4.5" width="5.5" height="7" rx="1.25" fill="none" stroke="currentColor"/>',
     marT: '<path d="M3 2.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="5.25" width="7" height="8" rx="1.25" fill="none" stroke="currentColor"/>',
@@ -1562,14 +1562,14 @@
       h += layoutSections(el);
       if (el.tagName.toLowerCase() === 'svg') {
         h += sec('Icon color', colorRow('color', 'Icon color'));
-        h += sec('Appearance', `<div class="r2">${lf('Opacity', nf('opacity', 'opa', 'Opacity', '%'))}<span></span></div>`);
+        h += sec('Appearance', `<div class="r2">${lf('Opacity', nf('opacity', 'opaSq', 'Opacity', '%'))}<span></span></div>`);
         const st0 = p.querySelector('.scroll')?.scrollTop || 0;
         p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
         p.querySelector('.scroll').scrollTop = st0;
         return;
       }
       const indep = S.corners;
-      h += sec('Appearance', `<div class="r2c lab">${lf('Opacity', nf('opacity', 'opa', 'Opacity', '%'))}${lf('Corner radius', nf('radius', 'radAll', 'Corner radius'))}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>
+      h += sec('Appearance', `<div class="r2c lab">${lf('Opacity', nf('opacity', 'opaSq', 'Opacity', '%'))}${lf('Corner radius', nf('radius', 'radAll', 'Corner radius'))}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>
         ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}`);
       const g = gradOf();
       const hasFill = g || (val('bg') && val('bg') !== 'transparent');
