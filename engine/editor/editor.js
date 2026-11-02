@@ -418,6 +418,12 @@
     if (tag === 'input' || tag === 'textarea') return clip(el.getAttribute('placeholder') || el.value);
     return clip(el.textContent);
   }
+  // The panel header: the kind as the name, and what it says or shows as a quiet second part (no quotes).
+  function headName(el) {
+    const k = kindOf(el), full = dName(el);
+    const w = full === k ? '' : (/^(img)$/i.test(el.tagName) ? el.getAttribute('alt') : /^(input|textarea)$/i.test(el.tagName) ? el.value || el.placeholder : el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120) || full.slice(k.length).replace(/^\s*“|”$/g, '');
+    return `<b class="hk">${esc(k)}</b>${w ? `<span class="hw" title="${esc(w)}">${esc(w)}</span>` : ''}`;
+  }
   function dName(el) {
     if (!el) return '';
     const k = kindOf(el), w = wordsOf(el);
@@ -1515,7 +1521,7 @@
     const el = s.el, inf = info();
     const name = (activeLoc() === s.use ? s.useInfo?.tag : s.defInfo?.tag) || nameOf(el);
     const loc = activeLoc();
-    let h = `<div class="sec head"><div class="secH"><span class="nm">${ico(layerIcon(el))}${esc(dName(el))}</span><span class="hbs">${hb('parent', 'up', 'Select parent')}</span></div>
+    let h = `<div class="sec head"><div class="secH"><span class="nm">${ico(layerIcon(el))}${headName(el)}</span><span class="hbs">${hb('parent', 'up', 'Select parent')}</span></div>
       ${scopeSentence(s, name, inf)}
       ${sourceHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}

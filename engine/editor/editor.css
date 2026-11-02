@@ -1442,3 +1442,7 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .pickBar,.kSuggest,.tryOn{border:0;border-radius:8px;background:rgba(var(--hi),.03);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
 .edits.sys{box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px rgba(252,189,221,.35),0 1px .5px #00000018,0 0 3px -1px #000000aa}
 :root[data-theme="light"] .pickBar,:root[data-theme="light"] .kSuggest,:root[data-theme="light"] .tryOn,:root[data-theme="light"] .side .tasks,:root[data-theme="light"] .edits{background:#F9F9F9;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05)}
+/* Panel header: "Image  Geirangerfjord at dusk": the kind, then its content in quiet grey, one line. */
+.head .nm .hk{flex:0 0 auto;font-weight:500;color:var(--ink)}
+.head .nm .hw{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink3);font-weight:400}
+.head .nm svg{flex:0 0 auto}
