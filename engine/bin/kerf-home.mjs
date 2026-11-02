@@ -161,7 +161,7 @@ const PAGE = `<!doctype html>
 :root[data-theme="light"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#1B1B1E;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-html,body{margin:0;min-height:100%;background:var(--canvas);color:var(--ink);font:400 13px/18px Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+html,body{margin:0;min-height:100%;background:var(--canvas);color:var(--ink);font:400 13px/18px -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit}
 .app{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100vh}
 nav{display:flex;flex-direction:column;gap:2px;padding:20px 12px;border-right:1px solid rgba(var(--hi),.06);background:var(--menu);position:sticky;top:0;height:100vh}
@@ -184,7 +184,7 @@ p{margin:6px 0 0;color:var(--ink2);max-width:560px}
 form.openf{display:flex;gap:8px;width:100%;max-width:640px}
 input{flex:1;min-width:0;height:42px;padding:0 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;outline:none}
 input:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(var(--hi),.2)}
-button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:42px;padding:0 18px;border:0;border-radius:10px;background:var(--select);color:var(--onSelect);font:500 13px Geist,system-ui,sans-serif;cursor:pointer;text-decoration:none;white-space:nowrap}
+button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:42px;padding:0 18px;border:0;border-radius:10px;background:var(--select);color:var(--onSelect);font:500 13px -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif;cursor:pointer;text-decoration:none;white-space:nowrap}
 button:disabled{opacity:.5;cursor:default}
 .ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
 .ghost:hover{background:var(--panel)}
@@ -217,13 +217,13 @@ select:focus{border-color:var(--select);box-shadow:0 0 0 3px rgba(var(--hi),.2)}
 .ok{color:var(--ok)}
 .steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .step{padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
-.step i{display:grid;place-items:center;width:24px;height:24px;margin-bottom:10px;border-radius:50%;background:var(--raised);color:var(--ink);font:600 12px/1 Geist,system-ui,sans-serif;font-style:normal}
+.step i{display:grid;place-items:center;width:24px;height:24px;margin-bottom:10px;border-radius:50%;background:var(--raised);color:var(--ink);font:600 12px/1 -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif;font-style:normal}
 .step b{display:block;margin-bottom:4px}
 .step span{color:var(--ink2)}
 table.keys{border-collapse:collapse;width:100%}
 table.keys td{padding:9px 0;border-bottom:1px solid rgba(var(--hi),.06);color:var(--ink2)}
 table.keys td:last-child{text-align:right}
-kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;background:var(--raised);color:var(--ink);font:500 11px/16px Geist,system-ui,sans-serif;text-align:center}
+kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;background:var(--raised);color:var(--ink);font:500 11px/16px -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif;text-align:center}
 /* Start page. Sidebar like Paper (you at the top, search, sections, a small card, links at the bottom);
    project cards like Figma (a framed preview, then name and time); opening a project is a dialog. */
 :root{--side:#141416}:root[data-theme="light"]{--side:#FAFAFB}
@@ -233,10 +233,10 @@ nav{background:var(--side);border-right:1px solid rgba(var(--hi),.06);padding:12
 nav a,.me{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:8px;color:var(--ink2);text-decoration:none;font-weight:500;font-size:13px}
 nav a.on{background:rgba(var(--hi),.08);color:var(--ink)}
 nav a:hover:not(.on){background:rgba(var(--hi),.04);color:var(--ink)}
-.me{width:100%;height:36px;margin-bottom:6px;padding:0 8px;border:0;background:transparent;color:var(--ink);font:600 13.5px Geist,system-ui,sans-serif;justify-content:flex-start;cursor:pointer}
+.me{width:100%;height:36px;margin-bottom:6px;padding:0 8px;border:0;background:transparent;color:var(--ink);font:600 13.5px -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif;justify-content:flex-start;cursor:pointer}
 .me:hover{background:rgba(var(--hi),.05)}
 .me svg{color:var(--ink3);margin-left:-4px}
-.av{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,var(--logoA),var(--logoB));color:#111113;font:600 11px/1 Geist,system-ui,sans-serif}
+.av{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,var(--logoA),var(--logoB));color:#111113;font:600 11px/1 -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif}
 .av img{width:100%;height:100%;object-fit:cover}
 .nsearch{display:flex;align-items:center;gap:8px;height:32px;margin:0 0 10px;padding:0 6px 0 10px;border-radius:8px;background:rgba(var(--hi),.06);color:var(--ink3)}
 .nsearch input{height:30px;padding:0;border:0;background:none;border-radius:0;font-size:13px;color:var(--ink)}
@@ -268,7 +268,7 @@ main{padding:28px 40px 72px;max-width:1280px}
 :root[data-theme="light"] .pri{background:linear-gradient(180deg,#2A2A2F,#141416);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 1px 2px rgba(0,0,0,.25)}
 .pri:active{scale:.97}
 .seg{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:rgba(var(--hi),.05);box-shadow:inset 0 1px 2px rgba(0,0,0,.25)}
-.seg button{height:28px;padding:0 10px;border-radius:7px;background:transparent;color:var(--ink2);font:500 12.5px/1 Geist,system-ui,sans-serif}
+.seg button{height:28px;padding:0 10px;border-radius:7px;background:transparent;color:var(--ink2);font:500 12.5px/1 -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif}
 .seg button.on{background:#3A3A41;color:var(--ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.45)}
 :root[data-theme="light"] .seg{box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
 :root[data-theme="light"] .seg button.on{background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.1)}
