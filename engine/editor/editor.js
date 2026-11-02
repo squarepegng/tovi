@@ -554,7 +554,7 @@
       try {
         const who = S.sel ? dName(S.sel.el) : '';
         const r = await api('/edit', via.prop === 'children' ? { loc: via.loc, text: change.text, name: who } : { loc: via.loc, props: [{ name: via.prop, value: change.text }], propText: true, name: who });
-        if (r.changed) { S.count = r.n; toast(`${who} · Text “${change.text}”`, `Changed where it’s used, in ${via.file}`, false, true); }
+        if (r.changed) S.count = r.n;
         afterEdit();
       } catch (e) { toast(e.message, '', true); }
       return;
@@ -568,17 +568,13 @@
         const edits = [{ loc, ...change, cva: cvaParam(), name: dName(S.sel.el), dom: [...S.sel.el.classList] }, ...group.map((m) => ({ loc: locOf(m), ...change, name: dName(m.el), dom: [...m.el.classList] }))];
         const r = await api('/ai/apply', { batch: Date.now(), edits: edits.map((e) => ({ loc: e.loc, ops: e.ops || [], props: e.props || [], text: e.text, name: e.name, dom: e.dom, bp: bpParam() })) });
         S.count = r.n;
-        const ok = r.results.filter((x) => x.ok && x.changed).length;
-        toast(`${ok} element${ok === 1 ? '' : 's'} · ${(r.results.find((x) => x.summary)?.summary.labels || []).join(' · ')}`, r.results.some((x) => !x.ok) ? r.results.find((x) => !x.ok).error : '', false, true);
+        // Like Figma, a routine edit says nothing: the canvas shows it. Only a failure is worth a note.
+        const bad = r.results.find((x) => !x.ok);
+        if (bad) toast(bad.error, '', true);
       } else {
         const r = await api('/edit', { loc, ...change, cva: cvaParam(), bp: bpParam(), dom: S.sel ? [...S.sel.el.classList] : [], scope: S.srcScope || 'key', name: S.sel ? dName(S.sel.el) : null });
         if (r.changed) {
           S.count = r.n;
-          const sm = r.summary;
-          const who = S.sel ? dName(S.sel.el) : '';
-          const where = sm.scope === 'variant' ? ` (all “${activeVariant()?.variant}”)` : sm.scope === 'all' ? ' (every one)' : '';
-          if (sm.size) sm.labels = (sm.labels || []).map((l) => l.replace(/ \((only on \w+|all sizes)\)$/, ''));
-          toast(`${who}${where} · ${(sm.labels || []).join(' · ')}${sm.size ? ` · ${sm.size.toLowerCase()}` : ''}`, sm.offScale.length ? 'Some values are off your design scale' : '', false, true, `Saved to ${fileName(r.file)} · ${[sm.removed.join(' ') || '—', sm.added.join(' ') || '—'].join(' → ')}`);
         }
       }
       afterEdit();
@@ -1567,7 +1563,8 @@
       t.classList.toggle('in', r.top < 22);
     }
   }
-  const labelOf = (el) => dName(el);
+  // The label on the canvas names the kind of element only (Heading, Button, Card); the panel has the rest.
+  const labelOf = (el) => kindOf(el);
   // What Tovi is working on, shown like a selection in Tovi's pink: an outline per element (a card, a heading, a
   // section) with a tag naming it and what Tovi is doing ("Pricing · Reviewing"). States: scan (Diagnose reviewing
   // it, a slow light sweep), look (thinking about it, outline only), edit (changing it now, a pulse), done (a check).
@@ -1595,7 +1592,7 @@
     while (host.children.length < items.length) { const d = document.createElement('div'); d.className = 'box work'; d.innerHTML = `<span class="tag"><img class="wAv" src="${TOVI_PIC}" alt=""><span class="tagT"></span></span><i class="wCheck"></i>`; host.appendChild(d); }
     [...host.children].forEach((b, i) => {
       const x = items[i];
-      const nm = x && /^(section|header|footer|nav)$/i.test(x.el.tagName) ? blockName(x.el) : x ? dName(x.el) : '';
+      const nm = x && /^(section|header|footer|nav)$/i.test(x.el.tagName) ? blockName(x.el) : x ? kindOf(x.el) : '';
       place(b, x?.el || null, x ? `${nm}${x.w.label ? ` · ${x.w.label}` : ''}` : null);
       if (x && b.dataset.state !== x.w.state) b.dataset.state = x.w.state;
       if (x) b.classList.toggle('fading', x.w.state === 'done' && now - x.w.t > 3300);
@@ -3444,7 +3441,7 @@
       const r = await api('/structure', { loc, op, name: S.sel ? dName(S.sel.el) : null });
       if (!r.changed) return false;
       S.count = r.n;
-      toast(`${S.sel ? dName(S.sel.el) + ' · ' : ''}${r.summary.action}`, '', false, true, fileName(r.file));
+      if (op?.type === 'delete' || /delet|remov/i.test(r.summary.action || '')) toast(`${S.sel ? kindOf(S.sel.el) : 'Element'} deleted`, '', false, true);
       if (!keepSel) { S.sel = null; renderPanel(); }
       afterEdit();
       guard(before);
