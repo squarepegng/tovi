@@ -617,7 +617,7 @@
   async function undo() {
     try {
       const r = await api('/undo', {});
-      if (r.undone) { S.count = r.n; toast(r.label ? `Undone: ${r.label}` : 'Undone'); afterEdit(); renderChanges(); }
+      if (r.undone) { cue('undo'); S.count = r.n; toast(r.label ? `Undone: ${r.label}` : 'Undone'); afterEdit(); renderChanges(); }
       else toast('Nothing to undo');
     } catch (e) { toast(e.message, '', true); }
   }
@@ -853,6 +853,7 @@
         <div class="setSec"><h3>Editing</h3>
           ${tog('sim', S.simScope === 'all', 'Look-alikes change together', 'When cards look the same, style changes go to all of them.')}
           ${tog('scale', S.scaleArrows, 'Arrow keys follow your scale', 'Arrows step through your design system’s sizes. Shift+arrow nudges 1px.')}
+          ${tog('sound', S.sound, 'Sounds', 'Soft cues when you switch modes, undo, delete, and when Tovi finishes or your pull request is sent.')}
           ${row('Panels', 'Put the side panels back to their usual widths.', '<button class="outline sm" data-act="setPanels">Reset</button>')}
         </div>
         <div class="setSec"><h3>AI</h3>
@@ -1519,7 +1520,33 @@
       : '<span class="note">No changes yet.</span>');
   }
   let toastT;
+  /* ---------- sound: a few soft cues for meaningful moments (never hovers or routine edits) ---------- */
+  // Generated with the Web Audio API, so there are no sound files. Quiet by design; off in Settings → Sounds.
+  S.sound = (() => { try { return localStorage.getItem('kerf.sound') !== 'off'; } catch { return true; } })();
+  let actx = null;
+  function tone(freq, at, dur, { type = 'sine', gain = 0.05, to = null } = {}) {
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + at;
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const SOUNDS = {
+    edit: () => { tone(740, 0, 0.07, { type: 'triangle', gain: 0.045 }); tone(1110, 0.045, 0.09, { type: 'triangle', gain: 0.04 }); },
+    interact: () => { tone(1110, 0, 0.07, { type: 'triangle', gain: 0.04 }); tone(740, 0.045, 0.09, { type: 'triangle', gain: 0.045 }); },
+    undo: () => tone(660, 0, 0.09, { type: 'sine', gain: 0.05, to: 440 }),
+    remove: () => tone(220, 0, 0.12, { type: 'sine', gain: 0.07, to: 110 }),
+    done: () => { tone(988, 0, 0.18, { gain: 0.04 }); tone(1319, 0.07, 0.22, { gain: 0.035 }); tone(1976, 0.14, 0.3, { gain: 0.025 }); },
+    sent: () => { tone(784, 0, 0.16, { gain: 0.045 }); tone(1175, 0.09, 0.2, { gain: 0.04 }); tone(1568, 0.18, 0.34, { gain: 0.035 }); },
+    error: () => { tone(330, 0, 0.12, { type: 'triangle', gain: 0.05 }); tone(262, 0.1, 0.16, { type: 'triangle', gain: 0.05 }); },
+  };
+  function cue(name) {
+    if (!S.sound || !SOUNDS[name]) return;
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); SOUNDS[name](); } catch {}
+  }
+
   function toast(msg, sub, err, withUndo, code) {
+    if (err) cue('error');
     const t = $('toast');
     t.hidden = false;
     t.className = 'toast' + (err ? ' err' : '');
@@ -1839,6 +1866,7 @@
         if (v === 'agents') { S.agentsOn = !S.agentsOn; save('kerf.agents', S.agentsOn ? 'on' : 'off'); }
         if (v === 'sim') { S.simScope = S.simScope === 'all' ? 'one' : 'all'; save('kerf.sim', S.simScope); renderPanel(); }
         if (v === 'scale') { S.scaleArrows = !S.scaleArrows; save('kerf.scale', S.scaleArrows ? 'on' : 'off'); }
+        if (v === 'sound') { S.sound = !S.sound; save('kerf.sound', S.sound ? 'on' : 'off'); if (S.sound) cue('edit'); }
         openSettings(); break;
       case 'setMode': setStyleMode(v); openSettings(); break;
       case 'setTheme': applyTheme(v); showSettings(); api('/prefs', { theme: v }).catch((err) => toast(err.message, '', true)); break;
@@ -2131,6 +2159,7 @@
       const all = S.prAll || [], note = $('prBody').value.trim();
       const body = `${note ? note + '\n\n' : ''}### What changed\n${all.map((c) => `- ${c.source === 'ai' ? '(AI) ' : ''}${c.name ? `**${c.name}**: ` : ''}${c.label}`).join('\n') || '- (see commits)'}\n\n<details><summary>Code changes</summary>\n\n${all.map((c) => `- \`${c.file}\`: ${c.code || c.label}`).join('\n')}\n</details>\n\nMade with Tovi.`;
       const r = await api('/pr', { title: $('prTitle').value, body });
+      cue('sent');
       $('modal').innerHTML = `<section class="dialog" role="dialog" aria-modal="true"><div class="db" style="padding:20px;gap:10px">
         <span style="display:grid;place-items:center;width:32px;height:32px;border-radius:8px;background:var(--raised)">${ico('check', 16)}</span>
         <h2 style="margin:0;font-size:18px">${r.updated ? 'Pull request updated' : r.needsGitHubStep ? 'Branch pushed' : 'Pull request ready'}</h2>
@@ -2764,6 +2793,7 @@
       const ok = r.results.filter((x) => x.ok && x.changed).length, bad = r.results.filter((x) => !x.ok);
       m.failed = bad.map((x) => x.loc);
       m.appliedN = ok;
+      if (ok) cue('done');
       S.count = r.n;
       m.status = ok ? 'applied' : 'failed';
       toast(`Applied ${ok} change${ok === 1 ? '' : 's'}`, bad.length ? `${bad.length} skipped: ${bad[0].error}` : '', !!bad.length && !ok, !!ok);
@@ -3235,6 +3265,7 @@
       const ok = results.filter((x) => x.ok && x.changed).length, bad = results.filter((x) => !x.ok);
       m.failed = bad.map((x) => x.loc);
       m.appliedN = ok;
+      if (ok) cue('done');
       m.status = ok ? 'applied' : 'failed';
       toast(`Applied ${ok} change${ok === 1 ? '' : 's'}`, bad.length ? `${bad.length} skipped: ${bad[0].error}` : '', !!bad.length && !ok, !!ok);
       if (ok) S.notes = [];
@@ -3283,6 +3314,7 @@
     });
   }
   function setTool(t) {
+    if ((t === 'interact') !== (S.tool === 'interact')) cue(t === 'interact' ? 'interact' : 'edit');
     S.tool = t;
     S.noteDraft = null;
     S.hintSeen = true;
@@ -3455,7 +3487,7 @@
       const r = await api('/structure', { loc, op, name: S.sel ? dName(S.sel.el) : null });
       if (!r.changed) return false;
       S.count = r.n;
-      if (op?.type === 'delete' || /delet|remov/i.test(r.summary.action || '')) toast(`${S.sel ? kindOf(S.sel.el) : 'Element'} deleted`, '', false, true);
+      if (op?.type === 'delete' || /delet|remov/i.test(r.summary.action || '')) cue('remove'), toast(`${S.sel ? kindOf(S.sel.el) : 'Element'} deleted`, '', false, true);
       if (!keepSel) { S.sel = null; renderPanel(); }
       afterEdit();
       guard(before);
