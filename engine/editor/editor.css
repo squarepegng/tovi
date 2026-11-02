@@ -1356,10 +1356,11 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .meAv:hover{box-shadow:0 0 0 2px rgba(var(--hi),.18)}
 .meAv:focus-visible{outline:none;box-shadow:0 0 0 2px var(--sel)}
 
-/* Property fields sit slightly raised, like Paper's: a light rim (brightest on top) and a dark outer edge with a
-   1px shadow. Quieter than a selected option, so selection still reads first. While typing, the blue ring takes over.
-   Light theme stays flat. */
-#panel .inp{box-shadow:inset 0 1px 0 rgba(255,255,255,.07),inset 0 0 0 1px rgba(255,255,255,.045),0 0 0 1px rgba(0,0,0,.45),0 1px 1px rgba(0,0,0,.3)}
-#panel .inp:focus-within{box-shadow:inset 0 0 0 1px rgba(43,102,217,.75),0 0 0 3px rgba(43,102,217,.16)}
-:root[data-theme="light"] #panel .inp:not(:focus-within){box-shadow:none}
-@media (prefers-color-scheme: light){:root[data-theme="system"] #panel .inp:not(:focus-within){box-shadow:none}}
+/* Property fields: Paper's own control style, copied exactly (its --shadow-control): a fill one step above the panel,
+   a faint top light, a half-pixel inner glow ring, a tiny drop below and a soft dark halo. No border. While typing,
+   a crisp 2px blue outline drawn 1px inside the edge; the shadow stays. Same in both themes, as in Paper. */
+#panel .inp{border:0;background:rgba(var(--hi),.055);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+#panel .inp:hover{background:rgba(var(--hi),.075)}
+#panel .inp:focus-within{background:rgba(var(--hi),.055);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa;outline:2px solid #2B66D9;outline-offset:-1px}
+:root[data-theme="light"] #panel .inp{background:#F9F9F9}
+@media (prefers-color-scheme: light){:root[data-theme="system"] #panel .inp{background:#F9F9F9}}
