@@ -1234,3 +1234,6 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .kcTop .kcCtx svg{color:var(--ink3)}
 .kc,.kc:focus-within{box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .kc.big,.kc.big:focus-within{box-shadow:0 1px 2px rgba(0,0,0,.1),0 6px 16px -8px rgba(0,0,0,.25)}
+
+/* A field you're typing in gets a soft blue edge, not a bright white one. */
+#panel .inp:focus-within{border-color:rgba(43,102,217,.75);box-shadow:0 0 0 3px rgba(43,102,217,.16)}

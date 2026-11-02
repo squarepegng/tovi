@@ -601,7 +601,7 @@
   const pending = {};
   function commitSoon(prop, value) {
     clearTimeout(pending[prop]);
-    pending[prop] = setTimeout(() => commit({ ops: [{ prop, value }] }), 450);
+    pending[prop] = setTimeout(() => commit({ ops: [{ prop, value }] }), 300);
   }
   async function undo() {
     try {
@@ -1124,7 +1124,7 @@
 
   /* ---------- design panel ---------- */
   const val = (p) => read(p, S.sel?.el);
-  const nf = (p, icon, title, unit) => { const st = stepOf(p); return `<label class="inp${info()?.sized?.includes(p) ? ' sized' : ''}" title="${title}${st ? ` · ${st === 'custom' ? 'off your design scale' : `scale step ${st}`}` : ''}${info()?.sized?.includes(p) ? ' · different on other screen sizes' : ''}"><span class="ic" data-scrub="${p}">${icon.startsWith('<') ? icon : ico(icon, 12)}</span><input type="text" inputmode="decimal" data-prop="${p}" value="${esc(val(p))}" aria-label="${title}">${st ? `<span class="u step${st === 'custom' ? ' off' : ''}">${st === 'custom' ? 'off' : esc(st)}</span>` : ''}${unit ? `<span class="u">${unit}</span>` : ''}</label>`; };
+  const nf = (p, icon, title, unit) => { const st = ''; return `<label class="inp${info()?.sized?.includes(p) ? ' sized' : ''}" title="${title}${st ? ` · ${st === 'custom' ? 'off your design scale' : `scale step ${st}`}` : ''}${info()?.sized?.includes(p) ? ' · different on other screen sizes' : ''}"><span class="ic" data-scrub="${p}">${icon.startsWith('<') ? icon : ico(icon, 12)}</span><input type="text" inputmode="decimal" data-prop="${p}" value="${esc(val(p))}" aria-label="${title}">${st ? `<span class="u step${st === 'custom' ? ' off' : ''}">${st === 'custom' ? 'off' : esc(st)}</span>` : ''}${unit ? `<span class="u">${unit}</span>` : ''}</label>`; };
   // A field with its name above it, like Figma's labelled fields.
   const lf = (label, field) => `<div class="fl"><span class="flab">${label}</span>${field}</div>`;
   // The design-system step behind a number (p-4 → "4", rounded-lg → "lg", text-xl → "xl"); "custom" when off the scale.
@@ -1407,7 +1407,10 @@
       h += sec('Effects', sh !== 'none' ? shadowBody() : '', sh !== 'none' ? hb('rmShadow', 'minus', 'Remove shadow') : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
     }
     const st = p.querySelector('.scroll')?.scrollTop || 0;
+    // Redraws must never steal the field you're in: keep its focus, caret and what you've typed.
+    const f = document.activeElement, keep = f && p.contains(f) && f.matches('input[data-prop],input[data-calpha],input[data-color]') ? { sel: f.dataset.prop ? `input[data-prop="${f.dataset.prop}"]` : `input[data-calpha="${f.dataset.calpha}"]`, v: f.value, a: f.selectionStart, b: f.selectionEnd } : null;
     p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
+    if (keep) { const n = p.querySelector(keep.sel); if (n) { n.value = keep.v; n.focus({ preventScroll: true }); try { n.setSelectionRange(keep.a, keep.b); } catch {} } }
     p.querySelectorAll('textarea[data-text]').forEach(growText);
     p.querySelector('.scroll').scrollTop = st;
     renderFpop();
