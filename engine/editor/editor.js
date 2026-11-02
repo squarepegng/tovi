@@ -416,7 +416,7 @@
     if (!el) { S.multi = []; S.sel = null; S.cpick = S.cp = null; renderPanel(); renderLayers(); chatCtx(); return; }
     S.pageSel = false;
     const list = [...sameLoc(el)], prev = S.sel;
-    S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null };
+    S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null, path: pathOf(el) };
     // "This one" / "Only here" is a choice for one element: a new selection starts from the default again
     // (all copies, every look-alike), so edits keep reaching every copy unless you choose otherwise.
     if (!prev || prev.def !== S.sel.def || prev.use !== S.sel.use) {
@@ -525,11 +525,22 @@
     renderPanel();
   }
   // After an edit the app re-renders and the element may be a new node: find it again.
+  // Where an element sits in the page, so it can be found again after an edit moves its code (a line added
+  // above it changes its source location).
+  const pathOf = (el) => { const p = []; while (el && el.parentElement) { p.unshift([...el.parentElement.children].indexOf(el)); el = el.parentElement; } return p; };
+  const atPath = (doc, p) => { let el = doc.documentElement; for (const i of p || []) { el = el?.children[i]; if (!el) return null; } return el; };
   function refind() {
     const s = S.sel;
-    if (!s || !D || (s.el.isConnected && s.el.ownerDocument === D)) return;
-    const list = D.querySelectorAll(s.def ? `[data-kerf="${CSS.escape(s.def)}"]` : `[data-kerf-use="${CSS.escape(s.use)}"]`);
-    if (list.length) { s.el = list[Math.min(s.idx, list.length - 1)]; s.repeat = list.length; }
+    if (!s || !D) return;
+    if (!(s.el.isConnected && s.el.ownerDocument === D)) {
+      const list = D.querySelectorAll(s.def ? `[data-kerf="${CSS.escape(s.def)}"]` : `[data-kerf-use="${CSS.escape(s.use)}"]`);
+      if (list.length) { s.el = list[Math.min(s.idx, list.length - 1)]; s.repeat = list.length; }
+      else { const el = s.path && atPath(D, s.path); if (el && (defOf(el) || useOf(el))) s.el = el; }
+    }
+    // The code may have moved: always take the element's current source location.
+    const d = defOf(s.el), u = useOf(s.el);
+    if ((d && d !== s.def) || (u && u !== s.use)) { s.def = d || s.def; s.use = u || s.use; s.defInfo = s.useInfo = null; }
+    s.path = pathOf(s.el);
   }
 
   /* ---------- editing ---------- */
@@ -1321,7 +1332,7 @@
       if (!opts.some(([v]) => v === S.scope)) S.scope = vname ? 'variant' : 'all';
       return `<div class="seg">${opts.map(([v, n, t]) => `<button data-act="scope" data-v="${v}" class="${S.scope === v ? 'on' : ''}" title="${esc(t)}">${esc(n)}</button>`).join('')}</div>`;
     }
-    if (s.def && s.use && S.scope === 'auto') S.scope = 'all';
+    if (s.def && s.use && S.scope === 'auto' && s.defInfo) S.scope = 'all';
     if (s.def && s.use) return `<div class="seg"><button data-act="scope" data-v="all" class="${S.scope === 'all' ? 'on' : ''}" title="Change the component itself, everywhere it's used">Everywhere</button><button data-act="scope" data-v="here" class="${S.scope === 'here' ? 'on' : ''}" title="Change only this use of the component">Only here</button></div>`;
     return '';
   }
