@@ -10,11 +10,11 @@
 </head>
 <body>
 <div id="kerf">
-  <header id="top"></header>
   <div id="body">
-    <aside class="side l" id="layers" hidden></aside>
+    <div class="col l" id="colL"><header class="phd" id="top"></header><aside class="side l" id="layers" hidden></aside></div>
     <div class="rz l" data-resize="l" role="separator" aria-orientation="vertical" aria-label="Resize the side panel" title="Drag to resize · double-click to reset"></div>
     <main id="stage">
+      <div class="topC" id="topC"></div>
       <div id="canvas"><div id="sizer"></div>
       <div id="frameBox">
         <iframe id="frame" title="Your app" src="/"></iframe>
@@ -51,7 +51,7 @@
       <button class="helpBtn" id="helpBtn" data-act="shortcuts" title="Keyboard shortcuts · ?" aria-label="Keyboard shortcuts">?</button>
     </main>
     <div class="rz r" data-resize="r" role="separator" aria-orientation="vertical" aria-label="Resize panel" title="Drag to resize · double-click to reset"></div>
-    <aside class="side r" id="panel" hidden></aside>
+    <div class="col r" id="colR"><div class="phd r" id="topR"></div><aside class="side r" id="panel" hidden></aside></div>
   </div>
   <div class="scrim" id="modal" hidden></div>
   <div class="menu" id="menu" hidden role="menu"></div>

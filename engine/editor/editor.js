@@ -788,20 +788,18 @@
     const p = S.project || {};
     // Changes not yet handed off. The button stays usable after a hand off so a failed push can be sent again.
     const total = S.versions.draft.length + S.versions.versions.reduce((a, v) => a + v.changes.length, 0), n = Math.max(0, total - (S.versions.sent || 0));
-    $('top').innerHTML = `<div class="tside">
-        <button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Side panel: Chat and Layers" aria-label="Show or hide the side panel" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>
+    // No top bar (like Paper): the left column's header has the menu, project and page; the right column's header has
+    // history, you, zoom and Hand off; screen sizes and Present float at the top of the canvas.
+    $('top').innerHTML = `<button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Side panel: Chat and Layers (⇧\\)" aria-label="Show or hide the side panel" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>
         <button class="logoBtn" data-act="kerfMenu" title="Tovi menu" aria-label="Tovi menu" aria-haspopup="menu">${ico('kerf', 16)}${ico('chev', 10)}</button>
-        <span class="crumbs"><span class="proj" title="${esc(p.repo || p.name || '')}">${esc(String(p.name || 'Tovi').split('/').pop())}</span><span class="sep">/</span><button class="pageBtn" data-act="pagesMenu" title="Pages" aria-haspopup="menu">${esc(pageName(S.path))}${ico('chev', 10)}</button></span>
-      </div>
-      <div class="tmid"><div class="bps" role="radiogroup" aria-label="Screen size">${Object.keys(DEVICES).map((d) => `<button class="${S.device === d ? 'on' : ''}" data-act="device" data-v="${d}" role="radio" aria-checked="${S.device === d}" title="${DEV_LABEL[d]} · ${devRange(d)}">${ico(d, 14)}<span>${DEV_LABEL[d]}</span></button>`).join('')}</div></div>
-      <div class="tside r">
+        <span class="crumbs"><span class="proj" title="${esc(p.repo || p.name || '')}">${esc(String(p.name || 'Tovi').split('/').pop())}</span><span class="sep">/</span><button class="pageBtn" data-act="pagesMenu" title="Pages" aria-haspopup="menu">${esc(pageName(S.path))}${ico('chev', 10)}</button></span>`;
+    $('topC').innerHTML = `<div class="bps" role="radiogroup" aria-label="Screen size">${Object.keys(DEVICES).map((d) => `<button class="${S.device === d ? 'on' : ''}" data-act="device" data-v="${d}" role="radio" aria-checked="${S.device === d}" title="${DEV_LABEL[d]} · ${devRange(d)}">${ico(d, 14)}<span>${DEV_LABEL[d]}</span></button>`).join('')}</div>
+        <button class="icon" data-act="present" title="Present: the app full screen" aria-label="Present">${ico('play', 15)}</button>`;
+    $('topR').innerHTML = `<button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
         <button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
-        <button class="icon" data-act="present" title="Present: the app full screen" aria-label="Present">${ico('play', 16)}</button>
-        <button class="icon" data-act="settings" title="Settings (⌘,)" aria-label="Settings">${ico('gear', 16)}</button>
-        <button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
+        <span class="sp"></span>
         <button class="meAv" data-act="meMenu" title="${esc(S.me?.name || 'You')}" aria-label="You: ${esc(S.me?.name || 'You')}" aria-haspopup="menu">${meAvatar()}</button>
-        <button class="primary" data-act="pr" ${total ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>
-      </div>`;
+        <button class="primary" data-act="pr" ${total ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>`;
   }
 
   /* menus: one popover for the Tovi menu, pages, zoom and right-click */
@@ -982,8 +980,11 @@
     const c = $('canvas'), fb = $('frameBox');
     if (!c) return;
     // Room for the frame's name above it and a margin below, like an artboard.
-    const aw = Math.max(80, c.clientWidth - 48), ah = Math.max(80, c.clientHeight - 64);
-    let zFit, w, z, h, left, top = 44;
+    // With the left panel hidden its header floats over the canvas's top-left, so the frame starts lower.
+    const floatL = $('layers').hidden || document.body.classList.contains('minUI'), top0 = floatL ? 84 : 44;
+    const aw = Math.max(80, c.clientWidth - 48), ah = Math.max(80, c.clientHeight - 20 - top0);
+    let zFit, w, z, h, left, top = top0;
+    $('devLabel').style.top = top0 - 24 + 'px';
     if (S.mode === 'preview' && S.device === 'desktop' && S.zoom === 'fit') {
       // Preview on desktop: full screen, edge to edge, like presenting the real product.
       zFit = Math.max(0.5, Math.min(1, c.clientWidth / 1024));
@@ -1038,7 +1039,7 @@
   }).observe(frame);
   // Side panels: drag their inner edge to resize, double-click to reset. Widths are remembered in this browser.
   const SIDE = { l: { el: 'layers', def: 300, min: 260, max: 520 }, r: { el: 'panel', def: 284, min: 248, max: 520 } };
-  const setSide = (k, w) => { const c = SIDE[k]; w = Math.round(Math.max(c.min, Math.min(c.max, w))); document.getElementById(c.el).style.flexBasis = w + 'px'; return w; };
+  const setSide = (k, w) => { const c = SIDE[k]; w = Math.round(Math.max(c.min, Math.min(c.max, w))); document.getElementById(c.el).parentElement.style.flexBasis = w + 'px'; return w; };
   for (const k of Object.keys(SIDE)) { let w = null; try { w = +localStorage.getItem(`kerf.side.${k}`); } catch {} setSide(k, w || SIDE[k].def); }
   let sideDrag = null;
   document.addEventListener('pointerdown', (e) => {
@@ -2027,7 +2028,7 @@
     }
     if (!a) {
       if (S.cpick && !downInFpop && !e.target.closest('#fpop,#fpop2')) closeFpop();
-      if (!downInFpop && !e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal,#fpop,#fpop2')) closeFloating();
+      if (!downInFpop && !e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#topR,#topC,#modal,#fpop,#fpop2')) closeFloating();
       return;
     }
     const act = a.dataset.act, v = a.dataset.v;

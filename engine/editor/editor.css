@@ -1483,3 +1483,42 @@ aside.side.r{border-left-color:var(--chromeLine)}
 :root[data-theme="system"] #panel .seg button.on,:root[data-theme="system"] #panel .ibs .ib.on,:root[data-theme="system"] .ltabs .seg button.on,:root[data-theme="system"] .bps button.on{color:rgba(0,0,0,.85)}
 :root[data-theme="system"] .side .tasks,:root[data-theme="system"] .byNote .ngs,:root[data-theme="system"] .edits,:root[data-theme="system"] .pickBar,:root[data-theme="system"] .kSuggest,:root[data-theme="system"] .tryOn,:root[data-theme="system"] .kAlt,:root[data-theme="system"] .acts.tkFoot{background:#F9F9F9;box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}
 :root[data-theme="system"] .side .bub,:root[data-theme="system"] .side .kc{background:#FFFFFF}}
+
+/* No top bar (like Paper). Each side is a full-height column: its header holds what the bar had, the panel fills the
+   rest. A hidden panel's header shrinks to a small floating pill in that corner, so nothing is ever out of reach.
+   Screen sizes and Present float at the top centre of the canvas. */
+#kerf{position:relative}
+.col{position:relative;display:flex;flex-direction:column;flex:0 0 auto;min-width:0;min-height:0;background:var(--chrome)}
+.col.l{flex-basis:300px;border-right:1px solid var(--chromeLine)}
+.col.r{flex-basis:284px;border-left:1px solid var(--chromeLine)}
+.col>aside.side{flex:1 1 auto!important;min-height:0;width:auto;border:0!important}
+.phd{flex:0 0 44px;display:flex;align-items:center;gap:4px;padding:0 8px;min-width:0;position:relative;z-index:16}
+.phd.r{gap:2px;padding:0 8px 0 6px}
+.phd .sp{flex:1}
+.phd .crumbs{min-width:0;flex:1}
+.phd .crumbs .proj{max-width:120px}
+.phd .pageBtn{min-width:0}
+.phd .zpct{display:flex;align-items:center;gap:4px;height:28px;padding:0 6px;border:0;border-radius:6px;background:transparent;color:var(--ink2);font-size:12px}
+.col.l+.rz.l{}
+.col.l:has(>aside[hidden])+.rz.l,.rz.r:has(+.col.r>aside[hidden]){display:none}
+.col:has(>aside[hidden]),body.minUI .col{flex-basis:0!important;width:0;border:0;background:transparent;z-index:30}
+.col:has(>aside[hidden])>.phd,body.minUI .col>.phd{position:absolute;top:8px;height:36px;padding:0 4px;border-radius:10px;background:var(--chrome);box-shadow:0 0 0 1px rgba(var(--hi),.08),0 6px 20px rgba(0,0,0,.3);white-space:nowrap}
+.col.l:has(>aside[hidden])>.phd,body.minUI .col.l>.phd{left:8px}
+.col.r:has(>aside[hidden])>.phd,body.minUI .col.r>.phd{right:8px}
+.col:has(>aside[hidden])>.phd .crumbs .proj,body.minUI .col>.phd .crumbs .proj{max-width:160px}
+.col.r:has(>aside[hidden])>.phd .sp,body.minUI .col.r>.phd .sp{display:none}
+#stage{position:relative}
+.topC{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:22;display:flex;align-items:center;gap:4px;padding:3px;border-radius:10px;background:var(--chrome);box-shadow:0 0 0 1px rgba(var(--hi),.07),0 4px 14px rgba(0,0,0,.22)}
+.topC .icon{width:26px;height:26px}
+:root[data-theme="light"] .topC,:root[data-theme="light"] .col:has(>aside[hidden])>.phd{box-shadow:0 0 0 1px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.08)}
+.col:has(>aside[hidden])>.phd .crumbs,body.minUI .col>.phd .crumbs{flex:0 0 auto}
+.col:has(>aside[hidden])>.phd .pageBtn,body.minUI .col>.phd .pageBtn{max-width:180px}
+/* With the left panel hidden, the canvas starts below the floating pills so nothing sits on the frame's label. */
+/* Presenting: Tovi's controls step aside; Esc or "Stop presenting" brings them back. */
+#kerf:has(#canvas.present) .topC,#kerf:has(#canvas.present) .col>.phd{display:none}
+
+/* The left header still carries the old bar's id (#top): beat its old rules. */
+#kerf #top{flex:0 0 44px;border:0;background:transparent;padding:0 8px;gap:4px}
+#kerf .col:has(>aside[hidden])>#top,body.minUI #kerf .col>#top{position:absolute;top:8px;left:8px;height:36px;padding:0 4px;border-radius:10px;background:var(--chrome);box-shadow:0 0 0 1px rgba(var(--hi),.08),0 6px 20px rgba(0,0,0,.3);white-space:nowrap}
+:root[data-theme="light"] #kerf .col:has(>aside[hidden])>#top{box-shadow:0 0 0 1px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.08)}
+#kerf:has(#canvas.present) .col>#top{display:none}
