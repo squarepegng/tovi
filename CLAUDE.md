@@ -94,7 +94,7 @@ One dark theme for now (light theme and core components still to do).
 
 **Core colour rule (changed November 2026): Tovi pink is the brand** (the logo, Tovi's cursor and name tag, guides, rule prompts, change markers, AI proposals). Purple is gone (it read too close to Wonder). **Buttons and active states are ivory** in the dark theme and near-black in the light theme (Hand off, active tool, toggles). **Blue means "what you're touching" on the canvas** (selection outlines, handles, drop line, the Layers highlight), like Figma. In dark theme the top bar and side panels sit darker than the canvas (#111113), Framer-style. Icons are Lucide (1.25px lines at any size) plus a few of Tovi's own field icons. Light and dark themes both exist; dark is the default.
 
-Type: Geist for the interface (12px is the workhorse size), Geist Mono for code paths. Spacing: 4 / 8 / 12 / 16. Radii: 4 / 6 / 10.
+Type: the Mac system font (SF Pro, like Paper) for the interface, set once as `--ui` in editor.css with Geist as the fallback (12px is the workhorse size); Geist Mono for code paths. Panel fields and toggles follow Paper's exact control style (24px, 6px corners, flat 5% track, soft raised chosen item). Spacing: 4 / 8 / 12 / 16. Radii: 4 / 6 / 10.
 
 Polish target: Framer-level finish with Figma's structure. All floating controls live in **one minimal bottom toolbar** of icons with hover tooltips (name + shortcut). The Preview/Edit mode switch is in that toolbar; sub-tools open in flyouts; the pending change count is an amber dot on the history icon.
 

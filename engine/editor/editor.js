@@ -3340,7 +3340,7 @@
     else if (n.shape === 'circle') s = `<ellipse cx="${n.x + n.w / 2}" cy="${n.y + n.h / 2}" rx="${n.w / 2}" ry="${n.h / 2}" ${st}/>`;
     else if (n.shape === 'arrow') { const a = Math.atan2(n.y2 - n.y, n.x2 - n.x), L = 12; s = `<path d="M${n.x} ${n.y}L${n.x2} ${n.y2}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a - 0.5)} ${n.y2 - L * Math.sin(a - 0.5)}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a + 0.5)} ${n.y2 - L * Math.sin(a + 0.5)}" stroke="#2B66D9" stroke-width="2.5" fill="none" stroke-linecap="round"/>`; }
     const [bx, by] = o.shape === 'pin' || o.shape === 'arrow' ? [o.x, o.y] : [o.x + o.w, o.y];
-    if (i != null) s += `<g transform="translate(${bx} ${by}) scale(${1 / (S.z || 1)})" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${hl ? `<circle r="16" fill="${pink ? 'rgba(217,70,143,.28)' : 'rgba(43,102,217,.28)'}"/>` : ''}<circle r="11" fill="${col}" stroke="#fff" stroke-width="2"/><text y="4" fill="#fff" font-size="11" font-weight="600" font-family="Geist,system-ui,sans-serif" text-anchor="middle">${i + 1}</text></g>`;
+    if (i != null) s += `<g transform="translate(${bx} ${by}) scale(${1 / (S.z || 1)})" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${hl ? `<circle r="16" fill="${pink ? 'rgba(217,70,143,.28)' : 'rgba(43,102,217,.28)'}"/>` : ''}<circle r="11" fill="${col}" stroke="#fff" stroke-width="2"/><text y="4" fill="#fff" font-size="11" font-weight="600" font-family="-apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif" text-anchor="middle">${i + 1}</text></g>`;
     else if (n.shape === 'pin') s += `<circle cx="${n.x}" cy="${n.y}" r="6" fill="#2B66D9"/>`;
     return s;
   }
@@ -4309,7 +4309,7 @@
       if (B.left >= A.right) line(A.right, yMid, B.left, yMid); else if (B.right <= A.left) line(B.right, yMid, A.left, yMid);
       if (B.top >= A.bottom) line(xMid, A.bottom, xMid, B.top); else if (B.bottom <= A.top) line(xMid, B.bottom, xMid, A.top);
     }
-    g.innerHTML = lines.map((l) => `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="#F06A5F" stroke-width="1"/><rect x="${(l.x1 + l.x2) / 2 - 14}" y="${(l.y1 + l.y2) / 2 - 9}" width="28" height="16" rx="3" fill="#F06A5F"/><text x="${(l.x1 + l.x2) / 2}" y="${(l.y1 + l.y2) / 2 + 3}" fill="#fff" font-size="10" font-weight="600" text-anchor="middle" font-family="Geist,system-ui,sans-serif">${l.d}</text>`).join('');
+    g.innerHTML = lines.map((l) => `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="#F06A5F" stroke-width="1"/><rect x="${(l.x1 + l.x2) / 2 - 14}" y="${(l.y1 + l.y2) / 2 - 9}" width="28" height="16" rx="3" fill="#F06A5F"/><text x="${(l.x1 + l.x2) / 2}" y="${(l.y1 + l.y2) / 2 + 3}" fill="#fff" font-size="10" font-weight="600" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif">${l.d}</text>`).join('');
   }
   const altKey = (e) => { if (e.key === 'Alt') { S.alt = e.type === 'keydown'; } };
   ['keydown', 'keyup'].forEach((t) => window.addEventListener(t, altKey, true));
