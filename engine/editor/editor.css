@@ -1426,3 +1426,14 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .mk.skip{border:1px dashed rgba(var(--hi),.2)}
 .kDone{margin-top:-4px;padding:0 4px 0 12px;height:28px}
 .kDone .kStatus{font-size:12px}
+
+/* Tasks waiting for Tovi: the panel's own fill with the soft control edge (no dark box, no outline). The change list
+   follows suit. */
+.side .tasks{border:0;border-radius:8px;background:transparent;box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+.side .tasks .tkFoot{border-top-color:rgba(var(--hi),.06)}
+.edits{background:transparent}
+/* Layers: the selected layer and everything inside it read as one block, the children a lighter blue (Figma). */
+.layer.sub{background:rgba(43,102,217,.1);color:var(--ink);border-radius:0}
+.layer.on:has(+ .layer.sub){border-bottom-left-radius:0;border-bottom-right-radius:0}
+.layer.sub:not(:has(+ .layer.sub)){border-bottom-left-radius:4px;border-bottom-right-radius:4px}
+.glides .layer.sub:hover{background:rgba(43,102,217,.16)}
