@@ -793,6 +793,7 @@
         <button class="icon" data-act="present" title="Present: the app full screen" aria-label="Present">${ico('play', 16)}</button>
         <button class="icon" data-act="settings" title="Settings (⌘,)" aria-label="Settings">${ico('gear', 16)}</button>
         <button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
+        <button class="meAv" data-act="meMenu" title="${esc(S.me?.name || 'You')}" aria-label="You: ${esc(S.me?.name || 'You')}" aria-haspopup="menu">${meAvatar()}</button>
         <button class="primary" data-act="pr" ${total ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>
       </div>`;
   }
@@ -930,6 +931,9 @@
     ], at);
   }
   // Right-click on the canvas: what a designer reaches for, on the element under the cursor.
+  // You, like Figma and Paper: your picture top right (your GitHub picture when signed in, else your initial).
+  function meAvatar() { const n = S.me?.name || 'You', ini = esc(n.trim()[0] || '?').toUpperCase(); return S.me?.avatar ? `<img src="${esc(S.me.avatar)}" alt="" data-i="${ini}" onerror="this.replaceWith(this.dataset.i)">` : ini; }
+  api('/person').then((p) => { S.me = p; renderTop(); }).catch(() => {});
   function contextMenu(at) {
     const s = S.sel, inf = info(), el = s?.el;
     if (!el) return;
@@ -2092,6 +2096,7 @@
       case 'device': S.device = v; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); break;
       case 'zoom': setZoom(v); break;
       case 'kerfMenu': kerfMenu(below(a)); break;
+      case 'meMenu': { const r = a.getBoundingClientRect(); openMenu([{ head: S.me?.login ? `${S.me.name} · GitHub ${S.me.login}` : S.me?.name || 'You' }, { label: 'Settings', icon: 'gear', kbd: '⌘,', run: () => document.querySelector('[data-act="settings"]')?.click() }, { label: 'Back to projects', icon: 'chevR', run: () => { location.href = 'http://localhost:4100/'; } }], { x: r.right - 236, y: r.bottom + 6 }); break; }
       case 'pagesMenu': pagesMenu(below(a)); break;
       case 'zoomMenu': zoomMenu(below(a)); break;
       case 'shortcuts': shortcuts(); break;

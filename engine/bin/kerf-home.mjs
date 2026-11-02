@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { openProject, PROJECTS_DIR, projects, stopAll } from '../src/project.mjs';
 import { readRecent } from '../src/recent.mjs';
 import { readPrefs, savePrefs } from '../src/prefs.mjs';
+import { readPerson, savePerson } from '../src/person.mjs';
+import { execFile } from 'node:child_process';
 import { MODELS, PROVIDERS, listModels } from '../src/ai.mjs';
 
 const ENV = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env');
@@ -22,6 +24,9 @@ function setEnv(name, value) {
   fs.chmodSync(ENV, 0o600);
 }
 let job = null;
+// Who's using Tovi: their name (Settings), and their GitHub picture when this Mac is signed in to GitHub.
+let ghLogin = null;
+execFile('gh', ['api', 'user', '--jq', '.login'], { timeout: 6000 }, (err, out) => { if (!err && /^[\w-]{1,40}$/.test(String(out).trim())) ghLogin = String(out).trim(); });
 
 // Every project you've opened, newest first: the editor records each one as it opens (see src/recent.mjs);
 // older copies of GitHub repos in ~/Kerf/projects are listed too.
@@ -103,6 +108,12 @@ http.createServer(async (req, res) => {
     return send(res, 200, { ok: true });
   }
   if (req.method === 'GET' && req.url.startsWith('/api/models?')) return send(res, 200, await listModels(new URL(req.url, 'http://x').searchParams.get('provider')));
+  if (req.method === 'GET' && req.url === '/api/me') return send(res, 200, { name: readPerson(), login: ghLogin, avatar: ghLogin ? `https://github.com/${ghLogin}.png?size=96` : null });
+  if (req.method === 'POST' && req.url === '/api/me') {
+    let body = '';
+    for await (const c of req) body += c;
+    return send(res, 200, { name: savePerson(JSON.parse(body || '{}').name) });
+  }
   if (req.method === 'GET' && req.url === '/api/prefs') return send(res, 200, readPrefs());
   if (req.method === 'POST' && req.url === '/api/prefs') {
     let body = '';
@@ -213,98 +224,145 @@ table.keys{border-collapse:collapse;width:100%}
 table.keys td{padding:9px 0;border-bottom:1px solid rgba(var(--hi),.06);color:var(--ink2)}
 table.keys td:last-child{text-align:right}
 kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;background:var(--raised);color:var(--ink);font:500 11px/16px Geist,system-ui,sans-serif;text-align:center}
-/* Start page, after Framer, Figma and Wonder: a quiet sidebar with search, one primary action, filters and big previews. */
+/* Start page. Sidebar like Paper (you at the top, search, sections, a small card, links at the bottom);
+   project cards like Figma (a framed preview, then name and time); opening a project is a dialog. */
 :root{--side:#141416}:root[data-theme="light"]{--side:#FAFAFB}
 @media (prefers-color-scheme: light){:root[data-theme="system"]{--side:#FAFAFB}}
-nav{background:var(--side);border-right-color:rgba(var(--hi),.06);padding:14px 10px}
-.brand{padding:4px 8px 14px}
-nav a{height:32px;padding:0 10px;font-weight:500;font-size:13px}
-nav a.on{background:rgba(var(--hi),.08)}
+.app{grid-template-columns:248px minmax(0,1fr)}
+nav{background:var(--side);border-right:1px solid rgba(var(--hi),.06);padding:12px 10px 14px;gap:1px}
+nav a,.me{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:8px;color:var(--ink2);text-decoration:none;font-weight:500;font-size:13px}
+nav a.on{background:rgba(var(--hi),.08);color:var(--ink)}
+nav a:hover:not(.on){background:rgba(var(--hi),.04);color:var(--ink)}
+.me{width:100%;height:36px;margin-bottom:6px;padding:0 8px;border:0;background:transparent;color:var(--ink);font:600 13.5px Geist,system-ui,sans-serif;justify-content:flex-start;cursor:pointer}
+.me:hover{background:rgba(var(--hi),.05)}
+.me svg{color:var(--ink3);margin-left:-4px}
+.av{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,var(--logoA),var(--logoB));color:#111113;font:600 11px/1 Geist,system-ui,sans-serif}
+.av img{width:100%;height:100%;object-fit:cover}
 .nsearch{display:flex;align-items:center;gap:8px;height:32px;margin:0 0 10px;padding:0 6px 0 10px;border-radius:8px;background:rgba(var(--hi),.06);color:var(--ink3)}
-.nsearch input{height:30px;padding:0;border:0;background:none;border-radius:0;font-size:13px}
+.nsearch input{height:30px;padding:0;border:0;background:none;border-radius:0;font-size:13px;color:var(--ink)}
 .nsearch input:focus{box-shadow:none}
 .nsearch kbd{background:rgba(var(--hi),.07);color:var(--ink3)}
-.phead{display:flex;align-items:center;justify-content:space-between;gap:16px}
-.phead h1{font-size:20px;line-height:28px;font-weight:600;letter-spacing:-.01em}
-.pri{height:34px;padding:0 14px 0 12px;border-radius:9px;background:linear-gradient(180deg,#fff,#E7E6E2);color:#111113;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.4)}
+.nsec{margin:12px 0 2px;padding:10px 10px 4px;border-top:1px solid rgba(var(--hi),.06);color:var(--ink3);font-size:11.5px;font-weight:500}
+nav a .ct{margin-left:auto;color:var(--ink3);font-size:11.5px;font-variant-numeric:tabular-nums}
+.ncard{display:flex;flex-direction:column;gap:6px;margin:0 2px 10px;padding:14px;border-radius:12px;background:rgba(var(--hi),.04);box-shadow:inset 0 0 0 1px rgba(var(--hi),.06)}
+.ncard b{font-weight:500}
+.ncard span{color:var(--ink3);font-size:12.5px;line-height:17px}
+.ncard .btn{margin-top:6px;height:30px;border-radius:8px;font-size:12.5px}
+.nfoot{display:flex;align-items:center;gap:6px;padding:0 10px;color:var(--ink3);font-size:12px;white-space:nowrap}
+.nfoot a{display:inline;height:auto;padding:0;color:var(--ink3);font-weight:400;font-size:12px}
+.nfoot a:hover{background:none;color:var(--ink)}
+.nfoot .sp{flex:1}
+.mmenu{position:fixed;z-index:40;min-width:220px;padding:4px;border-radius:12px;background:var(--menu);box-shadow:0 0 0 1px rgba(var(--hi),.08),0 1px 1px rgba(0,0,0,.14),0 8px 24px rgba(0,0,0,.35);animation:pin .16s cubic-bezier(.2,0,0,1)}
+.mmenu .mh{padding:8px 10px 6px;color:var(--ink3);font-size:12px}
+.mmenu a{display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;border-radius:8px;color:var(--ink);text-decoration:none;font-size:13px}
+.mmenu a:hover{background:rgba(var(--hi),.07)}
+.mmenu a svg{color:var(--ink3)}
+.mmenu hr{border:0;height:1px;margin:4px 6px;background:rgba(var(--hi),.07)}
+@keyframes pin{from{opacity:0;scale:.96;filter:blur(3px)}}
+main{padding:28px 40px 72px;max-width:1280px}
+#v-projects{gap:22px}
+.phead{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:36px}
+.phead h1{font-size:22px;line-height:28px;font-weight:600;letter-spacing:-.015em}
+.pact{display:flex;align-items:center;gap:10px}
+.pri{height:32px;padding:0 13px 0 11px;border-radius:9px;background:linear-gradient(180deg,#fff,#E7E6E2);color:#111113;font-weight:500;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.4)}
 :root[data-theme="light"] .pri{background:linear-gradient(180deg,#2A2A2F,#141416);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 1px 2px rgba(0,0,0,.25)}
 .pri:active{scale:.97}
-.openCard{display:flex;flex-direction:column;gap:14px;padding:20px;border-radius:14px;background:var(--panel);box-shadow:0 0 0 1px rgba(var(--hi),.07),0 12px 32px rgba(0,0,0,.25)}
-.openCard h2{font-size:15px;line-height:20px}
-.openCard p{margin-top:4px}
-.openCard input{height:38px}
-.openCard button#go{height:38px}
-.ptools{display:flex;align-items:center;gap:10px}
-.ptools .sp{flex:1}
 .seg{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:rgba(var(--hi),.05);box-shadow:inset 0 1px 2px rgba(0,0,0,.25)}
 .seg button{height:28px;padding:0 10px;border-radius:7px;background:transparent;color:var(--ink2);font:500 12.5px/1 Geist,system-ui,sans-serif}
-.seg button span{margin-left:4px;color:var(--ink3);font-variant-numeric:tabular-nums}
 .seg button.on{background:#3A3A41;color:var(--ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.45)}
 :root[data-theme="light"] .seg{box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
 :root[data-theme="light"] .seg button.on{background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.1)}
 .seg.vt button{width:30px;padding:0;color:var(--ink3)}
 .seg.vt button.on{color:var(--ink)}
-.ptools select{height:32px;min-width:0;padding:0 28px 0 10px;background-position:right 9px center;border-color:transparent;background-color:transparent;color:var(--ink2);font-size:12.5px}
-.ptools select:hover{background-color:rgba(var(--hi),.05)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:28px 20px}
-.proj{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:12px;height:auto;padding:0;border-radius:0;background:none;color:var(--ink);text-align:left;white-space:normal;font:inherit}
-.shot{position:relative;display:block;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px rgba(var(--hi),.07);transition:box-shadow .16s cubic-bezier(.2,0,0,1),translate .16s cubic-bezier(.2,0,0,1)}
-.shot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top;display:block}
-.shot .ph{position:absolute;inset:0;display:grid;place-items:center;opacity:.22;filter:grayscale(1)}
-.proj:hover .shot{translate:0 -2px;box-shadow:0 0 0 1px rgba(var(--hi),.16),0 10px 28px rgba(0,0,0,.3)}
-.proj:focus-visible{outline:none}.proj:focus-visible .shot{box-shadow:0 0 0 2px #2B66D9}
-.info{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:0 2px}
-.info .tx{display:flex;flex-direction:column;min-width:0}
-.info b{font-weight:500;font-size:14px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.info .when{color:var(--ink3);font-size:12.5px;line-height:18px}
-.info .src{display:none;color:var(--ink3);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.run{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;height:22px;margin-top:-1px;padding:0 8px;border-radius:6px;background:rgba(111,211,154,.1);color:var(--ok);font-size:11.5px;font-weight:500}
-.run::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
-.grid.list{display:flex;flex-direction:column;gap:2px}
-.grid.list .proj{flex-direction:row;align-items:center;gap:14px;padding:8px;border-radius:10px}
-.grid.list .proj:hover{background:rgba(var(--hi),.04)}
-.grid.list .shot{flex:0 0 80px;width:80px;border-radius:6px}
-.grid.list .proj:hover .shot{translate:none;box-shadow:0 0 0 1px rgba(var(--hi),.1)}
-.grid.list .info{flex:1;align-items:center}
-.grid.list .src{display:block}
-#v-projects{gap:24px}
-#job:empty{display:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:24px}
+.proj{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;height:auto;padding:0;border-radius:12px;overflow:hidden;background:var(--panel);box-shadow:inset 0 0 0 1px rgba(var(--hi),.08);color:var(--ink);text-align:left;white-space:normal;font:inherit;transition:box-shadow .16s cubic-bezier(.2,0,0,1)}
+.proj:hover{box-shadow:inset 0 0 0 1px rgba(var(--hi),.2),0 8px 24px rgba(0,0,0,.25)}
+.proj:focus-visible{outline:none;box-shadow:inset 0 0 0 2px #2B66D9}
+.shot{position:relative;display:block;aspect-ratio:16/10;background:rgba(var(--hi),.035);border-bottom:1px solid rgba(var(--hi),.07);overflow:hidden}
+.shot img{position:absolute;left:12%;right:12%;top:12%;width:76%;height:auto;min-height:80%;border-radius:6px 6px 0 0;object-fit:cover;object-position:top;box-shadow:0 0 0 1px rgba(var(--hi),.08),0 6px 20px rgba(0,0,0,.35);transition:translate .2s cubic-bezier(.2,0,0,1)}
+.proj:hover .shot img{translate:0 -3px}
+.shot .ph{position:absolute;inset:0;display:grid;place-items:center;opacity:.2;filter:grayscale(1)}
+.info{display:flex;align-items:center;gap:10px;padding:12px 14px 13px}
+.info .ic{flex:0 0 auto;width:20px;height:20px;border-radius:5px;display:grid;place-items:center;background:rgba(var(--hi),.08)}
+.info .tx{display:flex;flex-direction:column;min-width:0;flex:1}
+.info b{font-weight:600;font-size:13px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.info .when{color:var(--ink3);font-size:12px;line-height:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.info .when i{font-style:normal;color:var(--ok)}
+.info .when i::before{content:'';display:inline-block;width:6px;height:6px;margin:0 5px 1px 0;border-radius:50%;background:currentColor}
+.grid.list{display:flex;flex-direction:column;gap:0;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(var(--hi),.08);overflow:hidden}
+.grid.list .proj{flex-direction:row;align-items:center;border-radius:0;background:transparent;box-shadow:none;border-bottom:1px solid rgba(var(--hi),.06)}
+.grid.list .proj:last-child{border-bottom:0}
+.grid.list .proj:hover{background:rgba(var(--hi),.03)}
+.grid.list .shot{flex:0 0 96px;width:96px;margin:8px 0 8px 10px;border:0;border-radius:6px}
+.grid.list .shot img{inset:0;left:0;top:0;width:100%;height:100%;border-radius:6px;box-shadow:none}
+.grid.list .info .ic{display:none}
+.empty{padding:64px 24px;border:0;text-align:center;color:var(--ink3)}
+.empty b{display:block;margin-bottom:6px;color:var(--ink);font-size:15px;font-weight:600}
+.empty .pri{margin-top:18px}
+.scrim{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:20px;background:rgba(10,10,12,.6)}
+:root[data-theme="light"] .scrim{background:rgba(20,20,24,.28)}
+.dlg{width:min(520px,100%);display:flex;flex-direction:column;border-radius:16px;background:var(--panel);box-shadow:0 0 0 1px rgba(var(--hi),.08),0 24px 64px rgba(0,0,0,.5);animation:pin .2s cubic-bezier(.2,0,0,1)}
+.dlg .dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 20px 4px}
+.dlg .dh h2{font-size:16px;line-height:22px;font-weight:600}
+.dlg .dh p{margin-top:4px;font-size:13px;line-height:19px}
+.dlg .x{width:28px;height:28px;padding:0;margin:-4px -6px 0 0;border-radius:8px;background:transparent;color:var(--ink3)}
+.dlg .x:hover{background:rgba(var(--hi),.07);color:var(--ink)}
+.dlg .db{display:flex;flex-direction:column;gap:14px;padding:14px 20px 18px}
+.dlg .seg{align-self:flex-start}
+.dlg .seg button{display:inline-flex;gap:7px;align-items:center}
+.fld{display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:10px;background:var(--canvas);box-shadow:inset 0 0 0 1px rgba(var(--hi),.1);color:var(--ink3)}
+.fld:focus-within{box-shadow:inset 0 0 0 1px rgba(43,102,217,.75),0 0 0 3px rgba(43,102,217,.16)}
+.fld input{height:38px;padding:0;border:0;background:none;border-radius:0;font-size:13.5px}
+.fld input:focus{box-shadow:none}
+.dlg .df{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-top:1px solid rgba(var(--hi),.07)}
+.dlg .df .hint{flex:1}
+.dlg .df .btn,.dlg .df button{height:32px;border-radius:9px;font-size:13px}
+.prog{display:flex;flex-direction:column;gap:10px;padding:4px 0 2px}
+.prog .status{font-weight:500}
+#v-settings,#v-help{max-width:720px}
 input:focus,select:focus{border-color:rgba(43,102,217,.75);box-shadow:0 0 0 3px rgba(43,102,217,.16)}
-@media (max-width:760px){.app{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px}.brand{padding:0 8px 0 4px}nav .sp,nav .ver{display:none}main{padding:28px 16px 48px}}
+@media (max-width:760px){.ncard,.nsec,.nfoot,.nsearch kbd{display:none!important}.me{width:auto;margin:0}.app{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px}.brand{padding:0 8px 0 4px}nav .sp,nav .ver{display:none}main{padding:28px 16px 48px}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 </style></head>
 <body><div class="app">
 <nav aria-label="Tovi">
-  <div class="brand"><svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoA)"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoB)"/></svg>Tovi</div>
+  <button class="me" id="meBtn" aria-haspopup="menu" aria-expanded="false"><span class="av" id="meAv"></span><span id="meName">You</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
   <label class="nsearch"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input id="q" placeholder="Search" autocomplete="off" spellcheck="false" aria-label="Search projects"><kbd>/</kbd></label>
-  <a href="#projects" data-v="projects"><svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="2.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9.5" width="5" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>Projects</a>
-  <a href="#settings" data-v="settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a>
-  <a href="#help" data-v="help"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.6 1.6c-.6.3-.9.7-.9 1.3v.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.4" r=".8" fill="currentColor"/></svg>Help</a>
+  <a href="#projects" data-v="projects"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Recents<span class="ct" id="nAll"></span></a>
+  <a href="#running" data-v="running"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/></svg>Running<span class="ct" id="nRun"></span></a>
+  <div class="nsec">Tovi</div>
+  <a href="#settings" data-v="settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a>
+  <a href="#help" data-v="help"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>Help</a>
   <span class="sp"></span>
-  <span class="ver" id="ver"></span>
+  <div class="ncard" id="keyBanner" hidden><b>Add your AI key</b><span>Tovi’s chat, notes and Diagnose need a key from Claude, OpenAI or Gemini.</span><a class="btn ghost" href="#settings">Add key</a></div>
+  <div class="nfoot"><a href="#help">What’s new</a><span>·</span><a href="https://github.com/squarepegng/tovi/issues" target="_blank" rel="noopener">Feedback</a><span class="sp"></span><span id="ver"></span></div>
 </nav>
 <main>
   <section class="view" id="v-projects" aria-labelledby="pT">
-    <div class="phead"><h1 id="pT">Projects</h1><button class="pri" id="openBtn" aria-expanded="false" aria-controls="openCard"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Open project</button></div>
-    <div class="openCard" id="openCard" hidden>
-      <div><h2 id="oT">Open a project</h2><p>Paste a GitHub link or a folder on this computer. Tovi runs your app and opens it with the editor on top. Your code only changes when you edit.</p></div>
-      <form class="openf" id="f"><input id="src" placeholder="github.com/team/app  or  ~/code/app" autocomplete="off" spellcheck="false" aria-label="GitHub link or folder"><button id="go">Open</button></form>
-      <label class="chk"><input type="checkbox" id="diagOn" checked><span>Check my product for design issues when it opens <span class="hint">Tovi reviews each page and leaves notes on what to fix.</span></span></label>
-      <span class="hint">React apps built with Vite or Next.js 13+, styled with Tailwind CSS v3. Private repos use your GitHub sign-in on this Mac.</span>
-    </div>
-    <div class="banner" id="keyBanner" hidden><span>Add your Anthropic key to use Tovi’s AI.</span><a class="btn ghost sm" href="#settings">Add key</a></div>
-    <div id="job"></div>
-    <div class="ptools" id="ptools" hidden>
-      <div class="seg" role="group" aria-label="Show"><button class="on" data-f="all">All<span id="nAll"></span></button><button data-f="run">Running<span id="nRun"></span></button></div>
-      <span class="sp"></span>
-      <select id="sort" aria-label="Sort by"><option value="at">Last opened</option><option value="name">Name</option></select>
-      <div class="seg vt" role="group" aria-label="View"><button data-view="grid" class="on" aria-label="Grid" title="Grid"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></svg></button><button data-view="list" aria-label="List" title="List"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h.01M3 12h.01M3 19h.01M8 5h13M8 12h13M8 19h13"/></svg></button></div>
-    </div>
+    <div class="phead"><h1 id="pT">Recents</h1><div class="pact">
+      <div class="seg vt" role="group" aria-label="View" id="ptools"><button data-view="grid" class="on" aria-label="Grid" title="Grid"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></svg></button><button data-view="list" aria-label="List" title="List"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h.01M3 12h.01M3 19h.01M8 5h13M8 12h13M8 19h13"/></svg></button></div>
+      <button class="pri" data-new><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New project</button></div></div>
     <div class="grid" id="recent"></div>
   </section>
+  <div class="scrim" id="dlg" hidden><section class="dlg" role="dialog" aria-modal="true" aria-labelledby="dT">
+    <div class="dh"><div><h2 id="dT">New project</h2><p>Open a React app you already have. Tovi runs it on this Mac and puts the editor on top. Your code only changes when you edit.</p></div><button class="x" data-close aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <form id="f">
+      <div class="db" id="dForm">
+        <div class="seg" role="group" aria-label="Where is it"><button type="button" class="on" data-kind="gh"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>GitHub</button><button type="button" data-kind="dir"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>Folder on this Mac</button></div>
+        <label class="fld"><span id="fIco"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg></span><input id="src" placeholder="github.com/team/app" autocomplete="off" spellcheck="false" aria-label="GitHub link or folder"></label>
+        <label class="chk"><input type="checkbox" id="diagOn" checked><span>Review the design when it opens <span class="hint">Tovi looks at each page and leaves notes on what to fix.</span></span></label>
+      </div>
+      <div class="db" id="job" hidden></div>
+      <div class="df"><span class="hint" id="dHint">React with Vite or Next.js 13+, Tailwind CSS v3.</span><button type="button" class="ghost" data-close>Cancel</button><button id="go">Open project</button></div>
+    </form>
+  </section></div>
+  <div class="mmenu" id="meMenu" role="menu" hidden><div class="mh" id="meWho"></div><a href="#settings" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a><a href="#help" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>Help</a><hr><a href="https://github.com/squarepegng/tovi" target="_blank" rel="noopener" role="menuitem"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>Tovi on GitHub</a></div>
 
   <section class="view" id="v-settings" aria-labelledby="sT">
     <div><h1 id="sT">Settings</h1><p>Saved only on this Mac. Keys live in a git-ignored file, and Tovi never shows them again.</p></div>
+    <div><div class="secH"><h2>You</h2></div>
+      <div class="rows"><div class="srow"><div class="tx"><b>Your name</b><span class="hint">Shown at the top of the sidebar and on the versions and changes you make.</span>
+        <form id="nmf"><input id="nmIn" autocomplete="off" spellcheck="false" aria-label="Your name"><button class="sm">Save</button></form></div><span class="av" id="setAv" style="width:40px;height:40px;font-size:15px"></span></div></div></div>
     <div><div class="secH"><h2>AI</h2></div>
       <div class="rows">
         <div class="srow"><div class="tx"><b>Provider</b><span class="hint" id="aiNow">Checking…</span></div>
@@ -362,60 +420,69 @@ fetch('/api/prefs').then(r=>r.json()).then(p=>applyTheme(p.theme)).catch(()=>{})
 document.addEventListener('change',e=>{if(e.target.id!=='themeSel')return;applyTheme(e.target.value);fetch('/api/prefs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:e.target.value})})});
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
-function route(){const v=(location.hash||'#projects').slice(1);const ok=['projects','settings','help'].includes(v)?v:'projects';document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+ok));document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===ok));}
-addEventListener('hashchange',route);route();
-let polling=null,started=false;
+// Sections: Recents and Running (the same projects, filtered), Settings, Help.
+function route(){const v=(location.hash||'#projects').slice(1);const ok=['projects','running','settings','help'].includes(v)?v:'projects';const view=ok==='running'?'projects':ok;document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+view));document.querySelectorAll('nav a[data-v]').forEach(a=>a.classList.toggle('on',a.dataset.v===ok));F=ok==='running'?'run':'all';$('pT').textContent=F==='run'?'Running':'Recents';renderList();$('meMenu').hidden=true}
+let polling=null,started=false,LIST=[],F='all',Q='',VIEW='grid',KIND='gh';try{VIEW=localStorage.getItem('kerf.view')==='list'?'list':'grid'}catch{}
+// New project: a dialog. Pick GitHub or a folder, paste, open; the progress shows in the same dialog.
+const GH=document.querySelector('[data-kind="gh"] svg').outerHTML,DIR=document.querySelector('[data-kind="dir"] svg').outerHTML;
+function setKind(k){KIND=k;document.querySelectorAll('[data-kind]').forEach(b=>b.classList.toggle('on',b.dataset.kind===k));$('fIco').innerHTML=k==='gh'?GH:DIR;$('src').placeholder=k==='gh'?'github.com/team/app':'~/code/app';$('dHint').textContent=k==='gh'?'Private repos use your GitHub sign-in on this Mac.':'Paste the path of the app’s folder. Tip: drag the folder into Terminal to copy its path.'}
+function showDlg(on){const d=$('dlg');if(!on&&polling&&!started)return;d.hidden=!on;if(on){$('dForm').hidden=false;$('job').hidden=true;$('go').hidden=false;$('go').disabled=false;$('go').textContent='Open project';setTimeout(()=>$('src').focus(),0)}}
+document.addEventListener('click',e=>{if(e.target.closest('[data-new]')){showDlg(true);return}if(e.target.closest('[data-close]')||e.target.id==='dlg'){showDlg(false);return}const k=e.target.closest('[data-kind]');if(k)setKind(k.dataset.kind)});
 async function open(source){
-  location.hash='#projects';$('go').disabled=true;started=true;
+  $('dlg').hidden=false;$('dForm').hidden=true;$('job').hidden=false;$('go').hidden=true;started=true;
+  $('job').innerHTML='<div class="prog"><div class="status"><span class="spin"></span>Starting</div></div>';
   const r=await fetch('/api/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source})});
-  if(!r.ok){const j=await r.json();$('job').innerHTML='<div class="card"><span class="err">'+esc(j.error)+'</span></div>';$('go').disabled=false;return}
+  if(!r.ok){const j=await r.json();$('job').innerHTML='<div class="prog"><span class="err">'+esc(j.error)+'</span></div>';$('go').hidden=false;$('go').textContent='Try again';$('dForm').hidden=false;return}
   poll();
 }
 async function poll(){
-  clearTimeout(polling);
+  clearTimeout(polling);polling=null;
   const j=await (await fetch('/api/job')).json();
-  if(!j){return}
+  if(!j)return;
   const done=j.url||j.error;
-  $('job').innerHTML='<div class="card"><div class="status">'+(j.error?'<span class="err">'+esc(j.error)+'</span>':j.url?'Ready':'<span class="spin"></span>'+esc(j.step))+'</div>'+
-    (j.url?'<a class="btn sm" style="align-self:flex-start" href="'+esc(j.url)+'">Open in Tovi</a>':'')+'<details class="logs"'+(j.error||window.__logsOpen?' open':'')+'><summary>Technical details</summary><pre id="log">'+esc(j.log.trim())+'</pre></details></div>';
+  if(done&&!started)return;
+  $('dlg').hidden=false;$('dForm').hidden=!j.error;$('job').hidden=false;$('go').hidden=!j.error;if(j.error)$('go').textContent='Try again';
+  $('job').innerHTML='<div class="prog"><div class="status">'+(j.error?'<span class="err">'+esc(j.error)+'</span>':j.url?'Ready. Opening Tovi…':'<span class="spin"></span>'+esc(j.step))+'</div><details class="logs"'+(j.error||window.__logsOpen?' open':'')+'><summary>Technical details</summary><pre id="log">'+esc(j.log.trim())+'</pre></details></div>';
   const dd=document.querySelector('#job details');if(dd)dd.ontoggle=()=>{window.__logsOpen=dd.open};
   const l=$('log');if(l)l.scrollTop=l.scrollHeight;
   if(j.url&&started){const d=$('diagOn')?.checked;location.href=j.url+(d?(j.url.includes('?')?'&':'?')+'diagnose=1':'');return}
-  if(done){$('go').disabled=false;loadRecent();return}
+  if(done){loadRecent();return}
   polling=setTimeout(poll,700);
 }
-const ago=t=>{const s=(Date.now()-t)/1000;return s<3600?Math.max(1,Math.round(s/60))+' min ago':s<86400?Math.round(s/3600)+' h ago':Math.round(s/86400)+' d ago'};
-// Projects: All or Running, sorted, as big previews or a list. The card shows the app as it last looked in Tovi.
-let LIST=[],F='all',Q='',VIEW='grid';try{VIEW=localStorage.getItem('kerf.view')==='list'?'list':'grid'}catch{}
+const ago=t=>{const s=(Date.now()-t)/1000;return s<60?'just now':s<3600?Math.round(s/60)+' min ago':s<86400?Math.round(s/3600)+' h ago':s<86400*30?Math.round(s/86400)+' d ago':new Date(t).toLocaleDateString()};
+// Cards like Figma's: the app framed on a quiet backdrop, then a small mark, the name and when it was opened.
 const LOGO='<svg width="44" height="44" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="currentColor"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="currentColor"/></svg>';
+const MARK='<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoA)"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoB)"/></svg>';
 const nm=p=>p.name||String(p.source).split('/').filter(Boolean).pop();
-function card(p){return '<button class="proj" data-src="'+esc(p.source)+'"'+(p.url?' data-url="'+esc(p.url)+'"':'')+'><span class="shot"><span class="ph">'+LOGO+'</span>'+(p.thumb?'<img src="/api/thumb?id='+encodeURIComponent(p.id)+'&t='+p.thumb+'" alt="" loading="lazy" onerror="this.remove()">':'')+'</span><span class="info"><span class="tx"><b>'+esc(nm(p))+'</b><span class="src">'+esc(p.source)+'</span><span class="when">Opened '+ago(p.at)+'</span></span>'+(p.url?'<span class="run">Running</span>':'')+'</span></button>'}
-function showOpen(on,first){const c=$('openCard');c.hidden=!on;$('openBtn').setAttribute('aria-expanded',on);$('openBtn').hidden=!!first;$('oT').textContent=first?'Open your first project':'Open a project';if(on&&!first)setTimeout(()=>$('src').focus(),0)}
+function card(p){return '<button class="proj" data-src="'+esc(p.source)+'"'+(p.url?' data-url="'+esc(p.url)+'"':'')+' title="'+esc(p.source)+'"><span class="shot"><span class="ph">'+LOGO+'</span>'+(p.thumb?'<img src="/api/thumb?id='+encodeURIComponent(p.id)+'&t='+p.thumb+'" alt="" loading="lazy" onerror="this.remove()">':'')+'</span><span class="info"><span class="ic">'+MARK+'</span><span class="tx"><b>'+esc(nm(p))+'</b><span class="when">'+(p.url?'<i>Running</i> · ':'')+'Opened '+ago(p.at)+'</span></span></span></button>'}
 function renderList(){
-  const has=LIST.length;$('ptools').hidden=!has;if(!has)showOpen(true,true);else $('openBtn').hidden=false;
-  $('nAll').textContent=has;$('nRun').textContent=LIST.filter(p=>p.url).length;
-  let l=LIST.filter(p=>F==='all'||p.url).filter(p=>!Q||(nm(p)+' '+p.source).toLowerCase().includes(Q));
-  if($('sort').value==='name')l=[...l].sort((a,b)=>nm(a).localeCompare(nm(b)));
+  if(!$('recent'))return;
+  const has=LIST.length;$('ptools').hidden=!has;
+  $('nAll').textContent=has||'';$('nRun').textContent=LIST.filter(p=>p.url).length||'';
+  const l=LIST.filter(p=>F==='all'||p.url).filter(p=>!Q||(nm(p)+' '+p.source).toLowerCase().includes(Q));
   document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('on',b.dataset.view===VIEW));
-  $('recent').className='grid'+(VIEW==='list'?' list':'');
-  $('recent').innerHTML=l.length?l.map(card).join(''):has?'<div class="empty">'+(Q?'No projects match “'+esc(Q)+'”.':'Nothing is running right now.')+'</div>':'';
+  $('recent').className='grid'+(VIEW==='list'&&l.length?' list':'');
+  $('recent').innerHTML=l.length?l.map(card).join(''):'<div class="empty" style="grid-column:1/-1">'+(!has?'<b>No projects yet</b>Open a React app from GitHub or a folder on this Mac, and edit it like a design file.<br><button class="pri" data-new>'+document.querySelector('[data-new]').innerHTML+'</button>':Q?'<b>Nothing matches “'+esc(Q)+'”</b>Try another name.':'<b>Nothing is running</b>Open a project from Recents and it shows here while it runs.')+'</div>';
 }
 async function loadRecent(){LIST=await (await fetch('/api/recent')).json();renderList()}
-$('openBtn').addEventListener('click',()=>showOpen($('openCard').hidden));
-document.querySelector('.seg[aria-label="Show"]').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;F=b.dataset.f;b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));renderList()});
 document.querySelector('.seg.vt').addEventListener('click',e=>{const b=e.target.closest('[data-view]');if(!b)return;VIEW=b.dataset.view;try{localStorage.setItem('kerf.view',VIEW)}catch{}renderList()});
-$('sort').addEventListener('change',renderList);
-$('q').addEventListener('input',e=>{Q=e.target.value.trim().toLowerCase();if(location.hash&&location.hash!=='#projects')location.hash='#projects';renderList()});
-addEventListener('keydown',e=>{if(e.key==='/'&&!e.target.closest('input,textarea,select')){e.preventDefault();$('q').focus()}else if(e.key==='Escape'&&!$('openCard').hidden&&LIST.length)showOpen(false)});
-$('f').addEventListener('submit',e=>{e.preventDefault();const v=$('src').value.trim();if(v)open(v)});
+$('q').addEventListener('input',e=>{Q=e.target.value.trim().toLowerCase();if(!['','#projects','#running'].includes(location.hash))location.hash='#projects';renderList()});
+addEventListener('keydown',e=>{const typing=e.target.closest('input,textarea,select');if(e.key==='/'&&!typing){e.preventDefault();$('q').focus()}else if(e.key==='n'&&!typing&&!e.metaKey&&!e.ctrlKey&&$('dlg').hidden){e.preventDefault();showDlg(true)}else if(e.key==='Escape'){if(!$('dlg').hidden)showDlg(false);$('meMenu').hidden=true;$('meBtn').setAttribute('aria-expanded','false')}});
+$('f').addEventListener('submit',e=>{e.preventDefault();const v=$('src').value.trim();if(v)open(v);else $('src').focus()});
 $('recent').addEventListener('click',e=>{const b=e.target.closest('[data-src]');if(!b)return;if(b.dataset.url){location.href=b.dataset.url;return}$('src').value=b.dataset.src;open(b.dataset.src)});
+// You: picture and name at the top of the sidebar; the menu under it.
+async function loadMe(){try{const m=await (await fetch('/api/me')).json();const ini=esc((m.name||'?').trim()[0]||'?').toUpperCase();const av=m.avatar?'<img src="'+esc(m.avatar)+'" alt="" data-i="'+ini+'" onerror="this.replaceWith(this.dataset.i)">':ini;$('meAv').innerHTML=av;$('setAv').innerHTML=av;$('meName').textContent=m.name||'You';$('meWho').textContent=m.login?'Signed in to GitHub as '+m.login:'Not signed in to GitHub';if(document.activeElement!==$('nmIn'))$('nmIn').value=m.name||''}catch{}}
+$('meBtn').addEventListener('click',e=>{const m=$('meMenu'),r=e.currentTarget.getBoundingClientRect();m.hidden=!m.hidden;e.currentTarget.setAttribute('aria-expanded',String(!m.hidden));m.style.left=r.left+'px';m.style.top=(r.bottom+4)+'px'});
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('#meMenu,#meBtn'))$('meMenu').hidden=true});
+$('nmf').addEventListener('submit',async e=>{e.preventDefault();await fetch('/api/me',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('nmIn').value})});loadMe()});
+addEventListener('hashchange',route);route();
 async function loadKey(){const s=await (await fetch('/api/key-status')).json();
   $('keystat').innerHTML=s.set?'<span class="ok">Saved.</span> Paste a new key to replace it.':'No key yet. Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.';
   for(const p of ['openai','gemini']){const el=$('st-'+p);el.innerHTML=s[p]?'<span class="ok">Saved.</span> Paste a new key to replace it.':'No key yet. Get one at <a href="'+el.dataset.url+'" target="_blank" rel="noopener">'+el.dataset.host+'</a>.'}
   AI=s;if(!vp)vp=s.provider;renderAI();
   $('ustat').innerHTML=s.unsplash?'<span class="ok">Saved.</span> Photo search is on.':'Not set: photo search is off.';
   $('keyBanner').hidden=s.provider==='anthropic'?!!s.set:!!s[s.provider];}
-async function loadAbout(){try{const a=await (await fetch('/api/about')).json();$('ver').textContent='Version '+a.version;$('aver').textContent=a.version;$('adir').textContent=a.projectsDir+' (Tovi’s copies of the repos you open)';}catch{}}
+async function loadAbout(){try{const a=await (await fetch('/api/about')).json();$('ver').textContent='v'+a.version;$('aver').textContent=a.version;$('adir').textContent=a.projectsDir+' (Tovi’s copies of the repos you open)';}catch{}}
 $('uf').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/unsplash-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('uin').value})});const j=await r.json();if(!r.ok){$('uerr').textContent=j.error;return}$('uin').value='';$('uerr').textContent='';loadKey()});
 $('kf').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/api/key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:$('kin').value})});const j=await r.json();if(!r.ok){$('kerr').textContent=j.error;return}$('kin').value='';$('kerr').textContent='';loadKey()});
 document.querySelectorAll('.aif').forEach(f=>f.addEventListener('submit',async e=>{e.preventDefault();const i=f.querySelector('input'),er=f.parentNode.querySelector('.err');const r=await fetch('/api/ai-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:f.dataset.p,key:i.value})});const j=await r.json();if(!r.ok){er.textContent=j.error;return}i.value='';er.textContent='';loadKey()}));
@@ -441,5 +508,5 @@ $('aiModel').addEventListener('change',e=>{const v=e.target.value;if(v!=='__othe
 $('cmf').addEventListener('submit',e=>{e.preventDefault();const m=$('cmIn').value.trim();if(m)setModel(vp,m)});
 try{const v=localStorage.getItem('kerf.diagOn');if(v!=null)$('diagOn').checked=v==='1'}catch{}
 $('diagOn').addEventListener('change',e=>{try{localStorage.setItem('kerf.diagOn',e.target.checked?'1':'0')}catch{}});
-loadKey();loadRecent();loadAbout();poll();
+loadKey();loadRecent();loadAbout();loadMe();poll();
 </script></body></html>`;

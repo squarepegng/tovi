@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { touchRecent } from './recent.mjs';
 import { PROJECTS_DIR } from './project.mjs';
 import fs from 'node:fs';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tagSource } from './ast.mjs';
 import { loadTheme } from './tailwind.mjs';
@@ -62,6 +63,9 @@ export async function createKerf(webRoot) {
   const library = createLibrary(webRoot);
   const editor = createEditor(webRoot, () => theme, library);
   const session = createSession(webRoot, editor);
+  // The designer's GitHub account (when this Mac is signed in), for their picture in the editor.
+  let ghLogin = null;
+  execFile('gh', ['api', 'user', '--jq', '.login'], { timeout: 6000 }, (err, out) => { if (!err && /^[\w-]{1,40}$/.test(String(out).trim())) ghLogin = String(out).trim(); });
   const skip = /[\\/](node_modules|\.next|dist|build|out)[\\/]/;
   return {
     tag(code, file) {
@@ -91,7 +95,7 @@ export async function createKerf(webRoot) {
         }
         if (req.method === 'GET' && route === '/models') return send(200, await listModels(new URL(req.url, 'http://x').searchParams.get('provider')));
         if (req.method === 'GET' && route === '/prefs') return send(200, readPrefs());
-        if (req.method === 'GET' && route === '/person') return send(200, { name: readPerson(webRoot) });
+        if (req.method === 'GET' && route === '/person') return send(200, { name: readPerson(webRoot), login: ghLogin, avatar: ghLogin ? `https://github.com/${ghLogin}.png?size=96` : null });
         if (req.method === 'GET' && route === '/versions') return send(200, session.list());
         if (req.method === 'GET' && route === '/chat') return send(200, session.chat());
         // Which AI keys are saved (never the keys themselves), for the Settings window.
