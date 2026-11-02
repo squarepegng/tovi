@@ -1323,6 +1323,47 @@
     const differs = (inf?.classes || []).some((c) => /^(sm|md|lg|xl|2xl):[^:]+$/.test(c));
     return `<div class="sizeRow"><div class="seg">${[[false, 'All sizes'], [true, `${DEV_LABEL[dev]} only`]].map(([v, n]) => `<button data-act="sizeOnly" data-v="${v}" class="${only === v ? 'on' : ''}" title="${v ? `Change it only on ${DEV_LABEL[dev].toLowerCase()} (${devRange(dev)}); other screen sizes keep how they look now` : 'Make it the same on every screen size'}">${ico(v ? dev : 'corners', 12)}${n}</button>`).join('')}</div>${differs ? '<span class="note" title="This element is styled differently on other screen sizes">Differs by size</span>' : ''}</div>`;
   }
+  // What a change will reach, as one sentence: "Changes apply to [all 3 cards ▾] on [every screen ▾]".
+  // Each bold part opens a small menu. The canvas outlines the other elements it will reach (dashed).
+  function scopeWho(s, name) {
+    const kind = kindOf(s.el).toLowerCase();
+    const plural = (n) => `${n} ${/s$/.test(kind) ? kind : kind + 's'}`;
+    const c = s.defInfo?.cva;
+    if (c) {
+      scopeHTML(s, name); // settles the default scope
+      const vname = activeVariant()?.variant, comp = (s.use ? (s.useInfo?.tag || name) : name).replace(/[“"].*$/, '').trim() || kind;
+      const opts = [...(s.use ? [['here', 'this one only']] : []), ...(vname ? [['variant', `every “${vname}” ${comp.toLowerCase()}`]] : []), ['all', `every ${comp.toLowerCase()}`]];
+      return { opts, cur: S.scope, act: 'scope' };
+    }
+    if (s.def && s.use && s.defInfo) { scopeHTML(s, name); return { opts: [['all', `every ${(s.useInfo?.tag || kind).toLowerCase()}`], ['here', 'only here']], cur: S.scope, act: 'scope' }; }
+    if (s.similar?.length && !S.multi.length) return { opts: [['all', `all ${plural(s.similar.length + 1)}`], ['one', 'this one only']], cur: S.simScope, act: 'simScope' };
+    if (S.multi.length) return { fixed: `${plural(S.multi.length + 1)}` };
+    if (s.repeat > 1) return { fixed: `all ${plural(s.repeat)}` };
+    return null;
+  }
+  function scopeSentence(s, name, inf) {
+    const who = scopeWho(s, name);
+    const sizes = sizeRange() && inf?.classKind !== 'cva';
+    const w = (key, label) => `<button class="scW" data-act="scopeMenu" data-v="${key}">${esc(label)}${ico('chev', 10)}</button>`;
+    const whoTxt = who?.opts ? w('who', (who.opts.find(([v]) => v === who.cur) || who.opts[0])[1]) : who?.fixed ? `<b>${esc(who.fixed)}</b>` : '';
+    const dev = S.device, only = S.sizeOnly[dev];
+    const whereTxt = sizes ? w('where', only ? `${DEV_LABEL[dev].toLowerCase()} only` : 'every screen') : '';
+    if (!whoTxt && !whereTxt) return '';
+    const differs = (inf?.classes || []).some((c) => /^(sm|md|lg|xl|2xl):[^:]+$/.test(c));
+    return `<p class="scLine">Changes apply to ${whoTxt || `this ${esc(kindOf(s.el).toLowerCase())}`}${whereTxt ? ` on ${whereTxt}` : ''}${differs ? '<span class="note" title="This element is styled differently on other screen sizes">Differs by size</span>' : ''}</p>`;
+  }
+  function scopeMenu(key, btn) {
+    const s = S.sel; if (!s) return;
+    const r = btn.getBoundingClientRect(), at = { x: r.left, y: r.bottom + 4 };
+    if (key === 'who') {
+      const who = scopeWho(s, (activeLoc() === s.use ? s.useInfo?.tag : s.defInfo?.tag) || nameOf(s.el));
+      if (!who?.opts) return;
+      openMenu(who.opts.map(([v, label]) => ({ label: label.charAt(0).toUpperCase() + label.slice(1), on: v === who.cur, run: () => { if (who.act === 'scope') { S.scope = v; S.cpick = S.cp = null; } else S.simScope = v; renderPanel(); } })), at);
+    } else {
+      const dev = S.device;
+      openMenu([{ label: 'Every screen', on: !S.sizeOnly[dev], run: () => { S.sizeOnly[dev] = false; renderPanel(); } }, { label: `${DEV_LABEL[dev]} only`, on: !!S.sizeOnly[dev], run: () => { S.sizeOnly[dev] = true; renderPanel(); } }], at);
+    }
+  }
   function scopeHTML(s, name) {
     const c = s.defInfo?.cva;
     if (c) {
@@ -1365,10 +1406,8 @@
     const name = (activeLoc() === s.use ? s.useInfo?.tag : s.defInfo?.tag) || nameOf(el);
     const loc = activeLoc();
     let h = `<div class="sec head"><div class="secH"><span class="nm">${ico(layerIcon(el))}${esc(dName(el))}</span><span class="hbs">${hb('copyLoc', 'code', `Code: ${loc.replace(/:(\d+):\d+$/, ':$1')} (click to copy)`)}${hb('parent', 'up', 'Select parent')}</span></div>
-      ${scopeHTML(s, name)}
-      ${s.similar?.length && !S.multi.length ? `<div class="simRow"><span class="note">${s.similar.length + 1} look alike</span><div class="seg"><button data-act="simScope" data-v="all" class="${S.simScope === 'all' ? 'on' : ''}" title="Style changes go to all ${s.similar.length + 1}">All ${s.similar.length + 1}</button><button data-act="simScope" data-v="one" class="${S.simScope === 'one' ? 'on' : ''}" title="Change only this one">This one</button></div></div>` : ''}
+      ${scopeSentence(s, name, inf)}
       ${sourceHTML(inf)}
-      ${sizeHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}
       ${s.repeat > 1 && S.scope !== 'here' && !s.defInfo?.cva ? `<span class="note">Repeated ×${s.repeat} by the same code: edits apply to all of them.</span>` : ''}
 </div>`;
@@ -1666,7 +1705,7 @@
       if (dim.textContent !== t) dim.textContent = t;
       $('sel').classList.toggle('comp', !!(useOf(S.sel.el) && /^[A-Z]/.test(S.sel.el.getAttribute('data-kerf-n') || '')));
     }
-    const sib = edit && S.sel ? [...(S.sel.repeat > 1 ? [...sameLoc(S.sel.el)].filter((x) => x !== S.sel.el) : []), ...(S.simScope === 'all' && picking() ? (S.sel.similar || []) : [])].slice(0, 60) : [];
+    const sib = edit && S.sel && S.scope !== 'here' ? [...(S.sel.repeat > 1 ? [...sameLoc(S.sel.el)].filter((x) => x !== S.sel.el && (S.scope !== 'variant' || x.className === S.sel.el.className)) : []), ...(S.simScope === 'all' && picking() ? (S.sel.similar || []) : [])].slice(0, 60) : [];
     pool($('sibs'), sib.length, 'sib').forEach((b, i) => place(b, sib[i] || null, null));
     const aEls = D ? (S.amber || []).flatMap((loc) => [...D.querySelectorAll(q(loc))]).slice(0, 60) : [];
     pool($('amb'), aEls.length, 'amber').forEach((b, i) => place(b, aEls[i] || null, null));
@@ -1881,6 +1920,7 @@
       case 'diagnose': { if (S.diagnosing) break; const r = a.getBoundingClientRect(); openMenu([{ head: 'Diagnose with Tovi' }, { label: 'This page', sub: 'Every section, top to bottom · about a minute', run: () => runDiagnose('page') }, { label: 'This selection', sub: S.sel ? ctxName(S.sel.el) : 'Select something first', disabled: !S.sel, run: () => runDiagnose('selection') }, { label: 'Whole product', sub: 'Every page it can reach, up to 10 · a few minutes', run: () => runDiagnoseProduct() }], { x: r.left - 90, y: r.top - 200 }); break; }
       case 'toastClose': $('toast').hidden = true; break;
       case 'scope': S.scope = v; S.cpick = S.cp = null; renderPanel(); break;
+      case 'scopeMenu': scopeMenu(v, a); break;
       case 'srcScope': S.srcScope = v; renderPanel(); break;
       case 'sizeOnly': S.sizeOnly[S.device] = v === 'true'; renderPanel(); break;
       case 'reveal': S.reveal = { el: S.sel?.el, ...(S.reveal?.el === S.sel?.el ? S.reveal : {}), [v]: true }; renderPanel(); break;
