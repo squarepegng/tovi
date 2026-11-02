@@ -1531,25 +1531,16 @@
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
   }
-  // A tap: a few milliseconds of filtered noise (the click of a fingertip) over a tiny low thump (its body).
-  let tapNoise = null;
-  function tap(at, { pitch = 2600, body = 160, gain = 0.09 } = {}) {
-    if (!tapNoise) { tapNoise = actx.createBuffer(1, Math.round(actx.sampleRate * 0.03), actx.sampleRate); const d = tapNoise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3); }
-    const t = actx.currentTime + at;
-    const n = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
-    n.buffer = tapNoise; f.type = 'bandpass'; f.frequency.value = pitch; f.Q.value = 1.4;
-    g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
-    n.connect(f).connect(g).connect(actx.destination); n.start(t); n.stop(t + 0.035);
-    tone(body, at, 0.035, { gain: gain * 0.5, to: body * 0.6 });
-  }
+  // A pop: a soft, round sine that drops in pitch over ~45ms (like macOS). Higher pops go up, lower go down.
+  const pop = (at, hi = 900, lo = 380, gain = 0.06) => tone(hi, at, 0.045, { gain, to: lo });
   const SOUNDS = {
-    edit: () => { tap(0, { pitch: 2400 }); tap(0.075, { pitch: 3000 }); },
-    interact: () => { tap(0, { pitch: 3000 }); tap(0.075, { pitch: 2400 }); },
-    undo: () => tap(0, { pitch: 2000, gain: 0.08 }),
-    remove: () => tap(0, { pitch: 1200, body: 110, gain: 0.1 }),
-    done: () => { tap(0, { pitch: 2400, gain: 0.07 }); tap(0.07, { pitch: 2800, gain: 0.07 }); tap(0.14, { pitch: 3300, gain: 0.07 }); },
-    sent: () => { tap(0, { pitch: 2600 }); tap(0.08, { pitch: 3200 }); },
-    error: () => { tap(0, { pitch: 900, body: 120, gain: 0.09 }); tap(0.09, { pitch: 800, body: 100, gain: 0.09 }); },
+    edit: () => { pop(0, 750, 320); pop(0.075, 900, 380); },
+    interact: () => { pop(0, 900, 380); pop(0.075, 750, 320); },
+    undo: () => pop(0, 820, 340),
+    remove: () => pop(0, 520, 200, 0.07),
+    done: () => { pop(0, 750, 320, 0.05); pop(0.07, 900, 380, 0.05); pop(0.14, 1080, 450, 0.05); },
+    sent: () => { pop(0, 800, 340); pop(0.08, 1050, 440); },
+    error: () => { pop(0, 480, 200, 0.07); pop(0.09, 420, 180, 0.07); },
   };
   function cue(name) {
     if (!S.sound || !SOUNDS[name]) return;
