@@ -236,6 +236,7 @@
     let f = $('fpop');
     if (!f) { f = document.createElement('div'); f.id = 'fpop'; f.className = 'fpop'; f.setAttribute('role', 'dialog'); document.body.appendChild(f); }
     const k = S.cpick;
+    if (k !== 'grad' && $('fpop2')) $('fpop2').hidden = true;
     if (!k || !S.sel?.el) { f.hidden = true; return; }
     const close = `<button class="ib fpX" data-act="fpClose" aria-label="Close" title="Close · Esc">${ico('x')}</button>`;
     let head = '', body = '';
@@ -257,7 +258,7 @@
       head = tabsHTML2();
       const fill = k === 'bg' || k === 'grad';
       const types = fill ? `<div class="fpTypes"><button class="fpType${k === 'bg' ? ' on' : ''}" data-act="fpType" data-v="solid" title="Solid" aria-label="Solid"><i class="tSolid"></i></button><button class="fpType${k === 'grad' ? ' on' : ''}" data-act="fpType" data-v="gradient" title="Linear gradient" aria-label="Linear gradient"><i class="tGrad"></i></button></div>` : `<div class="fpName">${NAMES[k]}</div>`;
-      if (k === 'grad') { const g = gradOf() || { dir: 'r' }; body = types + gradHTML(g) + `<div class="gPick">${pickerHTML('grad', g[S.gstop])}</div>`; }
+      if (k === 'grad') { const g = gradOf() || { dir: 'r' }; body = types + gradHTML(g); }
       else body = types + pickerHTML(k, tokenOf(k));
     }
     f.innerHTML = `<div class="fpH">${head}${close}</div><div class="cpop" data-cpop="${k}">${body}</div>`;
@@ -266,6 +267,21 @@
     const pr = $('panel').getBoundingClientRect(), h = f.offsetHeight;
     f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
     f.style.top = Math.max(56, Math.min(innerHeight - h - 8, (S.fpY ?? 120) - 14)) + 'px';
+    renderFpop2(f);
+  }
+  // A gradient stop's colour picker, in its own panel to the left of the gradient panel (like Framer).
+  // Opens when a stop's pin or row is clicked; the gradient panel stays as it is.
+  function renderFpop2(main) {
+    let f2 = $('fpop2');
+    if (!f2) { f2 = document.createElement('div'); f2.id = 'fpop2'; f2.className = 'fpop'; f2.setAttribute('role', 'dialog'); f2.setAttribute('aria-label', 'Stop colour'); document.body.appendChild(f2); }
+    if (S.cpick !== 'grad' || !S.gpick || main?.hidden) { f2.hidden = true; return; }
+    const g = gradOf() || { dir: 'r' };
+    cpInit();
+    f2.innerHTML = `<div class="fpH">${tabsHTML2()}<button class="ib fpX" data-act="gPickClose" aria-label="Close" title="Close">${ico('x')}</button></div><div class="cpop" data-cpop="grad">${pickerHTML('grad', g[S.gstop])}</div>`;
+    f2.hidden = false;
+    const r = main.getBoundingClientRect(), h = f2.offsetHeight;
+    f2.style.right = Math.max(8, innerWidth - r.left + 8) + 'px';
+    f2.style.top = Math.max(56, Math.min(innerHeight - h - 8, r.top)) + 'px';
   }
   // Popular Google Fonts, by role. Any other Google Font can be typed in.
   const GFONTS = [
@@ -317,7 +333,7 @@
     await commit({ ops: [{ prop: 'fontFamily', value: key }] });
   }
   document.addEventListener('input', (e) => { if (e.target.id !== 'fontQ') return; S.fontQ = e.target.value; $('fontList').innerHTML = fontListHTML(); });
-  function closeFpop() { if (!S.cpick) return; S.cpick = S.cp = null; renderPanel(); }
+  function closeFpop() { if (!S.cpick) return; S.cpick = S.cp = null; S.gpick = false; renderPanel(); }
   // Save the picker's colour: a property, or the chosen gradient stop.
   function cpCommit(c) {
     if (c.p !== 'grad') return commit({ ops: [{ prop: c.p, value: cpOut(c) }] });
@@ -360,7 +376,7 @@
       previewGrad(g);
     };
     pin.setPointerCapture(e.pointerId);
-    const up = () => { pin.removeEventListener('pointermove', at); pin.removeEventListener('pointerup', up); pin.removeEventListener('pointercancel', up); if (moved) commitGrad(g); else renderFpop(); };
+    const up = () => { pin.removeEventListener('pointermove', at); pin.removeEventListener('pointerup', up); pin.removeEventListener('pointercancel', up); if (moved) commitGrad(g); else { S.gpick = true; renderFpop(); } };
     pin.addEventListener('pointermove', at); pin.addEventListener('pointerup', up); pin.addEventListener('pointercancel', up);
   }, true);
   function shadowOf() {
@@ -1202,7 +1218,22 @@
   const posOf = (g, k) => g[k + 'Pos'] ?? STOP_DEF[k];
   const stopsOf = (g) => ['from', g.via ? 'via' : null, 'to'].filter(Boolean).map((k) => ({ k, col: g[k], pos: posOf(g, k) }));
   const gradValue = (g) => [g.dir, ...stopsOf(g).map((st) => st.pos === STOP_DEF[st.k] ? st.col : `${st.col}@${st.pos}`)].filter(Boolean).join(' ');
-  const tokenSwatch = (n) => { const t = tokens().find(([k]) => k === n); return t ? swatch(t[1]) : n?.startsWith('#') ? n : 'transparent'; };
+  // Any gradient stop colour as CSS: a project token, any Tailwind colour (gray-900), one with an opacity
+  // (white/80, primary/40), transparent, or a raw hex.
+  function tokenSwatch(n) {
+    if (!n) return 'transparent';
+    if (/^(#|rgb|hsl)/.test(n)) return n;
+    const [base, op] = String(n).split('/');
+    const named = { transparent: 'transparent', black: '#000000', white: '#ffffff', current: 'currentColor' };
+    const raw = S.theme?.colors?.[base] ?? named[base];
+    if (raw == null) return 'transparent';
+    const css = raw === 'transparent' ? 'rgba(0,0,0,0)' : swatch(raw);
+    if (!op) return css;
+    const m = String(toCssRgb(css)).match(/[\d.]+/g) || [0, 0, 0, 1];
+    const a = (m.length > 3 ? +m[3] : 1) * (parseFloat(op) / 100);
+    return `rgba(${m[0]}, ${m[1]}, ${m[2]}, ${a})`;
+  }
+  const toCssRgb = (css) => { const doc = D || document, pr = doc.createElement('span'); pr.style.color = css; doc.body.appendChild(pr); const v = getComputedStyle(pr).color; pr.remove(); return v; };
   const stopSel = (key, cur, allowNone) => `<label class="inp"><i class="sw1" style="background:${esc(tokenSwatch(cur))}"></i><select data-gstop="${key}" aria-label="Gradient ${key}">${allowNone ? `<option value=""${cur ? '' : ' selected'}>No middle color</option>` : ''}${tokens().filter(([n]) => n !== 'transparent').map(([n]) => `<option${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
   const gradCss = (g) => `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${stopsOf(g).filter((st) => st.col).map((st) => `${tokenSwatch(st.col)} ${st.pos}%`).join(', ')})`;
   function fillBody(g, el) {
@@ -1896,8 +1927,8 @@
       return;
     }
     if (!a) {
-      if (S.cpick && !downInFpop && !e.target.closest('#fpop')) closeFpop();
-      if (!downInFpop && !e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal,#fpop')) closeFloating();
+      if (S.cpick && !downInFpop && !e.target.closest('#fpop,#fpop2')) closeFpop();
+      if (!downInFpop && !e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal,#fpop,#fpop2')) closeFloating();
       return;
     }
     const act = a.dataset.act, v = a.dataset.v;
@@ -1950,7 +1981,8 @@
       case 'diagStop': S.diagStop = true; if (S.card?.progress) { S.card.progress = 'Stopping after this page…'; renderChat(); } break;
       case 'goPage': if (v !== S.path) goTo(v); break;
       case 'fontPick': pickFont(a); break;
-      case 'gStop': if (e.target.closest('input')) { if (S.gstop !== v) { S.gstop = v; S.cp = null; } break; } S.gstop = v; S.cp = null; renderFpop(); break;
+      case 'gStop': if (e.target.closest('input')) { if (S.gstop !== v) { S.gstop = v; S.cp = null; } break; } S.gstop = v; S.cp = null; S.gpick = true; renderFpop(); break;
+      case 'gPickClose': S.gpick = false; renderFpop(); break;
       case 'fpType': { const want = v === 'gradient' ? 'grad' : 'bg'; if (S.cpick !== want) { S.cpick = want; S.cp = null; S.gstop = 'from'; setFillType(v); } break; }
       case 'gFlip': { const g = gradOf(); if (!g) break; const st = stopsOf(g); const r = st.map((x) => ({ col: x.col, pos: 100 - x.pos })).reverse(); ['from', g.via ? 'via' : null, 'to'].filter(Boolean).forEach((kk, n) => { g[kk] = r[n].col; g[kk + 'Pos'] = r[n].pos; }); S.cp = null; commitGrad(g); break; }
       case 'gRot': { const g = gradOf(); if (!g) break; g.dir = ROT[(ROT.indexOf(g.dir) + 1) % ROT.length]; commitGrad(g); break; }
@@ -2100,7 +2132,7 @@
   // Where did this click start? Picking a colour redraws the floating panel under the pointer, so the click that
   // follows can land on an element that's gone; a click that started inside the panel never closes it.
   let downInFpop = false;
-  document.addEventListener('pointerdown', (e) => { downInFpop = !!e.target.closest?.('#fpop'); }, true);
+  document.addEventListener('pointerdown', (e) => { downInFpop = !!e.target.closest?.('#fpop,#fpop2'); }, true);
   // Naming a version: Escape or clicking away cancels.
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest?.('.vName')) { e.stopPropagation(); S.vNaming = null; renderPanel(); } }, true);
   document.addEventListener('focusout', (e) => { if (e.target.closest?.('.vName') && S.vNaming != null) setTimeout(() => { if (!document.activeElement?.closest('.vName')) { S.vNaming = null; renderPanel(); } }, 120); });
