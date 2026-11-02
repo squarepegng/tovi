@@ -69,7 +69,7 @@ aside[hidden]{display:none!important}
 .modes .tb.on{background:var(--select);color:var(--onSelect)}
 .tb[disabled]{opacity:.35;cursor:default}
 .tb.sm{width:30px;height:32px}
-.tip{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:var(--ink);color:var(--canvas);font:500 12px/16px Geist,system-ui,sans-serif;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s}
+.tip{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:var(--ink);color:var(--canvas);font:500 12px/16px Geist,system-ui,sans-serif;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity var(--t-fast)}
 .tip .k{color:#55555D;margin-left:6px;font:400 11px/16px 'Geist Mono',ui-monospace,monospace}
 .tb:hover .tip,.tb:focus-visible .tip{opacity:1}
 .div{width:1px;height:28px;margin:0 6px;background:var(--line)}
@@ -97,7 +97,7 @@ aside[hidden]{display:none!important}
 .cr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px;align-items:center}
 .kv{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:8px;color:var(--ink2)}
 .kv>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.inp{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;background:var(--raised);border:1px solid transparent;border-radius:6px;min-width:0;position:relative;transition:border-color .12s,background .12s}
+.inp{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;background:var(--raised);border:1px solid transparent;border-radius:6px;min-width:0;position:relative;transition:border-color var(--t-fast),background var(--t-fast)}
 .inp:hover{border-color:var(--line)}
 .inp:focus-within{border-color:var(--select)}
 .inp.changed{box-shadow:inset 2px 0 0 var(--intent)}
@@ -270,7 +270,7 @@ details.code[open] summary::before{content:'⌄ '}
 .chg span:first-child{color:var(--ink)}
 
 /* composer: Ask, replies, chat and notes */
-.kc{position:relative;display:flex;flex-direction:column;gap:6px;padding:10px 10px 8px;background:var(--raised);border:1px solid var(--line);border-radius:14px;transition:border-color .12s,box-shadow .12s}
+.kc{position:relative;display:flex;flex-direction:column;gap:6px;padding:10px 10px 8px;background:var(--raised);border:1px solid var(--line);border-radius:14px;transition:border-color var(--t-fast),box-shadow var(--t-fast)}
 .kc:focus-within{border-color:var(--select);box-shadow:0 0 0 3px rgba(var(--hi),.18)}
 .kc.big{padding:12px 12px 8px;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
 .kc.big:focus-within{box-shadow:0 12px 40px rgba(0,0,0,.4),0 0 0 3px rgba(var(--hi),.18)}
@@ -286,13 +286,13 @@ details.code[open] summary::before{content:'⌄ '}
 .kcB:hover{background:var(--line);color:var(--ink)}
 .kcB.rec{color:#fff;background:var(--danger);animation:kpulse 1.4s ease-in-out infinite}
 @keyframes kpulse{0%,100%{box-shadow:0 0 0 0 rgba(240,106,95,.5)}50%{box-shadow:0 0 0 5px rgba(240,106,95,0)}}
-.kc .sendB{width:30px;height:30px;border-radius:999px;transition:opacity .12s}
+.kc .sendB{width:30px;height:30px;border-radius:999px;transition:opacity var(--t-fast)}
 .kc .sendB[disabled],.kc .lightBtn[disabled]{opacity:.35;cursor:default}
 .lightBtn.sm{height:30px;padding:0 12px;border-radius:999px;white-space:nowrap;font-size:12px}
 .kcAtt{display:flex;flex-wrap:wrap;gap:6px}
 .kcThumb{position:relative;width:52px;height:52px;border-radius:8px;overflow:hidden;background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)}
 .kcThumb img{width:100%;height:100%;object-fit:cover;display:block}
-.kcThumb button{position:absolute;top:3px;right:3px;display:grid;place-items:center;width:16px;height:16px;padding:0;border:0;border-radius:999px;background:rgba(0,0,0,.7);color:#fff;opacity:0;transition:opacity .12s}
+.kcThumb button{position:absolute;top:3px;right:3px;display:grid;place-items:center;width:16px;height:16px;padding:0;border:0;border-radius:999px;background:rgba(0,0,0,.7);color:#fff;opacity:0;transition:opacity var(--t-fast)}
 .kcThumb:hover button,.kcThumb button:focus-visible{opacity:1}
 .uAtt{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px}
 .uAtt img{width:64px;height:64px;object-fit:cover;border-radius:8px;box-shadow:inset 0 0 0 1px var(--line)}
@@ -309,7 +309,7 @@ details.code[open] summary::before{content:'⌄ '}
 .noteRes .prop,.ask .prop{max-height:min(62vh,560px);overflow:auto}
 .prop.byNote{gap:8px}
 .ngs{display:flex;flex-direction:column;gap:8px}
-.ng{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:10px;background:var(--raised);transition:opacity .12s,box-shadow .12s}
+.ng{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:10px;background:var(--raised);transition:opacity var(--t-fast),box-shadow var(--t-fast)}
 .ng:hover{box-shadow:inset 0 0 0 1px rgba(252,189,221,.5)}
 .ng.off{opacity:.5}
 .ngH{display:flex;align-items:center;gap:8px;min-width:0}
@@ -326,7 +326,7 @@ details.code[open] summary::before{content:'⌄ '}
 .ngE{display:flex;flex-direction:column;gap:4px}
 .ngE .ed{padding:6px 8px}
 .nTog{flex:0 0 auto;position:relative;width:26px;height:16px;padding:0;border:0;border-radius:8px;background:var(--line)}
-.nTog i{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:6px;background:var(--ink2);transition:transform .12s}
+.nTog i{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:6px;background:var(--ink2);transition:transform var(--t-fast)}
 .nTog.on{background:var(--intent)}
 .nTog.on i{transform:translateX(10px);background:var(--canvas)}
 .amberBtn[disabled]{opacity:.4}
@@ -536,7 +536,7 @@ body.minUI #layers,body.minUI #panel{display:none!important}
 .kSteps summary{display:inline-flex;align-items:center;gap:6px;list-style:none;cursor:pointer;user-select:none}
 .kSteps summary::-webkit-details-marker{display:none}
 .kSteps summary:hover{color:var(--ink2)}
-.kSteps summary svg:last-child{transition:transform .15s}
+.kSteps summary svg:last-child{transition:transform var(--t-mod)}
 .kSteps[open] summary svg:last-child{transform:rotate(90deg)}
 .kSteps ul{margin:8px 0 0;padding:8px 10px 8px 26px;border-left:1px solid rgba(var(--hi),.08);display:flex;flex-direction:column;gap:3px;max-height:180px;overflow:auto}
 .kSteps li{color:var(--ink2);line-height:16px}
@@ -724,7 +724,7 @@ body.dragging,body.dragging *{cursor:grabbing!important;user-select:none!importa
 /* resizable side panels */
 aside.side.l{flex:0 0 300px}
 .rz{flex:0 0 7px;margin:0 -3px;position:relative;z-index:15;cursor:col-resize;touch-action:none}
-.rz::after{content:'';position:absolute;top:0;bottom:0;left:3px;width:1px;background:transparent;transition:background .12s}
+.rz::after{content:'';position:absolute;top:0;bottom:0;left:3px;width:1px;background:transparent;transition:background var(--t-fast)}
 .rz:hover::after,body.resizing .rz::after{background:var(--select)}
 aside[hidden]+.rz.l{display:none}
 .rz.r:has(+aside[hidden]){display:none}
@@ -848,7 +848,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .simRow .seg button{flex:0 0 auto;padding:0 10px;overflow:visible}
 
 /* Tovi and its helpers on the canvas */
-.agent{position:absolute;left:0;top:0;z-index:40;pointer-events:none;transform-origin:0 0;opacity:0;transition:transform .55s cubic-bezier(.3,.7,.2,1),opacity .25s}
+.agent{position:absolute;left:0;top:0;z-index:40;pointer-events:none;transform-origin:0 0;opacity:0;transition:transform .55s cubic-bezier(.3,.7,.2,1),opacity var(--t-slow)}
 .agent.on{opacity:1}
 .agent svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 .agLbl{position:absolute;left:14px;top:14px;display:inline-flex;align-items:center;gap:6px;}
@@ -878,15 +878,15 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 #layers .lbody .comp{flex:0 0 auto}
 #layers .lbody .tasks .tkList{max-height:min(240px,35vh)}
 /* agents look and work like people in a Figma file */
-.agent{transition:opacity .25s}
-.agent svg{transition:transform .12s ease-out;transform-origin:2px 2px}
+.agent{transition:opacity var(--t-slow)}
+.agent svg{transition:transform var(--t-fast) ease-out;transform-origin:2px 2px}
 .agent.press svg{transform:scale(.82)}
-.agBox{position:absolute;left:0;top:0;z-index:35;pointer-events:none;opacity:0;outline:calc(1.5px * var(--iz, 1)) dashed var(--ac);outline-offset:calc(2px * var(--iz, 1));border-radius:2px;transition:opacity .2s}
+.agBox{position:absolute;left:0;top:0;z-index:35;pointer-events:none;opacity:0;outline:calc(1.5px * var(--iz, 1)) dashed var(--ac);outline-offset:calc(2px * var(--iz, 1));border-radius:2px;transition:opacity var(--t-mod)}
 .agBox.on{opacity:.9}
 .agBox.edit{outline-style:solid;outline-width:calc(2px * var(--iz, 1));outline-offset:0;background:color-mix(in srgb, var(--ac) 7%, transparent)}
-.agBoxTag{position:absolute;left:calc(-2px * var(--iz, 1));top:0;transform:translateY(-100%) scale(var(--iz, 1));transform-origin:0 100%;padding:1px 6px;border-radius:3px 3px 0 0;background:var(--ac);color:#1B1B1E;font:600 10px/15px Geist,system-ui,sans-serif;white-space:nowrap;opacity:0;transition:opacity .15s}
+.agBoxTag{position:absolute;left:calc(-2px * var(--iz, 1));top:0;transform:translateY(-100%) scale(var(--iz, 1));transform-origin:0 100%;padding:1px 6px;border-radius:3px 3px 0 0;background:var(--ac);color:#1B1B1E;font:600 10px/15px Geist,system-ui,sans-serif;white-space:nowrap;opacity:0;transition:opacity var(--t-mod)}
 .agBox.edit .agBoxTag{opacity:1}
-.agChip{position:absolute;left:0;top:0;z-index:41;pointer-events:none;transform-origin:0 0;opacity:0;max-width:280px;padding:4px 8px;border-radius:6px;background:#1B1B1E;color:#EDEDF0;border:1.5px solid var(--ac);font:500 11px/15px 'Geist Mono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 6px 16px rgba(0,0,0,.3);transition:opacity .2s}
+.agChip{position:absolute;left:0;top:0;z-index:41;pointer-events:none;transform-origin:0 0;opacity:0;max-width:280px;padding:4px 8px;border-radius:6px;background:#1B1B1E;color:#EDEDF0;border:1.5px solid var(--ac);font:500 11px/15px 'Geist Mono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 6px 16px rgba(0,0,0,.3);transition:opacity var(--t-mod)}
 .agChip.on{opacity:1}
 @media (prefers-reduced-motion: reduce){.agent svg,.agBox,.agChip{transition:none}}
 .crewRow{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:12px}
@@ -907,8 +907,8 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .setRow .outline.sm{flex:0 0 auto;text-decoration:none}
 .setSeg{flex:0 0 auto}
 .setSeg button{padding:0 10px}
-.switch{flex:0 0 auto;position:relative;width:34px;height:20px;padding:0;border:0;border-radius:999px;background:var(--line);cursor:pointer;transition:background .15s}
-.switch i{position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch{flex:0 0 auto;position:relative;width:34px;height:20px;padding:0;border:0;border-radius:999px;background:var(--line);cursor:pointer;transition:background var(--t-mod)}
+.switch i{position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform var(--t-mod)}
 .switch.on{background:var(--select)}
 .switch.on i{transform:translateX(14px)}
 .switch:focus-visible{outline:2px solid var(--select);outline-offset:2px}
@@ -1203,3 +1203,28 @@ aside.side.r{border-left-color:var(--chromeLine)}
 :root[data-theme="light"] #panel .seg button.on,:root[data-theme="light"] #panel .ibs .ib.on{background:var(--onFill);color:var(--ink);box-shadow:var(--onEdge)}
 .tb.on,.modes .tb.on,.primary,.pvBtn.on{background:var(--ivFill);color:var(--onSelect);box-shadow:var(--ivEdge)}
 .primary:hover{filter:brightness(1.03)}
+
+/* Motion: three speeds, like Fluid Functionalism. Small things move fast, big things slower; nothing bounces. */
+:root{--t-fast:80ms;--t-mod:160ms;--t-slow:240ms;--ease:cubic-bezier(.2,0,0,1)}
+*{transition-timing-function:var(--ease)}
+@media (prefers-reduced-motion:reduce){:root{--t-fast:0ms;--t-mod:0ms;--t-slow:0ms}}
+
+/* Sliding selection: one raised pill per segmented control glides to the chosen option. */
+.has-pill{position:relative;isolation:isolate}
+.has-pill>.pill{position:absolute;z-index:-1;pointer-events:none;border-radius:6px;background:var(--onFill);box-shadow:var(--onEdge);transition:left var(--t-mod) var(--ease),width var(--t-mod) var(--ease),top var(--t-mod) var(--ease),height var(--t-mod) var(--ease)}
+.has-pill.iv>.pill{background:var(--ivFill);box-shadow:var(--ivEdge);border-radius:8px}
+.has-pill>.on:not(.pill),.has-pill>.on:not(.pill):hover{background:transparent!important;box-shadow:none!important}
+
+/* Gliding hover: one soft highlight per list follows the cursor from row to row instead of blinking. */
+.glides{position:relative;isolation:isolate}
+.glides>.glide{position:absolute;left:0;top:0;z-index:-1;pointer-events:none;border-radius:6px;background:rgba(var(--hi),.07);opacity:0;transition:opacity var(--t-fast) var(--ease),transform var(--t-mod) var(--ease),height var(--t-mod) var(--ease),width var(--t-mod) var(--ease)}
+.glides>.glide.on{opacity:1}
+.glides .layer:hover:not(.on),.glides .fontRow:hover:not(.on),.glides .mi:hover:not([disabled]){background:transparent}
+.menu .mi:hover:not([disabled]){color:var(--ink)}
+.menu .mi:hover:not([disabled]) .mk,.menu .mi:hover:not([disabled]) .ml small{color:inherit}
+/* The bottom toolbar, in 3D: the bar is lit from above and floats, the tool track is pressed in, the active tool rises out of it. */
+.bar{background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,0) 60%),var(--raised);border-color:transparent;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 0 .5px rgba(0,0,0,.6),0 2px 4px rgba(0,0,0,.3),0 12px 32px rgba(0,0,0,.45)}
+.bar .modes{background:rgba(0,0,0,.28);box-shadow:inset 0 1px 2px rgba(0,0,0,.45),inset 0 0 0 .5px rgba(0,0,0,.35),0 1px 0 rgba(255,255,255,.05)}
+.bar .tb:not(.on):hover{background:rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+:root[data-theme="light"] .bar{background:linear-gradient(180deg,#fff,#F6F6F8);box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 2px 4px rgba(0,0,0,.06),0 12px 32px rgba(0,0,0,.12)}
+:root[data-theme="light"] .bar .modes{background:rgba(0,0,0,.05);box-shadow:inset 0 1px 2px rgba(0,0,0,.1)}

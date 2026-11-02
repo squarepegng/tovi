@@ -4050,6 +4050,54 @@
   api('/project').then((p) => { S.project = p; renderTop(); }).catch(() => {});
   api('/changes').then((c) => { S.count = c.length; renderBar(); }).catch(() => {});
   api('/chat').then((c) => { S.chat = (c.messages || []).map((m) => (m.role === 'kerf' && m.status === 'pending' ? { ...m, status: 'discarded' } : m)); S.notes = c.notes || []; renderAI(); }).catch(() => {});
+
+  /* ---------- fluid motion: sliding selection pills and gliding hover (after Fluid Functionalism) ---------- */
+  // Segmented controls get one raised pill that slides to the chosen option. Panels re-render often, so each
+  // control remembers where its pill was (by its option labels) and the new pill starts there, then slides.
+  const PILLS = '.seg, .bps, .ibs, .cpTabs, .modes, .tv-seg2';
+  const pillAt = new Map();
+  const pillKey = (c) => c.className + '|' + [...c.children].filter((x) => !x.classList.contains('pill')).map((x) => x.textContent.trim() || x.getAttribute('aria-label') || x.dataset.v || '').join('/');
+  function syncPill(c) {
+    const on = [...c.children].find((x) => x.classList.contains('on') && !x.classList.contains('pill'));
+    let pill = c.querySelector(':scope > .pill');
+    if (!on) { pill?.remove(); return; }
+    c.classList.add('has-pill');
+    if (c.classList.contains('modes')) c.classList.add('iv');
+    const to = { left: on.offsetLeft, top: on.offsetTop, width: on.offsetWidth, height: on.offsetHeight };
+    if (!to.width) return;
+    const key = pillKey(c), from = pillAt.get(key);
+    if (!pill) {
+      pill = document.createElement('span'); pill.className = 'pill'; c.prepend(pill);
+      Object.assign(pill.style, Object.fromEntries(Object.entries(from || to).map(([k, v]) => [k, v + 'px'])));
+      pill.style.borderRadius = getComputedStyle(on).borderRadius;
+      if (from) requestAnimationFrame(() => Object.assign(pill.style, Object.fromEntries(Object.entries(to).map(([k, v]) => [k, v + 'px']))));
+    } else Object.assign(pill.style, Object.fromEntries(Object.entries(to).map(([k, v]) => [k, v + 'px'])));
+    pillAt.set(key, to);
+  }
+  let pillQueued = false;
+  const pillsSoon = () => { if (pillQueued) return; pillQueued = true; requestAnimationFrame(() => { pillQueued = false; document.querySelectorAll(PILLS).forEach(syncPill); }); };
+  new MutationObserver(pillsSoon).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  addEventListener('resize', pillsSoon);
+  pillsSoon();
+
+  // Lists get one soft highlight that glides to the row under the cursor.
+  const ROWS = '.layer, .menu .mi:not([disabled]), .fontRow';
+  document.addEventListener('pointerover', (e) => {
+    const row = e.target.closest?.(ROWS);
+    if (!row) return;
+    const list = row.parentElement;
+    if (!list) return;
+    list.classList.add('glides');
+    let g = list.querySelector(':scope > .glide');
+    const place = () => { g.style.transform = `translate(${row.offsetLeft}px, ${row.offsetTop}px)`; g.style.width = row.offsetWidth + 'px'; g.style.height = row.offsetHeight + 'px'; };
+    if (!g) { g = document.createElement('span'); g.className = 'glide'; list.prepend(g); g.style.transition = 'none'; place(); g.offsetWidth; g.style.transition = ''; }
+    else place();
+    g.classList.add('on');
+  });
+  document.addEventListener('pointerout', (e) => {
+    const list = e.target.closest?.('.glides');
+    if (list && !list.contains(e.relatedTarget)) list.querySelector(':scope > .glide')?.classList.remove('on');
+  });
   refreshVersions();
   renderAll();
   if (frame.contentDocument?.readyState === 'complete') bindApp();
