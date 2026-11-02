@@ -914,7 +914,7 @@
       ...(plain ? [{ label: 'Ungroup', kbd: '⇧⌘G', run: () => structure({ type: 'ungroup' }) }] : []),
       { label: 'Move up', kbd: '⌥↑', run: () => structure({ type: 'move', dir: 'up' }, { keepSel: true }) },
       { label: 'Move down', kbd: '⌥↓', run: () => structure({ type: 'move', dir: 'down' }, { keepSel: true }) },
-      ...(document.querySelector('[data-act="sSwap"]') ? [{ label: 'Swap with…', run: act('sSwap') }] : []),
+      ...(/^[A-Z]/.test(nameOf(el)) || el.tagName.toLowerCase() === 'svg' ? [{ label: 'Swap with…', run: () => { const t = document.createElement('button'); t.dataset.act = 'sSwap'; Object.assign(t.style, { position: 'fixed', left: (at?.x ?? 0) + 'px', top: (at?.y ?? 0) + 'px', width: '1px', height: '1px', opacity: 0 }); document.body.appendChild(t); t.click(); setTimeout(() => t.remove(), 0); } }] : []),
       { label: 'Add next to it…', kbd: 'I', run: act('insertMenu') },
       '-',
       { label: 'Delete', kbd: '⌫', danger: true, run: () => deleteSelected() },
@@ -1359,7 +1359,7 @@
       ${sizeHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}
       ${s.repeat > 1 && S.scope !== 'here' && !s.defInfo?.cva ? `<span class="note">Repeated ×${s.repeat} by the same code: edits apply to all of them.</span>` : ''}
-      ${actionsHTML()}</div>`;
+</div>`;
     if (!inf) h += `<div class="sec"><span class="note">Reading code…</span></div>`;
     else if (inf.offline) { h += `<div class="sec"><span class="note">Reconnecting to your app…</span></div>`; clearTimeout(S.infoRetry); S.infoRetry = setTimeout(() => { if (S.sel) loadInfo(); }, 2000); }
     else if (inf.error) h += `<div class="sec"><span class="note warn">${esc(inf.error)}</span></div>`;
