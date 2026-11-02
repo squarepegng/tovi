@@ -1160,3 +1160,15 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 /* The number always stays readable: the scale-step chip gives way first. */
 #panel .inp input{min-width:3.5ch}
 #panel .inp .u.step{flex-shrink:1;min-width:0;overflow:hidden;text-overflow:clip}
+/* Framer-style chrome (dark theme): the top bar and side panels sit darker than the canvas, so their
+   fields and buttons stand out and the design in the middle gets the attention. Light theme unchanged. */
+:root{--chrome:#111113;--chromeLine:#232327;--field:rgba(255,255,255,.07)}
+:root[data-theme="light"]{--chrome:var(--panel);--chromeLine:var(--line);--field:rgba(0,0,0,.045)}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--chrome:var(--panel);--chromeLine:var(--line);--field:rgba(0,0,0,.045)}}
+#top,.side{background:var(--chrome)}
+#top{border-bottom-color:var(--chromeLine)}
+aside.side.l{border-right-color:var(--chromeLine)}
+aside.side.r{border-left-color:var(--chromeLine)}
+.side .sec{border-bottom-color:var(--chromeLine)}
+#panel .inp,#panel .ibs,#panel .seg{background:var(--field)}
+#panel .inp:hover,#panel .inp:focus-within{background:rgba(var(--hi),.1)}
