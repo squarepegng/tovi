@@ -1342,3 +1342,6 @@ aside.side.r{border-left-color:var(--chromeLine)}
 
 /* Design-system colours in the page panel: small round swatches. */
 .swatch{width:18px;height:18px;border-radius:50%}
+.swatch{border:0;padding:0;transition:box-shadow var(--t-fast) var(--ease)}
+.swatch.on{box-shadow:inset 0 0 0 1px rgba(var(--hi),.14),0 0 0 2px var(--panel),0 0 0 3.5px var(--sel)}
+#tokPop .cpop .note{font-size:11.5px}

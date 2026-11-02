@@ -1341,19 +1341,86 @@
     if (!S.tokens.length) return '';
     const themes = [...new Set(S.tokens.flatMap((t) => t.values.map((v) => v.theme)))].slice(0, 3);
     return `<div class="sec palette"><div class="secH"><span>Colours</span><span class="note">${themes.map((x) => esc(x[0].toUpperCase() + x.slice(1))).join(' · ')}</span></div><span class="note">Your design system. Changing one updates every screen that uses it.</span>
-      ${S.tokens.map((t) => `<div class="tok"><span class="tn">${esc(t.name)}</span><span class="sw">${themes.map((th) => { const v = t.values.find((x) => x.theme === th) || (th !== 'all' && t.values.find((x) => x.theme === 'all')); return v ? `<label class="swatch" style="background:${esc(v.hex)}" title="${esc(t.name)} · ${esc(th)} · ${esc(v.hex)}"><input type="color" value="${esc(v.hex.slice(0, 7))}" data-token="${esc(t.name)}" data-theme="${esc(v.theme)}" aria-label="${esc(t.name)} ${esc(th)}"></label>` : '<span class="swatch none"></span>'; }).join('')}</span></div>`).join('')}</div>`;
+      ${S.tokens.map((t) => `<div class="tok"><span class="tn">${esc(t.name)}</span><span class="sw">${themes.map((th) => { const v = t.values.find((x) => x.theme === th) || (th !== 'all' && t.values.find((x) => x.theme === 'all')); return v ? `<button type="button" class="swatch${S.tp?.name === t.name && S.tp?.theme === v.theme ? ' on' : ''}" style="background:${esc(v.hex)}" title="${esc(t.name)} · ${esc(th)} · ${esc(v.hex)}" data-token="${esc(t.name)}" data-theme="${esc(v.theme)}" data-hex="${esc(v.hex.slice(0, 7))}" aria-label="Edit ${esc(t.name)} ${esc(th)}"></button>` : '<span class="swatch none"></span>'; }).join('')}</span></div>`).join('')}</div>`;
   }
-  document.addEventListener('change', async (e) => {
-    const i = e.target.closest?.('[data-token]');
-    if (!i) return;
+  // Design-system colours open Tovi's own picker beside the swatch (never the browser's): drag the square or the
+  // hue, or type a hex. Each release writes the token once, and every screen that uses it follows.
+  S.tp = null;
+  function tokPick(btn) {
+    const same = S.tp && S.tp.name === btn.dataset.token && S.tp.theme === btn.dataset.theme;
+    S.tp = same ? null : { name: btn.dataset.token, theme: btn.dataset.theme, hex: btn.dataset.hex.replace('#', '').toUpperCase(), ...hexToHsv(btn.dataset.hex.replace('#', '')) };
+    renderTokPop();
+    document.querySelectorAll('.swatch[data-token]').forEach((x) => x.classList.toggle('on', !!S.tp && x.dataset.token === S.tp.name && x.dataset.theme === S.tp.theme));
+  }
+  function renderTokPop() {
+    let f = $('tokPop');
+    if (!S.tp) { if (f) f.hidden = true; return; }
+    if (!f) { f = document.createElement('div'); f.id = 'tokPop'; f.className = 'fpop'; f.setAttribute('role', 'dialog'); document.body.appendChild(f); }
+    const c = S.tp, hx = hsvToHex(c.h, c.s, c.v);
+    f.setAttribute('aria-label', `${c.name} colour`);
+    f.innerHTML = `<div class="fpH"><span class="fpT">${esc(c.name)}</span>${c.theme !== 'all' ? `<span class="note">${esc(c.theme[0].toUpperCase() + c.theme.slice(1))}</span>` : ''}<button class="ib fpX" data-tpclose aria-label="Close" title="Close · Esc">${ico('x')}</button></div>
+      <div class="cpop"><div class="cpSV" data-tpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
+      <div class="cpBar cpHue" data-tpdrag="hue"><i class="cpK" style="left:${c.h / 3.6}%;background:hsl(${c.h} 100% 50%)"></i></div>
+      <div class="cpRow"><i class="cpSw" style="background:#${hx}"></i><span class="cpMode">Hex</span><label class="cpVal"><input data-tphex value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"></label></div>
+      <span class="note">Changes every screen that uses ${esc(c.name)}.</span></div>`;
+    f.hidden = false;
+    const sw = document.querySelector(`.swatch[data-token="${CSS.escape(c.name)}"][data-theme="${CSS.escape(c.theme)}"]`), r = sw?.getBoundingClientRect();
+    const h = f.offsetHeight, panel = $('panel')?.getBoundingClientRect();
+    f.style.left = Math.max(8, (panel ? panel.left : r?.left || innerWidth) - f.offsetWidth - 10) + 'px';
+    f.style.top = Math.max(8, Math.min(innerHeight - h - 8, (r?.top ?? 80) - 40)) + 'px';
+  }
+  async function tokCommit() {
+    const c = S.tp, hx = hsvToHex(c.h, c.s, c.v);
+    if (hx === c.hex) return;
+    c.hex = hx;
     try {
-      const r = await api('/token', { name: i.dataset.token, hex: i.value.toUpperCase(), which: i.dataset.theme === 'all' ? 'both' : i.dataset.theme });
+      const r = await api('/token', { name: c.name, hex: '#' + hx, which: c.theme === 'all' ? 'both' : c.theme });
       if (r.changed) { S.count = r.n; toast(r.summary.labels?.[0] || 'Colour changed', 'Every screen using it updates', false, true); }
       S.tokens = null;
       afterEdit();
       renderPanel();
     } catch (err) { toast(err.message, '', true); }
+  }
+  document.addEventListener('click', (e) => {
+    const sw = e.target.closest?.('.swatch[data-token]');
+    if (sw) { e.preventDefault(); tokPick(sw); return; }
+    if (e.target.closest?.('[data-tpclose]')) { S.tp = null; renderTokPop(); renderPanel(); }
   });
+  document.addEventListener('pointerdown', (e) => {
+    if (S.tp && !e.target.closest?.('#tokPop,.swatch[data-token]')) { S.tp = null; renderTokPop(); document.querySelectorAll('.swatch.on').forEach((x) => x.classList.remove('on')); }
+    const area = e.target.closest?.('[data-tpdrag]');
+    if (!area || !S.tp) return;
+    e.preventDefault();
+    const kind = area.dataset.tpdrag, c = S.tp, pop = $('tokPop');
+    const paint = () => {
+      const hx = hsvToHex(c.h, c.s, c.v);
+      pop.querySelector('.cpSV').style.setProperty('--hue', `hsl(${c.h} 100% 50%)`);
+      const [sv, hue] = pop.querySelectorAll('.cpK');
+      sv.style.left = c.s * 100 + '%'; sv.style.top = (1 - c.v) * 100 + '%';
+      hue.style.left = c.h / 3.6 + '%'; hue.style.background = `hsl(${c.h} 100% 50%)`;
+      pop.querySelector('[data-tphex]').value = hx;
+      pop.querySelector('.cpSw').style.background = '#' + hx;
+      document.querySelectorAll(`.swatch[data-token="${CSS.escape(c.name)}"][data-theme="${CSS.escape(c.theme)}"]`).forEach((x) => { x.style.background = '#' + hx; });
+    };
+    const at = (ev) => {
+      const r = area.getBoundingClientRect(), x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+      if (kind === 'sv') { c.s = x; c.v = 1 - y; } else c.h = Math.min(359.9, x * 360);
+      paint();
+    };
+    at(e);
+    area.setPointerCapture(e.pointerId);
+    const up = () => { area.removeEventListener('pointermove', at); area.removeEventListener('pointerup', up); area.removeEventListener('pointercancel', up); tokCommit(); };
+    area.addEventListener('pointermove', at); area.addEventListener('pointerup', up); area.addEventListener('pointercancel', up);
+  }, true);
+  document.addEventListener('change', (e) => {
+    if (!e.target.matches?.('[data-tphex]') || !S.tp) return;
+    const hx = e.target.value.trim().replace(/^#/, '').toUpperCase();
+    if (!/^[0-9A-F]{6}$/.test(hx)) { renderTokPop(); return; }
+    Object.assign(S.tp, hexToHsv(hx));
+    renderTokPop();
+    tokCommit();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.tp) { e.stopPropagation(); S.tp = null; renderTokPop(); renderPanel(); } }, true);
   function sizeHTML(inf) {
     if (!sizeRange() || inf?.classKind === 'cva') return '';
     const dev = S.device, only = S.sizeOnly[dev];
