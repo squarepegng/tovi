@@ -3081,7 +3081,7 @@
     // Explore is a try-on: keep it, undo it, or turn it into the design system.
     const keep = p.mode === 'explore' && m.status === 'applied' ? (m.kept ? `<div class="kSuggest"><span>Kept. Want it everywhere?</span><button data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>` : `<div class="tryOn"><span>Trying this look on your screen.</span><div class="acts"><button class="ghostBtn" data-act2="tryUndo" data-i="${i}">Undo</button><button class="primary applyBtn" data-act2="tryKeep" data-i="${i}">Keep it</button></div><button class="linkBtn" data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>`) : '';
     const head = m.applying ? `Applying ${n} change${n === 1 ? '' : 's'}…` : m.status === 'applied' ? `Applied ${m.appliedN ?? n} of ${p.edits.length}` : `${p.edits.length} proposed change${p.edits.length === 1 ? '' : 's'}`;
-    return `<div class="prop${byNote ? ' byNote' : ''}">${stepsHTML(m)}${badge ? `<span class="badge">${badge}</span>` : ''}${p.ask ? askHTML(m, i) : `<p class="kText">${esc(cleanMsg(p.message))}</p>`}
+    return `<div class="prop${byNote ? ' byNote' : ''}">${stepsHTML(m)}${badge ? `<span class="badge">${badge}</span>` : ''}${p.ask ? askHTML(m, i) : `<p class="kText">${esc(cleanMsg(p.message))}</p>`}${p.alt && !p.ask ? `<button class="kAlt${m.altUsed ? ' used' : ''}" data-act2="altRun" data-i="${i}"${m.altUsed ? ' disabled' : ''}><span>Try instead</span><b>${esc(p.alt.label)}</b>${ico('chevR', 10)}</button>` : ''}
       ${m.talk?.length ? `<div class="talk">${m.talk.map((t) => `<div>${avatar(agentNamed(t.agent))}<b>${esc(t.agent)}</b><span>${esc(t.text)}</span></div>`).join('')}</div>` : ''}
       ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' && m.where === 'notes' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
       ${suggest}${keep}
@@ -3583,6 +3583,8 @@
       else if (act === 'chatHint') runAI(v, S.sel ? selectionTargets() : visibleTargets(), 'chat');
       else if (act === 'decide') decide(S.chat[+a.dataset.i], v);
       else if (act === 'askPick') askPick(S.chat[+a.dataset.i], +v);
+      // Tovi did what you asked; its better option is one click away.
+      else if (act === 'altRun') { const m = S.chat[+a.dataset.i]; if (m?.proposal?.alt && !m.altUsed && !S.card?.busy) { m.altUsed = true; runAI(m.proposal.alt.request, m.targets?.length ? m.targets : S.sel ? selectionTargets() : visibleTargets(), m.where, m.proposal.alt.label, true); } }
       else if (act === 'cardMin') { S.cardMin = !S.cardMin; renderAI(); }
       else if (act === 'closeCard') { S.cardMin = false; S.cardPos = {}; if (S.card?.previewing) { S.card.previewing = false; previewTokens(S.card, false); } if (S.card?.status === 'pending') S.card.status = 'discarded'; S.card = null; S.amber = []; renderAI(); }
       else if (act === 'modeMenu') { const r = a.getBoundingClientRect(); modeMenu({ x: r.left, y: r.top - 230 }); }

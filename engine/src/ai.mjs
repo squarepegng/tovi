@@ -94,6 +94,10 @@ const Proposal = z.object({
     question: z.string().describe('One short plain question, e.g. "Pop how: bolder, more colour, or more space?"'),
     options: z.array(z.string()).describe('2 or 3 short, clearly different directions the designer can pick, e.g. "Bolder type and contrast"'),
   }).nullable().describe('Rarely. Only when the request is so open that good designers would go clearly different ways (e.g. "make it pop", "fix this") and nothing earlier in the conversation narrows it. Then return no edits. Otherwise null'),
+  alt: z.object({
+    label: z.string().describe('A short label for your better option, e.g. "More space instead of lines"'),
+    request: z.string().describe('The instruction that would make the better option, as the designer would type it'),
+  }).nullable().describe('Only when you did what was asked but it makes the design worse or has a real trade-off: your better alternative, one click away. Otherwise null'),
   notes: z.array(z.object({
     note: z.number().int(),
     status: z.enum(['done', 'partial', 'not_possible']),
@@ -146,6 +150,7 @@ Work like a sharp collaborator:
 - Keep sets consistent: when the target is one of a group of similar elements (cards, nav items, list rows, chips), change their shared source or all of them, unless the designer says "only this one".
 - Be decisive: for vague requests ("make it pop", "more premium"), make tasteful, on-system choices and say in one sentence what you chose. Ask one short question (and return no edits) only when two very different readings are equally likely.
 - Keep the message to one or two plain sentences. Don't list every class; the edit list shows the details.
+- Be an honest design partner, not a yes-machine, but never in the way. Always do what the designer asked. Then judge it against the design craft below: if it makes the screen worse or has a real trade-off (more noise, broken hierarchy or consistency, lower contrast, the generic AI look), end the message with one plain sentence on why, and set alt to your better option (a short label and the request that would make it), e.g. message "...Lines between three short rows add clutter; more space separates them more cleanly." with alt { label: "More space instead of lines", request: "Remove the lines between the tasks and give each row a little more vertical space" }. If it is a good request, just do it without comment and leave alt null. Never lecture or refuse.
 
 Design craft (use your eye, like a senior designer reviewing this screen):
 - Hierarchy: one clear focal point per area; levels differ in size, weight or colour (a heading at least one step up the type scale or a weight step from body), not everything bold.
@@ -211,7 +216,7 @@ How to work:
 - action token changes a design-system colour everywhere it's used: token.name from the token list, token.value #RRGGBB, token.theme light, dark or both.
 - action code is the last resort for visual changes no other action can make (classes computed in an unusual way, inline styles): code.file is the file shown for that element or its style sources, code.find an exact snippet of code you were shown that occurs once, code.replace the new text. Keep it minimal and visual only: never change logic, data, handlers or imports. Keep the original formatting exactly: the same line breaks and indentation, one element per line as before; never squash several lines into one. Prefer several small code edits over one large one.
 - Always do what you can. If part of a request needs something not in your toolset yet (free positioning, animation, hover states, new pages), make the edits that get closest, set scope to partial, and say in one short sentence what you could not do yet. Never refuse a visual request outright when some of it is possible.
-- Prefer doing over asking. Ask (set ask, return no edits) only when a request is so open that good designers would go clearly different ways and nothing earlier in the conversation narrows it. Never ask about a numbered note, a check of your own work, or an answer to a question you already asked.
+- Prefer doing over asking. Ask (set ask, return no edits) only when a request is so open that good designers would go clearly different ways and nothing earlier in the conversation narrows it, . Never ask about a numbered note, a check of your own work, or an answer to a question you already asked.
 - needs_developer is only for requests that change behavior, data, logic, payments or accounts. Visual changes are never developer work, even when Tovi cannot make them yet; use not_yet for those.
 - This can be a conversation: earlier turns are included. Read follow-ups ("smaller", "undo that", "try again but warmer") against what you proposed before and whether it was applied.
 - Never say whether anything changed ("Nothing changed yet", "I haven't changed anything", "No edits"): Tovi shows that itself, next to your reply. When the designer is only asking a question, just answer it.
@@ -403,7 +408,7 @@ function parseProposal(raw) {
   let obj;
   try { obj = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The answer couldn’t be read. Try again.'); }
   if (obj && typeof obj === 'object') {
-    for (const k of ['suggest', 'notes', 'ask']) if (obj[k] === undefined) obj[k] = null;
+    for (const k of ['suggest', 'notes', 'ask', 'alt']) if (obj[k] === undefined) obj[k] = null;
     for (const e of Array.isArray(obj.edits) ? obj.edits : []) {
       for (const k of EDIT_NULLS) if (e[k] === undefined) e[k] = null;
       if (!Array.isArray(e.ops)) e.ops = [];
@@ -584,7 +589,7 @@ export async function propose({ request, targets, history = [], images = [], tok
   const notes = Array.isArray(p.notes) ? p.notes.filter((n) => Number.isInteger(n.note) && n.note > 0).map((n) => ({ note: n.note, status: n.status, summary: n.summary })) : null;
   if (m === 'explore') edits.forEach((e) => { if (!e.structure) e.offSystem = true; });
   if (m !== 'improve') { for (let k = edits.length - 1; k >= 0; k--) if (m === 'explore' && edits[k].structure?.type === 'token') edits.splice(k, 1); }
-  return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, ask: !edits.length && p.ask?.question && p.ask.options?.length >= 2 ? { question: String(p.ask.question).slice(0, 200), options: p.ask.options.slice(0, 3).map((o) => String(o).slice(0, 80)) } : null, edits, model: usedModel, usage: { input: usage.input || 0, output: usage.output || 0, cacheRead: usage.cacheRead || 0, cacheWrite: usage.cacheWrite || 0 } };
+  return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, alt: edits.length && p.alt?.label && p.alt?.request ? { label: String(p.alt.label).slice(0, 80), request: String(p.alt.request).slice(0, 400) } : null, ask: !edits.length && p.ask?.question && p.ask.options?.length >= 2 ? { question: String(p.ask.question).slice(0, 200), options: p.ask.options.slice(0, 3).map((o) => String(o).slice(0, 80)) } : null, edits, model: usedModel, usage: { input: usage.input || 0, output: usage.output || 0, cacheRead: usage.cacheRead || 0, cacheWrite: usage.cacheWrite || 0 } };
 }
 
 
