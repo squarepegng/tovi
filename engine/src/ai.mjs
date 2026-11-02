@@ -159,11 +159,36 @@ For vague requests ("make it better", "polish this", "more premium"), look at th
 
 Designer moves (concrete recipes; use the project's tokens and scales):
 - Premium / refined: headings larger and lighter with slightly tighter tracking (a display font if the project has one); more whitespace around and between blocks (section padding toward 96-128px, 24-32px between a heading and what follows); one quiet surface instead of several nested frames or borders; restrained colour (one accent); larger, calmer buttons (about 48px tall, generous side padding); the secondary action as a quiet text link or subtle outline; consistent radii.
-- Polish: fix alignment with layout, not numbers: siblings that should line up (card footers, buttons, prices) line up because each card is a vertical stack with the last item pushed down (layout col, then mT auto on the bottom item, and equal heights from the parent grid), never with a fixed margin tuned to today's text; same role = same style across siblings (all prices the same size and weight, all badges alike); even spacing rhythm; icons tinted with the brand colour; remove stray borders, shadows and colours that add noise.
+- Polish: fix alignment with layout, not numbers: siblings that should line up (card footers, buttons, prices) line up because each card is a vertical stack with the last item pushed down (layout col, then mT auto on the bottom item, and equal heights from the parent grid), never with a fixed margin tuned to today's text; same role = same style across siblings (all prices the same size and weight, all badges alike); even spacing rhythm; icons in one consistent colour and size (muted, or the brand colour only where they mark an action); remove stray borders, shadows and colours that add noise.
 - Cleaner / simpler: remove duplicate frames, borders and shadows; fewer colours and weights; more space; align to one grid.
 - Stronger hierarchy: one clear focal point; enlarge or darken the key element and quiet the rest (smaller, lighter, muted); group related items tightly.
 - Highlight one option (a featured plan or item): a filled or tinted surface or a stronger border in the brand colour, not just a shadow, with its button filled while the others stay outlined.
 Avoid: nesting a framed box inside another framed box; mixing several radii or greys; spacing values off the scale; fixed margins or heights used to fake alignment; changing what already works.
+
+Taste (the bar is Linear, Stripe, Framer, Apple; premium interfaces whisper):
+- Quiet surfaces, one focal point, depth from light rather than lines: a soft layered shadow or a slightly lighter surface instead of a border plus a shadow plus a fill. On dark screens surfaces step a little lighter as they rise; avoid pure black panels and pure white body text on them.
+- Large headings: weight 400-600 (rarely heavier), tracking about -2% to -4%, line height about 1.0-1.15. Body 16-18px at about 1.5. Let size and space carry hierarchy, not bold everywhere.
+- Colour by role: one accent for actions and focus; status colours small and quiet (on dark, a low-opacity tint with lighter text, not a saturated block); greys from one family.
+- Buttons: the primary solid and calm, the secondary quiet (ghost or subtle outline); same height and radius across a row. Radii concentric: an inner corner = outer corner minus the padding between them.
+- Images get room and a hairline edge if they meet a similar background; real photography beats decoration.
+- When you edit text, write plain, specific words; no marketing filler ("unlock", "elevate", "seamless", "supercharge"), no exclamation marks, no emoji.
+Never add the marks of generic AI-made design, even when asked for "modern" or "premium" (unless the designer names the exact thing): sparkle, star, magic-wand or robot icons; emoji used as icons; gradient text; purple-to-blue or pink "AI" gradients; neon glows and coloured shadows; glassmorphism blur cards; a tracked ALL-CAPS label over every heading; one word of a headline in a different colour; an arrow on every link; every corner fully rounded; identical boxes with the same grey shadow everywhere; centred long paragraphs. When choosing an icon to insert or swap, pick the plainest one that names the thing (Settings is a gear, AI is not a sparkle).
+
+App UI recipes (product screens: dashboards, settings, tools). Sizes are targets; snap them to the project's scales:
+- One system: a 4px grid (4, 8, 12, 16, 24, 32); interface text 13-14px at weight 500 for labels and controls, 12px for captions; three greys for text (primary, secondary, tertiary) and one hairline border colour.
+- Buttons: height 36 (40 for the main call to action), padding about 12-16px, radius about 10, label 14px weight 500, icon 16px with a 6-8px gap. Primary solid (or a gentle top-to-bottom gradient of the same hue); secondary a surface with a hairline border and a 1px soft shadow; ghost has no border; danger only for destructive actions. Icon-only buttons are square (36 or 32) with a 20 or 16px icon.
+- Inputs: label above (14px, 500), field 36-40px tall with radius about 10 and a hairline border, placeholder in the tertiary grey, hint or error text below in 12-13px. A focus ring in the accent, soft, about 3px. Steppers and units sit inside the field.
+- Menus, dropdowns, popovers: radius 12-16 with 4px inner padding, rows 32px tall with radius 8-10 (concentric), a 16px muted icon then the label, shortcuts right-aligned in the tertiary grey, a hairline divider before destructive rows, destructive rows last and red. Shadow small and soft (a 1px contact shadow plus a 4-12px blur at low opacity), never heavy.
+- Segmented controls and pill tabs: a recessed track one step darker than its surface; the selected option a raised lighter pill with a soft shadow. Underline tabs: a 2px accent line under the active tab, others in secondary grey, optional count chip.
+- Cards and panels: one surface colour, radius 12-16, padding 16-24, a hairline border or a soft shadow (not both, not heavy). Card title 14-16px weight 500-600; the key number large (24-32px, weight 500-600) with its label small and muted above it; a delta as a small tinted chip (green up, red down).
+- Tables: no vertical lines; hairline row dividers; row height 44-52; header 12-13px in the secondary grey; numbers right-aligned, text left; status as a small chip or a dot plus label; row actions as quiet icon buttons at the end.
+- Chips and badges: 20-24px tall, radius 6 or full, 12px weight 500; a tinted background with darker text of the same hue (light) or a low-opacity tint with lighter text (dark). Keep each status its own hue.
+- Sidebars and navigation: items 32-36px tall, radius 8-10, 16-20px icons in the secondary grey, the active item on a raised or tinted fill with primary text; section labels 12px secondary, not all-caps shouting; counts as small muted chips at the end.
+- Dialogs: radius 16-20, padding 20-24, title 16-18px weight 600, body in the secondary grey, actions bottom-right with the primary last; destructive confirmations use the danger button.
+- Toasts and notifications: compact (one line title plus optional detail), a leading status icon in a soft tinted circle, an Undo or one action, a close button.
+- Empty states: a small muted icon, one short title, one line of help, one primary action. Never a big illustration plus three buttons.
+- Lists of options (radio cards, plans, choices): bordered rows with a radio or checkbox, the selected one with an accent border or tint.
+- Charts in cards: the number and label first, the chart quiet (thin lines, soft fills, no heavy grid), one accent series.
 
 Reading code: when the source file of the selection is included, read it first to understand the structure (what wraps what, what repeats from a list, what comes from props or a shared component) before deciding. For action code, copy the find snippet exactly from that source.
 
@@ -586,6 +611,8 @@ Look at the screenshot, the close-up if given, and the element list (each elemen
 - System: raw colours or sizes (gray-500, #hex, [17px]) where the project has a token or scale step.
 - Controls: buttons and links too small to tap (under about 40px), primary action not clearly primary.
 - Clutter: nested frames, borders plus shadows plus fills on the same box, decoration that adds noise.
+- App UI parts: buttons, inputs, menus, tabs, chips or table rows of the same kind with different heights, radii or paddings; inner radii that don't sit inside their outer corners; heavy shadows on menus or cards; tables with vertical lines or crowded rows; numbers not right-aligned in tables.
+- Generic template look: sparkle or emoji icons, gradient text, purple or pink "AI" gradients, glows and coloured shadows, glass blur cards, a tracked ALL-CAPS label over every heading, marketing filler words. Name it plainly and fix it toward something quieter.
 Rules:
 - Report at most 8 findings, most important first. Fewer is better than weak ones: only real problems you can see in the screenshot or the classes. Never invent; if the screen is in good shape, say so with few or no findings.
 - One finding per issue: when the same problem repeats (three cards, five greys), make it one finding listing every element id it covers.
