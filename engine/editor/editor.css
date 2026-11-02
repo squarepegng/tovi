@@ -1461,3 +1461,25 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .kAlt:hover{background:rgba(var(--hi),.06)}
 .kAlt.used{opacity:.5;cursor:default}
 :root[data-theme="light"] .kAlt{background:#F9F9F9;box-shadow:0 0 0 1px rgba(0,0,0,.07)}
+
+/* Light theme, after Paper's light mode: a light grey panel (#F2F2F2) with whiter fields on it (#F9F9F9) and the
+   same field shadow as dark, so fields still sit raised; text black 80%, labels 40%; toggles a 5% black track with
+   the chosen item in the field white. */
+:root[data-theme="light"]{--chrome:#F2F2F2;--chromeLine:#E4E4E6;--onFill:#F9F9F9;--onEdge:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff22,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+:root[data-theme="light"] #panel .inp,:root[data-theme="light"] .scW{background:#F9F9F9;box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+:root[data-theme="light"] #panel .inp,:root[data-theme="light"] #panel .inp input,:root[data-theme="light"] #panel .inp select,:root[data-theme="light"] .scW{color:rgba(0,0,0,.8)}
+:root[data-theme="light"] #panel .inp .ic,:root[data-theme="light"] #panel .inp .tg,:root[data-theme="light"] #panel .inp .u,:root[data-theme="light"] .scW svg{color:rgba(0,0,0,.4);opacity:1}
+:root[data-theme="light"] #panel .ibs,:root[data-theme="light"] #panel .seg,:root[data-theme="light"] .ltabs .seg,:root[data-theme="light"] .bps{background:rgba(0,0,0,.05)}
+:root[data-theme="light"] #panel .seg button,:root[data-theme="light"] #panel .ibs .ib,:root[data-theme="light"] .ltabs .seg button,:root[data-theme="light"] .bps button{color:rgba(0,0,0,.55)}
+:root[data-theme="light"] #panel .seg button.on,:root[data-theme="light"] #panel .ibs .ib.on,:root[data-theme="light"] .ltabs .seg button.on,:root[data-theme="light"] .bps button.on{color:rgba(0,0,0,.85)}
+:root[data-theme="light"] .side .tasks,:root[data-theme="light"] .byNote .ngs,:root[data-theme="light"] .edits,:root[data-theme="light"] .pickBar,:root[data-theme="light"] .kSuggest,:root[data-theme="light"] .tryOn,:root[data-theme="light"] .kAlt,:root[data-theme="light"] .acts.tkFoot{background:#F9F9F9;box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+:root[data-theme="light"] .side .bub,:root[data-theme="light"] .side .kc{background:#FFFFFF}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--chrome:#F2F2F2;--chromeLine:#E4E4E6;--onFill:#F9F9F9;--onEdge:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff22,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+:root[data-theme="system"] #panel .inp,:root[data-theme="system"] .scW{background:#F9F9F9;box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+:root[data-theme="system"] #panel .inp,:root[data-theme="system"] #panel .inp input,:root[data-theme="system"] #panel .inp select,:root[data-theme="system"] .scW{color:rgba(0,0,0,.8)}
+:root[data-theme="system"] #panel .inp .ic,:root[data-theme="system"] #panel .inp .tg,:root[data-theme="system"] #panel .inp .u,:root[data-theme="system"] .scW svg{color:rgba(0,0,0,.4);opacity:1}
+:root[data-theme="system"] #panel .ibs,:root[data-theme="system"] #panel .seg,:root[data-theme="system"] .ltabs .seg,:root[data-theme="system"] .bps{background:rgba(0,0,0,.05)}
+:root[data-theme="system"] #panel .seg button,:root[data-theme="system"] #panel .ibs .ib,:root[data-theme="system"] .ltabs .seg button,:root[data-theme="system"] .bps button{color:rgba(0,0,0,.55)}
+:root[data-theme="system"] #panel .seg button.on,:root[data-theme="system"] #panel .ibs .ib.on,:root[data-theme="system"] .ltabs .seg button.on,:root[data-theme="system"] .bps button.on{color:rgba(0,0,0,.85)}
+:root[data-theme="system"] .side .tasks,:root[data-theme="system"] .byNote .ngs,:root[data-theme="system"] .edits,:root[data-theme="system"] .pickBar,:root[data-theme="system"] .kSuggest,:root[data-theme="system"] .tryOn,:root[data-theme="system"] .kAlt,:root[data-theme="system"] .acts.tkFoot{background:#F9F9F9;box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+:root[data-theme="system"] .side .bub,:root[data-theme="system"] .side .kc{background:#FFFFFF}}
