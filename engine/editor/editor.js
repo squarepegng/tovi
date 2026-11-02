@@ -1069,18 +1069,18 @@
   function renderBar() {
     // Presenting: the app alone, with one way back.
     if (S.mode === 'preview') { $('bar').innerHTML = `<button class="tb wide" data-act="mode" data-v="edit" aria-label="Stop presenting">${ico('x', 14)}<span>Stop presenting</span><span class="kbd">Esc</span></button>`; $('hint').hidden = true; return; }
-    const tool = (t, icon, name, key) => `<button class="tb${S.tool === t ? ' on' : ''}" data-act="tool" data-v="${t}" aria-label="${name}" aria-pressed="${S.tool === t}">${ico(icon, 20)}${tip(name, key)}</button>`;
+    const tool = (t, icon, name, key) => `<button class="tb${S.tool === t ? ' on' : ''}" data-act="tool" data-v="${t}" aria-label="${name}" aria-pressed="${S.tool === t}">${ico(icon, 24)}${tip(name, key)}</button>`;
     $('bar').innerHTML = `<div class="modes">
         ${tool('interact', 'tap', 'Interact with the app', 'P')}
         ${tool('select', 'editFrame', 'Edit', 'V')}
       </div>
       <span class="div"></span>
-      <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 20)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
-      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Mark for Tovi">${ico('markAI', 20)}${tip('Mark for Tovi', 'A')}</button>
-      <button class="tb${S.diagnosing ? ' busy' : ''}" data-act="diagnose" aria-label="Diagnose">${ico('diag', 20)}${S.notes.some((x) => x.by === 'tovi') ? '<i class="badgeDot tovi" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip(S.diagnosing ? 'Tovi is reviewing…' : 'Diagnose: find what to fix')}</button>
+      <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 24)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
+      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Mark for Tovi">${ico('markAI', 24)}${tip('Mark for Tovi', 'A')}</button>
+      <button class="tb${S.diagnosing ? ' busy' : ''}" data-act="diagnose" aria-label="Diagnose">${ico('diag', 24)}${S.notes.some((x) => x.by === 'tovi') ? '<i class="badgeDot tovi" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip(S.diagnosing ? 'Tovi is reviewing…' : 'Diagnose: find what to fix')}</button>
       <span class="div"></span>
-      <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 20)}${tip('Undo', '⌘Z')}</button>
-      <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 20)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>`;
+      <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 24)}${tip('Undo', '⌘Z')}</button>
+      <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 24)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>`;
     const h = $('hint');
     h.hidden = true;
     if (!h.hidden) h.innerHTML = `Click anything to select it. Press <span class="kbd">P</span> to use your app, hold <span class="kbd">⌘</span> to click through, or <span class="kbd">⌘K</span> to ask Tovi.`;

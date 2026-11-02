@@ -1339,3 +1339,6 @@ aside.side.r{border-left-color:var(--chromeLine)}
    Pink stays for Tovi's marks, small status tags and progress. */
 .note.warn{color:var(--ink2)}
 .ed .reach,.ed .mono{color:var(--ink3)}
+
+/* Design-system colours in the page panel: small round swatches. */
+.swatch{width:18px;height:18px;border-radius:50%}
