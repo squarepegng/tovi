@@ -1371,3 +1371,26 @@ aside.side.r{border-left-color:var(--chromeLine)}
 @media (prefers-color-scheme: light){:root[data-theme="system"]{--chrome:var(--panel);--chromeLine:var(--line);--menu:#FFFFFF}}
 :root:not([data-theme="light"]) .side .bub,:root:not([data-theme="light"]) .side .kc{background:#343437}
 @media (prefers-color-scheme: light){:root[data-theme="system"] .side .bub,:root[data-theme="system"] .side .kc{background:var(--raised)}}
+
+/* Paper's exact controls (read from Paper's own CSS, dark theme). Fields: 24px tall, 6px corners, 12px text at 90%
+   white. Toggle groups: a flat 5% white track (no inset), 24px tall, 7px corners; the chosen item is 5% more white
+   with the same soft shadow as a field and a brighter inner ring; labels 57.5% white, the chosen one 90% and a
+   touch heavier. */
+:root:not([data-theme="light"]){--onFill:rgba(255,255,255,.05);--onEdge:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff22,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--onFill:#FFFFFF;--onEdge:0 0 0 .5px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.12),0 2px 6px -3px rgba(0,0,0,.15)}}
+#panel .inp{height:24px;border-radius:6px;padding:0 8px;gap:6px;font-size:12px}
+#panel .inp input,#panel .inp select{font-size:12px}
+:root:not([data-theme="light"]) #panel .inp,:root:not([data-theme="light"]) #panel .inp input,:root:not([data-theme="light"]) #panel .inp select{color:rgba(255,255,255,.9)}
+#panel .inp.area{height:auto;min-height:24px;padding:4px 8px}
+#panel .inp .cchip{width:14px;height:14px;border-radius:3px}
+#panel .ibs,#panel .seg,.ltabs .seg,.bps{height:24px;padding:1px;gap:0;border-radius:7px;background:rgba(var(--hi),.05);box-shadow:none}
+#panel .ibs .ib,#panel .seg button,.ltabs .seg button,.bps button{height:22px;border-radius:6px}
+.bps button{padding:0 10px}
+:root:not([data-theme="light"]) #panel .seg button,:root:not([data-theme="light"]) #panel .ibs .ib,:root:not([data-theme="light"]) .ltabs .seg button,:root:not([data-theme="light"]) .bps button{color:rgba(255,255,255,.575)}
+:root:not([data-theme="light"]) #panel .seg button.on,:root:not([data-theme="light"]) #panel .ibs .ib.on,:root:not([data-theme="light"]) .ltabs .seg button.on,:root:not([data-theme="light"]) .bps button.on{color:rgba(255,255,255,.9)}
+.ltabs{padding:8px 10px}
+.ltabs .seg{flex:1;display:flex}
+.ltabs .seg button{flex:1;justify-content:center;align-items:center;gap:6px;padding:0 8px;font-weight:400;box-shadow:none}
+.ltabs .seg button.on{font-weight:500}
+.ltabs .seg .kbd{background:transparent;padding:0;color:inherit;opacity:.7}
+.has-pill>.pill{border-radius:6px}

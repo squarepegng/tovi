@@ -1114,7 +1114,7 @@
     box.hidden = S.mode !== 'edit' || !S.layersOpen;
     if (box.hidden) return;
     if (!box.querySelector('.ltabs')) box.innerHTML = '<div class="ptabs ltabs"></div><div class="lbody" id="lbody"></div>';
-    box.querySelector('.ltabs').innerHTML = `<button data-act="left" data-v="chat" class="${S.left === 'chat' ? 'on' : ''}">Chat <span class="kbd">⌘K</span></button><button data-act="left" data-v="layers" class="${S.left === 'layers' ? 'on' : ''}">Layers</button>`;
+    box.querySelector('.ltabs').innerHTML = `<div class="seg ltg" role="tablist"><button data-act="left" data-v="chat" role="tab" aria-selected="${S.left === 'chat'}" class="${S.left === 'chat' ? 'on' : ''}">Chat <span class="kbd">⌘K</span></button><button data-act="left" data-v="layers" role="tab" aria-selected="${S.left === 'layers'}" class="${S.left === 'layers' ? 'on' : ''}">Layers</button></div>`;
     box.dataset.left = S.left;
     if (S.left === 'layers') renderLayers(); else renderChat(focusChat);
   }
