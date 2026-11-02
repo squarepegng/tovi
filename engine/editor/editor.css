@@ -1335,3 +1335,7 @@ aside.side.r{border-left-color:var(--chromeLine)}
 :root[data-theme="light"] .pickHint{box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 6px 20px rgba(0,0,0,.12)}
 /* A message's second line is quieter grey, never a second colour. */
 .toast .sub{color:var(--ink3)}
+/* Secondary lines never switch colour to get attention: warnings, reach and code read in quiet greys.
+   Pink stays for Tovi's marks, small status tags and progress. */
+.note.warn{color:var(--ink2)}
+.ed .reach,.ed .mono{color:var(--ink3)}
