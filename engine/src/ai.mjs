@@ -90,6 +90,10 @@ const Proposal = z.object({
     mode: z.enum(['improve', 'explore']),
     why: z.string().describe('One short plain sentence, e.g. "Your palette and spacing are what make this feel generic."'),
   }).nullable().describe('Only in On system mode: set when the design system itself is the reason the screen looks weak, so a better result needs a better system. Otherwise null'),
+  ask: z.object({
+    question: z.string().describe('One short plain question, e.g. "Pop how: bolder, more colour, or more space?"'),
+    options: z.array(z.string()).describe('2 or 3 short, clearly different directions the designer can pick, e.g. "Bolder type and contrast"'),
+  }).nullable().describe('Rarely. Only when the request is so open that good designers would go clearly different ways (e.g. "make it pop", "fix this") and nothing earlier in the conversation narrows it. Then return no edits. Otherwise null'),
   notes: z.array(z.object({
     note: z.number().int(),
     status: z.enum(['done', 'partial', 'not_possible']),
@@ -180,6 +184,7 @@ How to work:
 - action token changes a design-system colour everywhere it's used: token.name from the token list, token.value #RRGGBB, token.theme light, dark or both.
 - action code is the last resort for visual changes no other action can make (classes computed in an unusual way, inline styles): code.file is the file shown for that element or its style sources, code.find an exact snippet of code you were shown that occurs once, code.replace the new text. Keep it minimal and visual only: never change logic, data, handlers or imports. Keep the original formatting exactly: the same line breaks and indentation, one element per line as before; never squash several lines into one. Prefer several small code edits over one large one.
 - Always do what you can. If part of a request needs something not in your toolset yet (free positioning, animation, hover states, new pages), make the edits that get closest, set scope to partial, and say in one short sentence what you could not do yet. Never refuse a visual request outright when some of it is possible.
+- Prefer doing over asking. Ask (set ask, return no edits) only when a request is so open that good designers would go clearly different ways and nothing earlier in the conversation narrows it. Never ask about a numbered note, a check of your own work, or an answer to a question you already asked.
 - needs_developer is only for requests that change behavior, data, logic, payments or accounts. Visual changes are never developer work, even when Tovi cannot make them yet; use not_yet for those.
 - This can be a conversation: earlier turns are included. Read follow-ups ("smaller", "undo that", "try again but warmer") against what you proposed before and whether it was applied.
 - Never say whether anything changed ("Nothing changed yet", "I haven't changed anything", "No edits"): Tovi shows that itself, next to your reply. When the designer is only asking a question, just answer it.
@@ -371,7 +376,7 @@ function parseProposal(raw) {
   let obj;
   try { obj = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The answer couldn’t be read. Try again.'); }
   if (obj && typeof obj === 'object') {
-    for (const k of ['suggest', 'notes']) if (obj[k] === undefined) obj[k] = null;
+    for (const k of ['suggest', 'notes', 'ask']) if (obj[k] === undefined) obj[k] = null;
     for (const e of Array.isArray(obj.edits) ? obj.edits : []) {
       for (const k of EDIT_NULLS) if (e[k] === undefined) e[k] = null;
       if (!Array.isArray(e.ops)) e.ops = [];
@@ -552,7 +557,7 @@ export async function propose({ request, targets, history = [], images = [], tok
   const notes = Array.isArray(p.notes) ? p.notes.filter((n) => Number.isInteger(n.note) && n.note > 0).map((n) => ({ note: n.note, status: n.status, summary: n.summary })) : null;
   if (m === 'explore') edits.forEach((e) => { if (!e.structure) e.offSystem = true; });
   if (m !== 'improve') { for (let k = edits.length - 1; k >= 0; k--) if (m === 'explore' && edits[k].structure?.type === 'token') edits.splice(k, 1); }
-  return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, edits, model: usedModel, usage: { input: usage.input || 0, output: usage.output || 0, cacheRead: usage.cacheRead || 0, cacheWrite: usage.cacheWrite || 0 } };
+  return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, ask: !edits.length && p.ask?.question && p.ask.options?.length >= 2 ? { question: String(p.ask.question).slice(0, 200), options: p.ask.options.slice(0, 3).map((o) => String(o).slice(0, 80)) } : null, edits, model: usedModel, usage: { input: usage.input || 0, output: usage.output || 0, cacheRead: usage.cacheRead || 0, cacheWrite: usage.cacheWrite || 0 } };
 }
 
 

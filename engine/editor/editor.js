@@ -210,13 +210,17 @@
     S.cp = { p: S.cpick, stop: S.gstop, ...hexToHsv(n.hex), a: n.a };
   }
   const tabsHTML2 = () => { const tab = S.cpTab || 'custom'; return `<div class="cpTabs fpTabs"><button data-act="cpTab" data-v="custom" class="${tab === 'custom' ? 'on' : ''}">Custom</button><button data-act="cpTab" data-v="vars" class="${tab === 'vars' ? 'on' : ''}">Variables</button></div>`; };
+  // A colour you can see through: solid on the left half, the real opacity over a checkerboard on the right (Figma).
+  const chipBg = (hex, a) => { if (!(a < 100) || !/^#[0-9a-f]{6}$/i.test(hex)) return hex; const x = `${hex}${('0' + Math.round(a * 2.55).toString(16)).slice(-2)}`; return `linear-gradient(90deg,${hex} 50%,transparent 50%),linear-gradient(${x},${x}),repeating-conic-gradient(#BDBDC2 0 25%,#fff 0 50%) 0 0/6px 6px`; };
+  // The project's own colours, one click away under the custom picker.
+  const themeDots = (p) => { const t = tokens().slice(0, 16); return t.length ? `<div class="cpDots">${t.map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" aria-label="${esc(n)}" style="background:${esc(swatch(v))}"></button>`).join('')}</div>` : ''; };
   function pickerHTML(p, tok) {
     const c = S.cp, hx = hsvToHex(c.h, c.s, c.v);
     if ((S.cpTab || 'custom') === 'vars') return `<div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('') || '<span class="note">This project has no colour variables yet.</span>'}</div>`;
     return `<div class="cpSV" data-cpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
       <div class="cpBar cpHue" data-cpdrag="hue"><i class="cpK" style="left:${c.h / 3.6}%;background:hsl(${c.h} 100% 50%)"></i></div>
       <div class="cpBar cpAlpha" data-cpdrag="alpha" style="--c:#${hx}"><i class="cpK" style="left:${c.a}%"></i></div>
-      <div class="cpRow"><span class="cpMode">Hex</span><label class="cpVal"><input data-cphex="${p}" value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"><input data-cpa="${p}" value="${c.a}" inputmode="numeric" aria-label="Opacity"><span>%</span></label></div>`;
+      <div class="cpRow"><i class="cpSw" style="background:${chipBg('#' + hx, c.a)}"></i><span class="cpMode">Hex</span><label class="cpVal"><input data-cphex="${p}" value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"><input data-cpa="${p}" value="${c.a}" inputmode="numeric" aria-label="Opacity"><span>%</span></label></div>${themeDots(p)}`;
   }
   const ROT = ['t', 'tr', 'r', 'br', 'b', 'bl', 'l', 'tl'];
   // Like Figma: a tall bar with a pin for each stop, then the stops as rows (position, colour, opacity).
@@ -745,7 +749,7 @@
   };
   // Icons: Lucide (lucide.dev, ISC licence) for everything common, Tovi's own drawings only for its special
   // field icons and marks. Every icon draws its lines at the same 1.25px on screen, whatever its size.
-  const LU = {"play": "<path d=\"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z\" />", "edit": "<path d=\"M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033z\" /> <path d=\"M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6\" />", "undo": "<path d=\"M9 14 4 9l5-5\" /> <path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\" />", "cursor": "<path d=\"M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z\" />", "editFrame": "<path d=\"M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033z\" /> <path d=\"M5 3a2 2 0 0 0-2 2\" /> <path d=\"M19 3a2 2 0 0 1 2 2\" /> <path d=\"M5 21a2 2 0 0 1-2-2\" /> <path d=\"M9 3h1\" /> <path d=\"M9 21h2\" /> <path d=\"M14 3h1\" /> <path d=\"M3 9v1\" /> <path d=\"M21 9v2\" /> <path d=\"M3 14v1\" />", "tap": "<path d=\"M22 14a8 8 0 0 1-8 8\" /> <path d=\"M18 11v-1a2 2 0 0 0-2-2a2 2 0 0 0-2 2\" /> <path d=\"M14 10V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1\" /> <path d=\"M10 9.5V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v10\" /> <path d=\"M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15\" />", "hand": "<path d=\"M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2\" /> <path d=\"M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2\" /> <path d=\"M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8\" /> <path d=\"M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15\" />", "task": "<path d=\"M13 5h8\" /> <path d=\"M13 12h8\" /> <path d=\"M13 19h8\" /> <path d=\"m3 17 2 2 4-4\" /> <path d=\"m3 7 2 2 4-4\" />", "list": "<path d=\"M3 5h.01\" /> <path d=\"M3 12h.01\" /> <path d=\"M3 19h.01\" /> <path d=\"M8 5h13\" /> <path d=\"M8 12h13\" /> <path d=\"M8 19h13\" />", "up": "<path d=\"m5 12 7-7 7 7\" /> <path d=\"M12 19V5\" />", "x": "<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />", "plus": "<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />", "minus": "<path d=\"M5 12h14\" />", "chev": "<path d=\"m6 9 6 6 6-6\" />", "chevR": "<path d=\"m9 18 6-6-6-6\" />", "alL": "<path d=\"M21 5H3\" /> <path d=\"M15 12H3\" /> <path d=\"M17 19H3\" />", "alC": "<path d=\"M21 5H3\" /> <path d=\"M17 12H7\" /> <path d=\"M19 19H5\" />", "alR": "<path d=\"M21 5H3\" /> <path d=\"M21 12H9\" /> <path d=\"M21 19H7\" />", "corners": "<path d=\"M3 7V5a2 2 0 0 1 2-2h2\" /> <path d=\"M17 3h2a2 2 0 0 1 2 2v2\" /> <path d=\"M21 17v2a2 2 0 0 1-2 2h-2\" /> <path d=\"M7 21H5a2 2 0 0 1-2-2v-2\" />", "opa": "<circle cx=\"15\" cy=\"9\" r=\"7\" /> <circle cx=\"9\" cy=\"15\" r=\"7\" />", "comp": "<path d=\"M15.536 11.293a1 1 0 0 0 0 1.414l2.376 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z\" /> <path d=\"M2.297 11.293a1 1 0 0 0 0 1.414l2.377 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414L6.088 8.916a1 1 0 0 0-1.414 0z\" /> <path d=\"M8.916 17.912a1 1 0 0 0 0 1.415l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.415l-2.377-2.376a1 1 0 0 0-1.414 0z\" /> <path d=\"M8.916 4.674a1 1 0 0 0 0 1.414l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z\" />", "frame": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" />", "text": "<path d=\"M12 4v16\" /> <path d=\"M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2\" /> <path d=\"M9 20h6\" />", "spark": "<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\" />", "pen": "<path d=\"M13 21h8\" /> <path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" />", "pin": "<path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0\" /> <circle cx=\"12\" cy=\"10\" r=\"3\" />", "box": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" />", "circle": "<circle cx=\"12\" cy=\"12\" r=\"10\" />", "arrow": "<path d=\"M13 5H19V11\" /> <path d=\"M19 5L5 19\" />", "history": "<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" /> <path d=\"M12 7v5l4 2\" />", "desktop": "<rect width=\"20\" height=\"14\" x=\"2\" y=\"3\" rx=\"2\" /> <line x1=\"8\" x2=\"16\" y1=\"21\" y2=\"21\" /> <line x1=\"12\" x2=\"12\" y1=\"17\" y2=\"21\" />", "tablet": "<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\" ry=\"2\" /> <line x1=\"12\" x2=\"12.01\" y1=\"18\" y2=\"18\" />", "mobile": "<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\" /> <path d=\"M12 18h.01\" />", "branch": "<path d=\"M15 6a9 9 0 0 0-9 9V3\" /> <circle cx=\"18\" cy=\"6\" r=\"3\" /> <circle cx=\"6\" cy=\"18\" r=\"3\" />", "check": "<path d=\"M20 6 9 17l-5-5\" />", "eye": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />", "dots": "<circle cx=\"12\" cy=\"12\" r=\"1\" /> <circle cx=\"19\" cy=\"12\" r=\"1\" /> <circle cx=\"5\" cy=\"12\" r=\"1\" />", "gear": "<path d=\"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />", "diag": "<path d=\"M3 7V5a2 2 0 0 1 2-2h2\" /> <path d=\"M17 3h2a2 2 0 0 1 2 2v2\" /> <path d=\"M21 17v2a2 2 0 0 1-2 2h-2\" /> <path d=\"M7 21H5a2 2 0 0 1-2-2v-2\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" /> <path d=\"m16 16-1.9-1.9\" />", "comment": "<path d=\"M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719\" />", "addEl": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M8 12h8\" /> <path d=\"M12 8v8\" />", "sidebar": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M9 3v18\" />", "trash": "<path d=\"M10 11v6\" /> <path d=\"M14 11v6\" /> <path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\" /> <path d=\"M3 6h18\" /> <path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\" />", "dup": "<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /> <path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />", "rotate": "<path d=\"M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" />", "swap": "<path d=\"M8 3 4 7l4 4\" /> <path d=\"M4 7h16\" /> <path d=\"m16 21 4-4-4-4\" /> <path d=\"M20 17H4\" />", "image": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" /> <circle cx=\"9\" cy=\"9\" r=\"2\" /> <path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\" />", "code": "<path d=\"m16 18 6-6-6-6\" /> <path d=\"m8 6-6 6 6 6\" />", "search": "<path d=\"m21 21-4.34-4.34\" /> <circle cx=\"11\" cy=\"11\" r=\"8\" />", "heading": "<path d=\"M18 20V4\" /> <path d=\"M6 12H18\" /> <path d=\"M6 20V4\" />", "button": "<rect width=\"20\" height=\"12\" x=\"2\" y=\"6\" rx=\"2\" />", "zin": "<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />", "clip": "<path d=\"m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551\" />", "mic": "<path d=\"M12 19v3\" /> <path d=\"M19 10v2a7 7 0 0 1-14 0v-2\" /> <rect x=\"9\" y=\"2\" width=\"6\" height=\"13\" rx=\"3\" />", "reload": "<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" /> <path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\" /> <path d=\"M8 16H3v5\" />", "lh": "<path d=\"M15 14H9\" /> <path d=\"M21 21H3\" /> <path d=\"M21 3H3\" /> <path d=\"m8 16 3.453-7.648a.6.6 0 011.094.001L16 16\" />", "ls": "<path d=\"M15 14H9\" /> <path d=\"M21 3v18\" /> <path d=\"M3 3v18\" /> <path d=\"m8 16 3.453-7.648a.6.6 0 011.094.001L16 16\" />"};
+  const LU = {"play":"<path d=\"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z\" />","edit":"<path d=\"M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033z\" /> <path d=\"M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6\" />","undo":"<path d=\"M9 14 4 9l5-5\" /> <path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\" />","cursor":"<path d=\"M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z\" />","editFrame":"<path d=\"M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033z\" /> <path d=\"M5 3a2 2 0 0 0-2 2\" /> <path d=\"M19 3a2 2 0 0 1 2 2\" /> <path d=\"M5 21a2 2 0 0 1-2-2\" /> <path d=\"M9 3h1\" /> <path d=\"M9 21h2\" /> <path d=\"M14 3h1\" /> <path d=\"M3 9v1\" /> <path d=\"M21 9v2\" /> <path d=\"M3 14v1\" />","tap":"<path d=\"M22 14a8 8 0 0 1-8 8\" /> <path d=\"M18 11v-1a2 2 0 0 0-2-2a2 2 0 0 0-2 2\" /> <path d=\"M14 10V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1\" /> <path d=\"M10 9.5V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v10\" /> <path d=\"M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15\" />","hand":"<path d=\"M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2\" /> <path d=\"M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2\" /> <path d=\"M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8\" /> <path d=\"M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15\" />","task":"<path d=\"M13 5h8\" /> <path d=\"M13 12h8\" /> <path d=\"M13 19h8\" /> <path d=\"m3 17 2 2 4-4\" /> <path d=\"m3 7 2 2 4-4\" />","list":"<path d=\"M3 5h.01\" /> <path d=\"M3 12h.01\" /> <path d=\"M3 19h.01\" /> <path d=\"M8 5h13\" /> <path d=\"M8 12h13\" /> <path d=\"M8 19h13\" />","up":"<path d=\"m5 12 7-7 7 7\" /> <path d=\"M12 19V5\" />","x":"<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />","plus":"<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />","minus":"<path d=\"M5 12h14\" />","chev":"<path d=\"m6 9 6 6 6-6\" />","chevR":"<path d=\"m9 18 6-6-6-6\" />","alL":"<path d=\"M21 5H3\" /> <path d=\"M15 12H3\" /> <path d=\"M17 19H3\" />","alC":"<path d=\"M21 5H3\" /> <path d=\"M17 12H7\" /> <path d=\"M19 19H5\" />","alR":"<path d=\"M21 5H3\" /> <path d=\"M21 12H9\" /> <path d=\"M21 19H7\" />","corners":"<path d=\"M3 7V5a2 2 0 0 1 2-2h2\" /> <path d=\"M17 3h2a2 2 0 0 1 2 2v2\" /> <path d=\"M21 17v2a2 2 0 0 1-2 2h-2\" /> <path d=\"M7 21H5a2 2 0 0 1-2-2v-2\" />","opa":"<circle cx=\"15\" cy=\"9\" r=\"7\" /> <circle cx=\"9\" cy=\"15\" r=\"7\" />","comp":"<path d=\"M15.536 11.293a1 1 0 0 0 0 1.414l2.376 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z\" /> <path d=\"M2.297 11.293a1 1 0 0 0 0 1.414l2.377 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414L6.088 8.916a1 1 0 0 0-1.414 0z\" /> <path d=\"M8.916 17.912a1 1 0 0 0 0 1.415l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.415l-2.377-2.376a1 1 0 0 0-1.414 0z\" /> <path d=\"M8.916 4.674a1 1 0 0 0 0 1.414l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z\" />","frame":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" />","text":"<path d=\"M12 4v16\" /> <path d=\"M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2\" /> <path d=\"M9 20h6\" />","spark":"<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\" />","pen":"<path d=\"M13 21h8\" /> <path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" />","pin":"<path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0\" /> <circle cx=\"12\" cy=\"10\" r=\"3\" />","box":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" />","circle":"<circle cx=\"12\" cy=\"12\" r=\"10\" />","arrow":"<path d=\"M13 5H19V11\" /> <path d=\"M19 5L5 19\" />","history":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" /> <path d=\"M12 7v5l4 2\" />","desktop":"<rect width=\"20\" height=\"14\" x=\"2\" y=\"3\" rx=\"2\" /> <line x1=\"8\" x2=\"16\" y1=\"21\" y2=\"21\" /> <line x1=\"12\" x2=\"12\" y1=\"17\" y2=\"21\" />","tablet":"<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\" ry=\"2\" /> <line x1=\"12\" x2=\"12.01\" y1=\"18\" y2=\"18\" />","mobile":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\" /> <path d=\"M12 18h.01\" />","branch":"<path d=\"M15 6a9 9 0 0 0-9 9V3\" /> <circle cx=\"18\" cy=\"6\" r=\"3\" /> <circle cx=\"6\" cy=\"18\" r=\"3\" />","check":"<path d=\"M20 6 9 17l-5-5\" />","eye":"<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />","dots":"<circle cx=\"12\" cy=\"12\" r=\"1\" /> <circle cx=\"19\" cy=\"12\" r=\"1\" /> <circle cx=\"5\" cy=\"12\" r=\"1\" />","gear":"<path d=\"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />","diag":"<path d=\"M3 7V5a2 2 0 0 1 2-2h2\" /> <path d=\"M17 3h2a2 2 0 0 1 2 2v2\" /> <path d=\"M21 17v2a2 2 0 0 1-2 2h-2\" /> <path d=\"M7 21H5a2 2 0 0 1-2-2v-2\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" /> <path d=\"m16 16-1.9-1.9\" />","comment":"<path d=\"M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719\" />","addEl":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M8 12h8\" /> <path d=\"M12 8v8\" />","sidebar":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M9 3v18\" />","trash":"<path d=\"M10 11v6\" /> <path d=\"M14 11v6\" /> <path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\" /> <path d=\"M3 6h18\" /> <path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\" />","dup":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /> <path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />","rotate":"<path d=\"M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" />","swap":"<path d=\"M8 3 4 7l4 4\" /> <path d=\"M4 7h16\" /> <path d=\"m16 21 4-4-4-4\" /> <path d=\"M20 17H4\" />","image":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" /> <circle cx=\"9\" cy=\"9\" r=\"2\" /> <path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\" />","code":"<path d=\"m16 18 6-6-6-6\" /> <path d=\"m8 6-6 6 6 6\" />","search":"<path d=\"m21 21-4.34-4.34\" /> <circle cx=\"11\" cy=\"11\" r=\"8\" />","heading":"<path d=\"M18 20V4\" /> <path d=\"M6 12H18\" /> <path d=\"M6 20V4\" />","button":"<rect width=\"20\" height=\"12\" x=\"2\" y=\"6\" rx=\"2\" />","zin":"<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />","clip":"<path d=\"m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551\" />","mic":"<path d=\"M12 19v3\" /> <path d=\"M19 10v2a7 7 0 0 1-14 0v-2\" /> <rect x=\"9\" y=\"2\" width=\"6\" height=\"13\" rx=\"3\" />","reload":"<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" /> <path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\" /> <path d=\"M8 16H3v5\" />","lh":"<path d=\"M15 14H9\" /> <path d=\"M21 21H3\" /> <path d=\"M21 3H3\" /> <path d=\"m8 16 3.453-7.648a.6.6 0 011.094.001L16 16\" />","ls":"<path d=\"M15 14H9\" /> <path d=\"M21 3v18\" /> <path d=\"M3 3v18\" /> <path d=\"m8 16 3.453-7.648a.6.6 0 011.094.001L16 16\" />","down":"<path d=\"M12 5v14\" /> <path d=\"m19 12-7 7-7-7\" />","group":"<path d=\"M3 7V5c0-1.1.9-2 2-2h2\" /> <path d=\"M17 3h2c1.1 0 2 .9 2 2v2\" /> <path d=\"M21 17v2c0 1.1-.9 2-2 2h-2\" /> <path d=\"M7 21H5c-1.1 0-2-.9-2-2v-2\" /> <rect width=\"7\" height=\"5\" x=\"7\" y=\"7\" rx=\"1\" /> <rect width=\"7\" height=\"5\" x=\"10\" y=\"12\" rx=\"1\" />","ungroup":"<rect width=\"8\" height=\"6\" x=\"5\" y=\"4\" rx=\"1\" /> <rect width=\"8\" height=\"6\" x=\"11\" y=\"14\" rx=\"1\" />","parent":"<polyline points=\"14 9 9 4 4 9\" /> <path d=\"M20 20h-7a4 4 0 0 1-4-4V4\" />"};
   const LINE = 1.25;
   const ico = (n, s = 14) => LU[n]
     ? `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${(LINE * 24 / s).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LU[n]}</svg>`
@@ -796,7 +800,7 @@
   /* menus: one popover for the Tovi menu, pages, zoom and right-click */
   function openMenu(items, at) {
     const m = $('menu');
-    m.innerHTML = items.map((it, i) => it === '-' ? '<div class="msep"></div>' : it.input ? `<form class="minput" data-mi="${i}"><input placeholder="${esc(it.placeholder || '')}" value="${esc(it.value || '')}" spellcheck="false" aria-label="${esc(it.placeholder || '')}"></form>` : it.head ? `<div class="mhead">${esc(it.head)}</div>` : `<button class="mi${it.on ? ' on' : ''}${it.danger ? ' danger' : ''}" data-mi="${i}" ${it.disabled ? 'disabled' : ''} role="menuitem"><span class="mchk">${it.on ? ico('check', 12) : ''}</span><span class="ml">${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>${it.kbd ? `<span class="mk">${esc(it.kbd)}</span>` : ''}</button>`).join('');
+    m.innerHTML = items.map((it, i) => it === '-' ? '<div class="msep"></div>' : it.input ? `<form class="minput" data-mi="${i}"><input placeholder="${esc(it.placeholder || '')}" value="${esc(it.value || '')}" spellcheck="false" aria-label="${esc(it.placeholder || '')}"></form>` : it.head ? `<div class="mhead">${esc(it.head)}</div>` : `<button class="mi${it.on ? ' on' : ''}${it.danger ? ' danger' : ''}" data-mi="${i}" ${it.disabled ? 'disabled' : ''} role="menuitem"><span class="mchk${it.icon ? ' mic' : ''}">${it.on ? ico('check', 12) : it.icon ? ico(it.icon, 14) : ''}</span><span class="ml">${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>${it.kbd ? `<span class="mk">${esc(it.kbd)}</span>` : ''}</button>`).join('');
     m.hidden = false;
     const w = m.offsetWidth, h = m.offsetHeight;
     m.style.left = Math.max(8, Math.min(innerWidth - w - 8, at.x)) + 'px';
@@ -933,21 +937,21 @@
     const plain = /^(div|section|span)$/.test(el.tagName.toLowerCase()) && !el.getAttribute('data-kerf-n');
     openMenu([
       { head: dName(el) },
-      ...(inf?.text?.editable ? [{ label: 'Edit text', kbd: '↵', run: () => beginText() }] : []),
-      { label: 'Ask Tovi about this…', kbd: '⌘K', run: () => toggleAI(true) },
-      { label: 'Select parent', kbd: '⇧↵', disabled: !pick(el.parentElement), run: () => { const p = pick(el.parentElement); if (p) select(p); } },
+      ...(inf?.text?.editable ? [{ label: 'Edit text', icon: 'text', kbd: '↵', run: () => beginText() }] : []),
+      { label: 'Ask Tovi about this…', icon: 'spark', kbd: '⌘K', run: () => toggleAI(true) },
+      { label: 'Select parent', icon: 'parent', kbd: '⇧↵', disabled: !pick(el.parentElement), run: () => { const p = pick(el.parentElement); if (p) select(p); } },
       '-',
-      { label: 'Duplicate', kbd: '⌘D', run: () => structure({ type: 'duplicate' }, { keepSel: true }) },
-      { label: 'Group into a frame', kbd: '⌥⌘G', run: () => groupSelected() },
-      ...(plain ? [{ label: 'Ungroup', kbd: '⇧⌘G', run: () => structure({ type: 'ungroup' }) }] : []),
-      { label: 'Move up', kbd: '⌥↑', run: () => structure({ type: 'move', dir: 'up' }, { keepSel: true }) },
-      { label: 'Move down', kbd: '⌥↓', run: () => structure({ type: 'move', dir: 'down' }, { keepSel: true }) },
-      ...(/^[A-Z]/.test(nameOf(el)) || el.tagName.toLowerCase() === 'svg' ? [{ label: 'Swap with…', run: () => { const t = document.createElement('button'); t.dataset.act = 'sSwap'; Object.assign(t.style, { position: 'fixed', left: (at?.x ?? 0) + 'px', top: (at?.y ?? 0) + 'px', width: '1px', height: '1px', opacity: 0 }); document.body.appendChild(t); t.click(); setTimeout(() => t.remove(), 0); } }] : []),
-      { label: 'Add next to it…', kbd: 'I', run: act('insertMenu') },
+      { label: 'Duplicate', icon: 'dup', kbd: '⌘D', run: () => structure({ type: 'duplicate' }, { keepSel: true }) },
+      { label: 'Group into a frame', icon: 'group', kbd: '⌥⌘G', run: () => groupSelected() },
+      ...(plain ? [{ label: 'Ungroup', icon: 'ungroup', kbd: '⇧⌘G', run: () => structure({ type: 'ungroup' }) }] : []),
+      { label: 'Move up', icon: 'up', kbd: '⌥↑', run: () => structure({ type: 'move', dir: 'up' }, { keepSel: true }) },
+      { label: 'Move down', icon: 'down', kbd: '⌥↓', run: () => structure({ type: 'move', dir: 'down' }, { keepSel: true }) },
+      ...(/^[A-Z]/.test(nameOf(el)) || el.tagName.toLowerCase() === 'svg' ? [{ label: 'Swap with…', icon: 'swap', run: () => { const t = document.createElement('button'); t.dataset.act = 'sSwap'; Object.assign(t.style, { position: 'fixed', left: (at?.x ?? 0) + 'px', top: (at?.y ?? 0) + 'px', width: '1px', height: '1px', opacity: 0 }); document.body.appendChild(t); t.click(); setTimeout(() => t.remove(), 0); } }] : []),
+      { label: 'Add next to it…', icon: 'addEl', kbd: 'I', run: act('insertMenu') },
+      { label: 'Copy code location', icon: 'code', run: () => { const l = activeLoc(); if (l) navigator.clipboard?.writeText(l).then(() => toast('Copied the code location')).catch(() => {}); } },
       '-',
-      { label: 'Delete', kbd: '⌫', danger: true, run: () => deleteSelected() },
-      '-',
-      { label: 'Copy code location', run: () => { const l = activeLoc(); if (l) navigator.clipboard?.writeText(l).then(() => toast('Copied the code location')).catch(() => {}); } },
+      // Destructive last, after a divider, so it's never a slip away from a safe row.
+      { label: 'Delete', icon: 'trash', kbd: '⌫', danger: true, run: () => deleteSelected() },
     ], at);
   }
   function shortcuts() {
@@ -1196,7 +1200,7 @@
   });
   function colorRow(p, title, removeAct) {
     const hex = val(p), tok = tokenOf(p), none = hex === 'transparent';
-    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label>${none ? '' : `<label class="inp ca" title="${title} opacity"><input type="text" inputmode="numeric" data-calpha="${p}" value="${alphaOf(p)}" aria-label="${title} opacity"><span class="u">%</span></label>`}</div>`;
+    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : chipBg(hex, alphaOf(p))}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label>${none ? '' : `<label class="inp ca" title="${title} opacity"><input type="text" inputmode="numeric" data-calpha="${p}" value="${alphaOf(p)}" aria-label="${title} opacity"><span class="u">%</span></label>`}</div>`;
     return h;
   }
   const isText = (el) => el && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
@@ -1622,11 +1626,21 @@
   function toast(msg, sub, err, withUndo, code) {
     if (err) cue('error');
     const t = $('toast');
+    // A message already showing tucks behind the new one and fades, instead of vanishing mid-read.
+    if (!t.hidden && t.innerHTML) {
+      const old = t.cloneNode(true);
+      old.removeAttribute('id'); old.classList.add('tucked'); old.setAttribute('aria-hidden', 'true');
+      t.parentNode.insertBefore(old, t);
+      setTimeout(() => old.remove(), 700);
+    }
+    const ms = err ? 6000 : withUndo ? 6000 : 4000;
     t.hidden = false;
     t.className = 'toast' + (err ? ' err' : '');
-    t.innerHTML = `<div class="tx"><span>${esc(msg)}</span>${sub ? `<span class="sub">${esc(sub)}</span>` : ''}${code ? `<span class="mono codeLine">${esc(code)}</span>` : ''}</div>${withUndo ? '<button class="outline" data-act="undo">Undo</button>' : ''}<button class="ib" data-act="toastClose" aria-label="Dismiss">${ico('x')}</button>`;
+    // The thin line drains while the message (and its Undo) lasts; hovering pauses it.
+    t.innerHTML = `<div class="tx"><span>${esc(msg)}</span>${sub ? `<span class="sub">${esc(sub)}</span>` : ''}${code ? `<span class="mono codeLine">${esc(code)}</span>` : ''}</div>${withUndo ? '<button class="outline" data-act="undo">Undo</button>' : ''}<button class="ib" data-act="toastClose" aria-label="Dismiss">${ico('x')}</button><i class="tLine" style="animation-duration:${ms}ms"></i>`;
     clearTimeout(toastT);
-    toastT = setTimeout(() => (t.hidden = true), err ? 6000 : 4000);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) toastT = setTimeout(() => (t.hidden = true), ms);
+    else t.querySelector('.tLine').addEventListener('animationend', () => { if (t.querySelector('.tLine')) t.hidden = true; }, { once: true });
   }
 
   /* ---------- modes ---------- */
@@ -2115,8 +2129,10 @@
       pop.querySelector('.cpAlpha').style.setProperty('--c', '#' + hx);
       pop.querySelector('[data-cphex]').value = hx;
       pop.querySelector('[data-cpa]').value = c.a;
+      const sw = pop.querySelector('.cpSw');
+      if (sw) sw.style.background = chipBg('#' + hx, c.a);
       const chip = c.p !== 'grad' && document.querySelector(`#panel [data-act="cpick"][data-v="${c.p}"]`);
-      if (chip) chip.style.background = cpOut(c);
+      if (chip) chip.style.background = chipBg('#' + hx, c.a);
       cpPreview(c);
     };
     const at = (ev) => {
@@ -2134,6 +2150,14 @@
   let downInFpop = false;
   document.addEventListener('pointerdown', (e) => { downInFpop = !!e.target.closest?.('#fpop,#fpop2'); }, true);
   // Naming a version: Escape or clicking away cancels.
+  // Tovi asked a question: 1, 2 or 3 picks an answer (when you're not typing).
+  document.addEventListener('keydown', (e) => {
+    if (!/^[1-3]$/.test(e.key) || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.target.closest?.('input,textarea,select,[contenteditable]')) return;
+    const m = [...S.chat].reverse().find((x) => x.role === 'kerf');
+    if (m?.status !== 'ask' || m.picked != null || !m.proposal.ask.options[+e.key - 1]) return;
+    e.preventDefault();
+    askPick(m, +e.key - 1);
+  });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest?.('.vName')) { e.stopPropagation(); S.vNaming = null; renderPanel(); } }, true);
   document.addEventListener('focusout', (e) => { if (e.target.closest?.('.vName') && S.vNaming != null) setTimeout(() => { if (!document.activeElement?.closest('.vName')) { S.vNaming = null; renderPanel(); } }, 120); });
   document.addEventListener('submit', (e) => {
@@ -2488,6 +2512,7 @@
     for (const m of S.chat) {
       if (m.role === 'user') h.push({ role: 'user', text: m.text });
       else if (m.error) h.push({ role: 'assistant', text: `(error) ${m.error}` });
+      else if (m.proposal?.ask) h.push({ role: 'assistant', text: `${m.proposal.message}\nAsked: ${m.proposal.ask.question} Options: ${m.proposal.ask.options.join(' / ')}` });
       else if (m.proposal) h.push({ role: 'assistant', text: `${m.proposal.message}\nProposed: ${m.proposal.edits.map((e) => `${e.tag} ${editLabel(e)}`).join('; ') || 'no edits'}\nStatus: ${m.status}` });
     }
     return h.filter((x, i) => !(i > 0 && h[i - 1].role === x.role));
@@ -2823,7 +2848,7 @@
       m.proposal = await api('/ai', { request: opts.review ? opts.review : text, light: !!opts.review, fast: !opts.review, targets, history, screen, focus, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
-      if (!m.proposal.edits.length) m.status = 'info';
+      if (!m.proposal.edits.length) m.status = m.proposal.ask ? 'ask' : 'info';
     } catch (e) { m.error = e.message; }
     m.busy = false;
     m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
@@ -2950,7 +2975,13 @@
         ${open ? `<div class="tkB">${g.info?.summary ? `<p>${esc(g.info.summary)}</p>` : ''}${g.eds.length ? `<div class="ngE">${g.eds.map(rowFor(m)).join('')}</div>` : ''}</div>` : ''}</div>`;
     }).join('') + (groups.length > 3 ? `<button class="tkMore" data-act2="ngMore" data-i="${i}">${m.allRows ? 'Show fewer' : `${more} more task${more === 1 ? '' : 's'}`}${ico(m.allRows ? 'chev' : 'chevR', 10)}</button>` : '');
   }
+  // Apply all, as a list that ticks off: each task shimmers while Tovi works on it, then gets a tick.
+  function stepListHTML(m) {
+    const st = m.steps, done = st.filter((x) => x.state !== 'wait' && x.state !== 'run').length, left = st.length - done;
+    return `<div class="aSteps"><div class="aStH"><i class="aRing" style="--p:${st.length ? done / st.length : 0}"></i><b>${left ? `${left} of ${st.length} left` : 'Finishing up'}</b><span class="aSec" data-secs="${m.started}">${Math.max(0, Math.round((Date.now() - m.started) / 1000))}s</span></div>${st.map((x) => `<div class="aSt ${x.state}"><i>${x.state === 'done' ? ico('check', 12) : x.state === 'fail' ? ico('x', 12) : ''}</i><span>${esc(x.title)}</span></div>`).join('')}</div>`;
+  }
   function kerfHTML(m, i) {
+    if (m.busy && m.steps) return `<div class="prop">${stepListHTML(m)}</div>`;
     if (m.busy && m.helpers) return `<div class="prop"><div class="crewRow">${avatar(AGENTS[0])}<span>Tovi is working on ${m.helpers.length === 1 ? 'the task' : `${m.helpers.length} tasks`}</span></div><div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
     if (m.busy) return `<div class="prop">${stepsHTML(m, true)}${live() ? `<div class="crewRow">${avatar(AGENTS[0])}<span>Tovi is looking it over</span></div>` : ''}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
     if (m.error) return `<div class="prop err">${stepsHTML(m)}<span class="note warn">${esc(m.error)}</span></div>`;
@@ -2964,7 +2995,7 @@
     // Explore is a try-on: keep it, undo it, or turn it into the design system.
     const keep = p.mode === 'explore' && m.status === 'applied' ? (m.kept ? `<div class="kSuggest"><span>Kept. Want it everywhere?</span><button data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>` : `<div class="tryOn"><span>Trying this look on your screen.</span><div class="acts"><button class="ghostBtn" data-act2="tryUndo" data-i="${i}">Undo</button><button class="primary applyBtn" data-act2="tryKeep" data-i="${i}">Keep it</button></div><button class="linkBtn" data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>`) : '';
     const head = m.applying ? `Applying ${n} change${n === 1 ? '' : 's'}…` : m.status === 'applied' ? `Applied ${m.appliedN ?? n} of ${p.edits.length}` : `${p.edits.length} proposed change${p.edits.length === 1 ? '' : 's'}`;
-    return `<div class="prop${byNote ? ' byNote' : ''}">${stepsHTML(m)}${badge ? `<span class="badge">${badge}</span>` : ''}<p class="kText">${esc(cleanMsg(p.message))}</p>
+    return `<div class="prop${byNote ? ' byNote' : ''}">${stepsHTML(m)}${badge ? `<span class="badge">${badge}</span>` : ''}${p.ask ? askHTML(m, i) : `<p class="kText">${esc(cleanMsg(p.message))}</p>`}
       ${m.talk?.length ? `<div class="talk">${m.talk.map((t) => `<div>${avatar(agentNamed(t.agent))}<b>${esc(t.agent)}</b><span>${esc(t.text)}</span></div>`).join('')}</div>` : ''}
       ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' && m.where === 'notes' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
       ${suggest}${keep}
@@ -2972,6 +3003,16 @@
       ${(() => { const need = m.status === 'pending' && !m.applying ? p.edits.filter((e) => e.structure?.type === 'imageAsk').length : 0; if (!need) return ''; const kind = p.edits.find((e) => e.structure?.type === 'imageAsk').structure.kind === 'photo' ? 'photo' : 'illustration'; return `<div class="pickBar"><span>${ico('image', 14)}Choose ${need === 1 ? `the ${kind}` : `${need} ${kind}s`} to finish</span><button class="primary applyBtn" data-act2="pickAll" data-i="${i}">Choose ${need === 1 ? kind : `${kind}s`}</button></div>`; })()}
       ${m.status === 'pending' && p.edits.length && !m.applying && !p.edits.some((e) => e.structure?.type === 'imageAsk') ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.status === 'applied' && !p.mode?.startsWith('explore') ? '' : status}</div>`;
   }
+  // When a request is wide open, Tovi asks one question with a few directions (press 1–3) instead of guessing.
+  function askHTML(m, i) {
+    const a = m.proposal.ask, done = m.picked != null;
+    return `<div class="kAsk"><p class="kText">${esc(a.question)}</p><div class="kOpts">${a.options.map((o, k) => `<button class="kOpt${m.picked === k ? ' on' : ''}" data-act2="askPick" data-i="${i}" data-v="${k}"${done ? ' disabled' : ''}><kbd>${k + 1}</kbd><span>${esc(o)}</span>${m.picked === k ? ico('check', 12) : ''}</button>`).join('')}</div>${done ? '' : '<span class="note">Or type your own answer.</span>'}</div>`;
+  }
+  const askPick = (m, k) => {
+    if (!m?.proposal?.ask || m.picked != null || S.card?.busy) return;
+    m.picked = k;
+    runAI(m.proposal.ask.options[k], m.targets?.length ? m.targets : S.sel ? selectionTargets() : visibleTargets(), m.where, null, true);
+  };
   // "Looked at 14 elements · Thought for 9s", which opens to show what Tovi read.
   function stepsHTML(m, live) {
     const n = m.lookedN || m.looked?.length || 0;
@@ -2985,7 +3026,12 @@
     return `${t < 60 ? `${t}s` : `${Math.floor(t / 60)}m ${t % 60}s`} · ${t < 2 ? 'Reading the screen' : 'Thinking'}`;
   };
   // Tick the live timers without re-drawing the conversation.
-  setInterval(() => document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = liveText(+el.dataset.since); }), 1000);
+  setInterval(() => {
+    document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = liveText(+el.dataset.since); });
+    document.querySelectorAll('[data-secs]').forEach((el) => { el.textContent = `${Math.max(0, Math.round((Date.now() - +el.dataset.secs) / 1000))}s`; });
+  }, 1000);
+  // While Tovi works, a soft pink light circles the rim of the message box (fades in and out, never switches).
+  setInterval(() => document.body.classList.toggle('aiWorking', S.chat.some((m) => m.busy)), 200);
   /* Tovi's floating card: drag it by its header, or collapse it to a slim bar so the page stays visible */
   S.cardPos = {};
   S.cardMin = false;
@@ -3041,9 +3087,9 @@
   }
   function chatHTML() {
     const ctx = S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen';
-    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}${m.checkLabel || 'Second look'}</div>` : ''}${kerfHTML(m, i)}${m.progress ? `<div class="diagProg"><span>${esc(m.progress)}</span>${m.noStop ? '' : '<button class="ghostBtn" data-act="diagStop">Stop</button>'}</div>` : ''}${!m.busy && m.pages?.length ? `<div class="diagPages">${m.pages.map((x) => `<button data-act="goPage" data-v="${esc(x.path)}"${x.path === S.path ? ' class="on"' : ''}><span>${esc(x.name)}</span><b>${x.error ? 'Couldn’t review' : x.n ? `${x.n} note${x.n === 1 ? '' : 's'}` : 'Looks good'}</b></button>`).join('')}</div>` : ''}</div>`)).join('');
+    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}${m.checkLabel || 'Second look'}</div>` : ''}${kerfHTML(m, i)}${m.progress && !(m.busy && m.steps) ? `<div class="diagProg"><span>${esc(m.progress)}</span>${m.noStop ? '' : '<button class="ghostBtn" data-act="diagStop">Stop</button>'}</div>` : ''}${!m.busy && m.pages?.length ? `<div class="diagPages">${m.pages.map((x) => `<button data-act="goPage" data-v="${esc(x.path)}"${x.path === S.path ? ' class="on"' : ''}><span>${esc(x.name)}</span><b>${x.error ? 'Couldn’t review' : x.n ? `${x.n} note${x.n === 1 ? '' : 's'}` : 'Looks good'}</b></button>`).join('')}</div>` : ''}</div>`)).join('');
     return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><img class="ceAvatar" src="${TOVI_PIC}" alt=""><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
-      <div class="comp">${tasksShown() ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
+      <div class="comp">${tasksShown() && !(S.card?.busy && S.card.steps) ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
   }
   function sendChat() {
     take('chatIn', (v, atts) => runAI(v, S.sel ? selectionTargets() : visibleTargets(), 'chat', null, false, atts));
@@ -3125,7 +3171,35 @@
     }
     reKC(id);
   }
-  function stopMic() { if (!mic) return; const r = mic.r; mic = null; try { r.stop(); } catch {} markMic(); }
+  function stopMic() { if (!mic) return; const r = mic.r; mic = null; try { r.stop(); } catch {} micLevel(false); markMic(); }
+  // While dictating, the mic's halo follows your voice (louder, wider), so you can see Tovi is hearing you.
+  let lvl = null;
+  async function micLevel(on) {
+    if (lvl) { cancelAnimationFrame(lvl.raf); lvl.stream?.getTracks().forEach((t) => t.stop()); lvl.ctx?.close().catch(() => {}); lvl = null; document.querySelectorAll('.kcB.mic').forEach((b) => b.style.removeProperty('--lv')); }
+    if (!on || !navigator.mediaDevices?.getUserMedia) return;
+    const me = (lvl = {});
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (lvl !== me) { stream.getTracks().forEach((t) => t.stop()); return; }
+      const ctx = new AudioContext(), an = ctx.createAnalyser();
+      an.fftSize = 512;
+      ctx.createMediaStreamSource(stream).connect(an);
+      Object.assign(me, { stream, ctx });
+      const buf = new Uint8Array(an.fftSize);
+      let v = 0;
+      const tick = () => {
+        an.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (const x of buf) sum += ((x - 128) / 128) ** 2;
+        // Rise fast, fall slowly, so the halo breathes instead of flickering.
+        const now = Math.min(1, Math.sqrt(sum / buf.length) * 5);
+        v = now > v ? v + (now - v) * 0.5 : v + (now - v) * 0.12;
+        document.querySelectorAll('.kcB.mic.rec').forEach((b) => b.style.setProperty('--lv', v.toFixed(3)));
+        me.raf = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch { /* no level meter; dictation still works */ }
+  }
   const markMic = () => document.querySelectorAll('[data-act2="mic"]').forEach((b) => { const on = mic?.id === b.dataset.id; b.classList.toggle('rec', on); b.title = on ? 'Stop dictation' : 'Dictate, in any language'; });
   function toggleMic(id) {
     const same = mic?.id === id;
@@ -3138,8 +3212,13 @@
     const t = $(id), base = t && t.value.trim() ? t.value.replace(/\s*$/, ' ') : '';
     mic = { id, r };
     r.onresult = (e) => {
+      // Chrome sometimes resends a phrase it already gave (or the whole text so far): keep each part once.
       let said = '';
-      for (const x of e.results) said += x[0].transcript;
+      for (const x of e.results) {
+        const s = x[0].transcript.trim(), lo = s.toLowerCase(), had = said.toLowerCase();
+        if (!s || (lo.includes(' ') && had.endsWith(lo))) continue;
+        said = had && lo.startsWith(had) ? s : said ? `${said} ${s}` : s;
+      }
       const el = $(id);
       if (el) { el.value = base + said.trimStart(); S.drafts[id] = el.value; syncKC(id); }
     };
@@ -3147,8 +3226,8 @@
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('The microphone is blocked. Allow it for this site in your browser, then try again.', '', true);
       else if (e.error !== 'no-speech' && e.error !== 'aborted') toast('Dictation stopped', e.error, true);
     };
-    r.onend = () => { if (mic?.r === r) { mic = null; markMic(); } };
-    try { r.start(); } catch { mic = null; }
+    r.onend = () => { if (mic?.r === r) { mic = null; micLevel(false); markMic(); } };
+    try { r.start(); micLevel(true); } catch { mic = null; }
     markMic();
     t?.focus();
   }
@@ -3204,6 +3283,7 @@
   // Compact, like Figma: one line per task, a chevron for the details, one footer with the actions.
   function tasksHTML(busy) {
     const n = S.notes.length;
+    if (busy && S.card?.steps) return `<div class="tasks">${stepListHTML(S.card)}</div>`;
     return `<div class="tasks">
       <div class="tkList">${S.notes.map((x, i) => { if (i >= 3 && !S.tasksAll) return ''; const open = S.openTask.includes(i); return `<div class="tk ntRow${open ? ' open' : ''}" data-note="${i + 1}">
         <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${x.by === 'tovi' ? avatar(AGENTS[0]) : ico('task', 15)}<b>${x.by === 'tovi' ? `${i + 1} · ${esc(x.title || 'Tovi')}` : `Task ${i + 1}`}</b><span class="tkT">${esc(x.by === 'tovi' ? x.problem || x.text : x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
@@ -3266,6 +3346,8 @@
     const history = historyFor();
     S.chat.push({ role: 'user', text: notes.map((n, i) => `Note ${i + 1}: ${n.text}`).join('\n'), shown: notes.map((n, i) => `${i + 1}. ${n.text}`).join('\n'), ctx: `${notes.length} task${notes.length === 1 ? '' : 's'}`, where: 'notes', atts: [] });
     const m = { role: 'kerf', busy: true, status: 'pending', where: 'notes', targets: all, noteTexts: notes.map((n) => n.text), skip: [], started: Date.now(), looked: all.map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: all.length, helpers: notes.map((n, i) => ({ n: i + 1, name: helperFor(i + 1).name })) };
+    m.steps = notes.map((n) => ({ title: n.title || n.text, state: 'wait' }));
+    const stepTo = (k, state) => { m.steps[k].state = state; renderChat(); renderMarks(); };
     S.chat.push(m);
     S.card = m;
     notes.forEach((n, k) => workOn(n.locs?.length ? n.locs : per[k].slice(0, 3).map((t) => t.loc), `Note ${k + 1}`));
@@ -3275,6 +3357,7 @@
     m.mode = S.modeOnce || S.styleMode;
     S.modeOnce = null;
     const run = async (k) => {
+      stepTo(k, 'run');
       if (!per[k].length) return { error: 'Nothing is under this mark any more (the page may have moved). Draw it again.' };
       const stop = () => {};
       const atts = (notes[k].atts || []).slice(0, 4);
@@ -3295,11 +3378,13 @@
     m.noStop = true;
     const land = (k) => {
       const es = (out[k]?.p?.edits || []).filter((e) => e.structure?.type !== 'imageAsk').map((e) => (e.structure ? { ...e, note: k + 1 } : { ...e, note: k + 1, bp: bpParam() }));
-      if (!es.length) { landed++; return; }
+      if (!es.length) { landed++; stepTo(k, out[k]?.error ? 'fail' : 'skip'); return; }
       saving = saving.then(async () => {
         const r = await applyLive(m, es, batch).catch((e) => ({ error: e.message }));
         if (r.results) { results.push(...r.results); nNow = Math.max(nNow, r.n || nNow); S.count = nNow; afterEdit(); }
         landed++;
+        m.steps[k].state = r.error ? 'fail' : 'done';
+        renderMarks();
         m.progress = `Applied ${landed} of ${notes.length} note${notes.length === 1 ? '' : 's'}…`;
         renderChat();
       });
@@ -3410,6 +3495,7 @@
       if (act === 'askHint') runAI(v, visibleTargets(), 'ask');
       else if (act === 'chatHint') runAI(v, S.sel ? selectionTargets() : visibleTargets(), 'chat');
       else if (act === 'decide') decide(S.chat[+a.dataset.i], v);
+      else if (act === 'askPick') askPick(S.chat[+a.dataset.i], +v);
       else if (act === 'cardMin') { S.cardMin = !S.cardMin; renderAI(); }
       else if (act === 'closeCard') { S.cardMin = false; S.cardPos = {}; if (S.card?.previewing) { S.card.previewing = false; previewTokens(S.card, false); } if (S.card?.status === 'pending') S.card.status = 'discarded'; S.card = null; S.amber = []; renderAI(); }
       else if (act === 'modeMenu') { const r = a.getBoundingClientRect(); modeMenu({ x: r.left, y: r.top - 230 }); }
