@@ -809,7 +809,8 @@
         <button class="logoBtn" data-act="kerfMenu" title="Tovi menu" aria-label="Tovi menu" aria-haspopup="menu">${ico('kerf', 16)}${ico('chev', 10)}</button>
         <span class="crumbs"><span class="proj" title="${esc(p.repo || p.name || '')}">${esc(String(p.name || 'Tovi').split('/').pop())}</span><span class="sep">/</span><button class="pageBtn" data-act="pagesMenu" title="Pages" aria-haspopup="menu">${esc(pageName(S.path))}${ico('chev', 10)}</button></span>`;
     $('topC').innerHTML = '';
-    $('topR').innerHTML = `<button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
+    $('topR').innerHTML = `<button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
+        <button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
         <span class="sp"></span>
         <button class="meAv" data-act="meMenu" title="${esc(S.me?.name || 'You')}" aria-label="You: ${esc(S.me?.name || 'You')}" aria-haspopup="menu">${meAvatar()}</button>
         <button class="primary" data-act="pr" ${total ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>`;
@@ -856,7 +857,6 @@
       { label: 'Help', run: () => window.open('http://localhost:4100/#help', '_blank') },
       '-',
       { label: S.direction ? `Design direction: ${dirName()}` : 'Set a design direction…', run: () => openDirection() },
-      { label: 'Version history', icon: 'history', run: () => { S.side = 'history'; refreshVersions(); renderAll(); } },
       { label: S.minUI ? 'Show panels' : 'Hide panels', kbd: '⇧\\', run: () => toggleMinUI() },
       { label: 'Settings…', kbd: '⌘,', run: () => openSettings() },
       '-',
@@ -1105,7 +1105,6 @@
       <button class="tb${S.diagnosing ? ' busy' : ''}" data-act="diagnose" aria-label="Diagnose">${ico('diag', 24)}${S.notes.some((x) => x.by === 'tovi') ? '<i class="badgeDot tovi" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip(S.diagnosing ? 'Tovi is reviewing…' : 'Diagnose: find what to fix')}</button>
       <span class="div"></span>
       <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 24)}${tip('Undo', '⌘Z')}</button>
-      <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 24)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>
       <span class="div"></span>
       <button class="tb" data-act="present" aria-label="Present">${ico('play', 24)}${tip('Present the app')}</button>`;
     const h = $('hint');
