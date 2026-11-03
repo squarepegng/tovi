@@ -1579,3 +1579,15 @@ aside.side.r{border-left-color:var(--chromeLine)}
 #panel .inp.sized{box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
 #panel .inp.sized::after{top:3px;right:3px;width:4px;height:4px;background:var(--ink3)}
 :root[data-theme="light"] #panel .inp.sized{box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}
+
+/* Image: one compact row like Figma and Paper (thumbnail, what it is, Replace ▾). */
+#panel .imgRow{display:flex;align-items:center;gap:10px;min-width:0}
+#panel .imgThumb{flex:0 0 auto;width:40px;height:40px;padding:0;border:0;border-radius:6px;overflow:hidden;background:repeating-conic-gradient(rgba(var(--hi),.08) 0 25%,transparent 0 50%) 0 0/8px 8px;box-shadow:inset 0 0 0 .5px rgba(var(--hi),.12);cursor:pointer}
+#panel .imgThumb img{width:100%;height:100%;object-fit:cover;display:block}
+#panel .imgMeta{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+#panel .imgMeta b{font-weight:500;font-size:12px;line-height:16px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#panel .imgMeta small{font-size:11px;line-height:14px;color:var(--ink3)}
+#panel .repBtn{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px 0 10px;border:0;border-radius:6px;background:rgba(var(--hi),.055);color:var(--ink);font:400 12px/1 var(--ui);cursor:pointer;box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+#panel .repBtn svg{color:var(--ink3)}
+#panel .repBtn:hover{background:rgba(var(--hi),.08)}
+:root[data-theme="light"] #panel .repBtn{background:#F9F9F9;box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}
