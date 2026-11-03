@@ -1588,3 +1588,12 @@ aside.side.r{border-left-color:var(--chromeLine)}
 #panel .m9 .mx.on i{background:var(--select)}
 #panel .togs .ib{flex:1}
 #panel .inp.area textarea{overflow-wrap:anywhere;scrollbar-width:thin}
+/* Toggle groups, matched to Paper's .toggle-group: flat 5% track with no
+   depth (only the chosen item is raised), unchosen icons at 40% (Paper's
+   gray-4 at 80%), chosen icons at 90%, soft superellipse corners. */
+#panel .ibs,#panel .seg{corner-shape:superellipse(1.3);margin-inline:-.5px}
+#panel .ibs .ib,#panel .seg button{corner-shape:superellipse(1.3)}
+:root:not([data-theme="light"]) #panel .ibs .ib:not(.on){color:rgba(255,255,255,.4)}
+:root:not([data-theme="light"]) #panel .ibs .ib:not(.on):hover{color:rgba(255,255,255,.7)}
+:root[data-theme="light"] #panel .ibs .ib:not(.on){color:rgba(0,0,0,.34)}
+@media (prefers-color-scheme: light){:root[data-theme="system"] #panel .ibs .ib:not(.on){color:rgba(0,0,0,.34)}}
