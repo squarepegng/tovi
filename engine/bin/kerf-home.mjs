@@ -156,9 +156,9 @@ const PAGE = `<!doctype html>
 <title>Tovi</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono&display=swap">
 <style>
-:root{--canvas:#1B1B1E;--panel:#232327;--raised:#2D2D32;--line:#3A3A40;--ink:#EDEDF0;--ink2:#B0B0BA;--ink3:#8B8B95;--select:#F2F1EE;--onSelect:#111113;--logoA:#E9A3C6;--logoB:#FCBDDD;--intent:#FCBDDD;--danger:#F06A5F;--ok:#6FD39A;--hi:255,255,255;--menu:#1E1E21;color-scheme:dark}
-@media (prefers-color-scheme: light){:root[data-theme="system"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#1B1B1E;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}}
-:root[data-theme="light"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#1B1B1E;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}
+:root{--canvas:#1C1C1C;--panel:#242424;--raised:#2F2F2F;--line:#3C3C3C;--ink:#EEEEEE;--ink2:#B3B3B3;--ink3:#8E8E8E;--select:#F2F1EE;--onSelect:#121212;--logoA:#E9A3C6;--logoB:#FCBDDD;--intent:#FCBDDD;--danger:#F06A5F;--ok:#6FD39A;--hi:255,255,255;--menu:#1F1F1F;color-scheme:dark}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--canvas:#F5F5F5;--panel:#FFFFFF;--raised:#EFEFEF;--line:#E4E4E4;--ink:#1C1C1C;--ink2:#585858;--ink3:#868686;--select:#1C1C1C;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}}
+:root[data-theme="light"]{--canvas:#F5F5F5;--panel:#FFFFFF;--raised:#EFEFEF;--line:#E4E4E4;--ink:#1C1C1C;--ink2:#585858;--ink3:#868686;--select:#1C1C1C;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--intent:#C2508A;--danger:#D93F33;--ok:#1E8A4F;--hi:0,0,0;--menu:#FAFAFB;color-scheme:light}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0;min-height:100%;background:var(--canvas);color:var(--ink);font:400 13px/18px -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif;-webkit-font-smoothing:antialiased}
@@ -226,7 +226,7 @@ table.keys td:last-child{text-align:right}
 kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;background:var(--raised);color:var(--ink);font:500 11px/16px -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif;text-align:center}
 /* Start page. Sidebar like Paper (you at the top, search, sections, a small card, links at the bottom);
    project cards like Figma (a framed preview, then name and time); opening a project is a dialog. */
-:root{--side:#141416}:root[data-theme="light"]{--side:#FAFAFB}
+:root{--side:#151515}:root[data-theme="light"]{--side:#FAFAFB}
 @media (prefers-color-scheme: light){:root[data-theme="system"]{--side:#FAFAFB}}
 .app{grid-template-columns:248px minmax(0,1fr)}
 nav{background:var(--side);border-right:1px solid rgba(var(--hi),.06);padding:12px 10px 14px;gap:1px}
@@ -236,7 +236,7 @@ nav a:hover:not(.on){background:rgba(var(--hi),.04);color:var(--ink)}
 .me{width:100%;height:36px;margin-bottom:6px;padding:0 8px;border:0;background:transparent;color:var(--ink);font:600 13.5px -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif;justify-content:flex-start;cursor:pointer}
 .me:hover{background:rgba(var(--hi),.05)}
 .me svg{color:var(--ink3);margin-left:-4px}
-.av{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,var(--logoA),var(--logoB));color:#111113;font:600 11px/1 -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif}
+.av{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,var(--logoA),var(--logoB));color:#121212;font:600 11px/1 -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif}
 .av img{width:100%;height:100%;object-fit:cover}
 .nsearch{display:flex;align-items:center;gap:8px;height:32px;margin:0 0 10px;padding:0 6px 0 10px;border-radius:8px;background:rgba(var(--hi),.06);color:var(--ink3)}
 .nsearch input{height:30px;padding:0;border:0;background:none;border-radius:0;font-size:13px;color:var(--ink)}
@@ -264,12 +264,12 @@ main{padding:28px 40px 72px;max-width:1280px}
 .phead{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:36px}
 .phead h1{font-size:22px;line-height:28px;font-weight:600;letter-spacing:-.015em}
 .pact{display:flex;align-items:center;gap:10px}
-.pri{height:32px;padding:0 13px 0 11px;border-radius:9px;background:linear-gradient(180deg,#fff,#E7E6E2);color:#111113;font-weight:500;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.4)}
-:root[data-theme="light"] .pri{background:linear-gradient(180deg,#2A2A2F,#141416);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 1px 2px rgba(0,0,0,.25)}
+.pri{height:32px;padding:0 13px 0 11px;border-radius:9px;background:linear-gradient(180deg,#fff,#E7E6E2);color:#121212;font-weight:500;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.4)}
+:root[data-theme="light"] .pri{background:linear-gradient(180deg,#2C2C2C,#151515);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 1px 2px rgba(0,0,0,.25)}
 .pri:active{scale:.97}
 .seg{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:rgba(var(--hi),.05);box-shadow:inset 0 1px 2px rgba(0,0,0,.25)}
 .seg button{height:28px;padding:0 10px;border-radius:7px;background:transparent;color:var(--ink2);font:500 12.5px/1 -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif}
-.seg button.on{background:#3A3A41;color:var(--ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.45)}
+.seg button.on{background:#3C3C3C;color:var(--ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.45)}
 :root[data-theme="light"] .seg{box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
 :root[data-theme="light"] .seg button.on{background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.1)}
 .seg.vt button{width:30px;padding:0;color:var(--ink3)}
@@ -299,8 +299,8 @@ main{padding:28px 40px 72px;max-width:1280px}
 .empty{padding:64px 24px;border:0;text-align:center;color:var(--ink3)}
 .empty b{display:block;margin-bottom:6px;color:var(--ink);font-size:15px;font-weight:600}
 .empty .pri{margin-top:18px}
-.scrim{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:20px;background:rgba(10,10,12,.6)}
-:root[data-theme="light"] .scrim{background:rgba(20,20,24,.28)}
+.scrim{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:20px;background:rgba(11,11,11,.6)}
+:root[data-theme="light"] .scrim{background:rgba(21,21,21,.28)}
 .dlg{width:min(520px,100%);display:flex;flex-direction:column;border-radius:16px;background:var(--panel);box-shadow:0 0 0 1px rgba(var(--hi),.08),0 24px 64px rgba(0,0,0,.5);animation:pin .2s cubic-bezier(.2,0,0,1)}
 .dlg .dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:20px 20px 4px}
 .dlg .dh h2{font-size:16px;line-height:22px;font-weight:600}

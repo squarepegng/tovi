@@ -80,19 +80,21 @@ One dark theme for now (light theme and core components still to do).
 
 | Token | Value |
 |---|---|
-| canvas | #1B1B1E |
-| panel | #232327 |
-| raised | #2D2D32 |
-| line | #3A3A40 |
-| ink | #EDEDF0 |
-| ink-2 | #B0B0BA |
-| ink-3 | #8B8B95 |
-| brand / action (`--select`) | ivory #F2F1EE in dark (text on it #111113), near-black #1B1B1E in light |
+| canvas | #1C1C1C |
+| panel | #242424 |
+| raised | #2F2F2F |
+| line | #3C3C3C |
+| ink | #EEEEEE |
+| ink-2 | #B3B3B3 |
+| ink-3 | #8E8E8E |
+| brand / action (`--select`) | ivory #F2F1EE in dark (text on it #121212), near-black #1C1C1C in light |
 | selection (blue, `--sel`) | #2B66D9 |
 | Tovi pink (brand, `--intent`) | #FCBDDD (light theme #C2508A); logo two-tone #E9A3C6 + #FCBDDD |
 | danger | #F06A5F |
 
-**Core colour rule (changed November 2026): Tovi pink is the brand** (the logo, Tovi's cursor and name tag, guides, rule prompts, change markers, AI proposals). Purple is gone (it read too close to Wonder). **Buttons and active states are ivory** in the dark theme and near-black in the light theme (Hand off, active tool, toggles). **Blue means "what you're touching" on the canvas** (selection outlines, handles, drop line, the Layers highlight), like Figma. In dark theme the top bar and side panels sit darker than the canvas (#111113), Framer-style. Icons are Lucide (1.25px lines at any size) plus a few of Tovi's own field icons. Light and dark themes both exist; dark is the default.
+All greys are neutral (equal red, green and blue). The old greys had a slight blue cast; don't reintroduce tinted greys.
+
+**Core colour rule (changed November 2026): Tovi pink is the brand** (the logo, Tovi's cursor and name tag, guides, rule prompts, change markers, AI proposals). Purple is gone (it read too close to Wonder). **Buttons and active states are ivory** in the dark theme and near-black in the light theme (Hand off, active tool, toggles). **Blue means "what you're touching" on the canvas** (selection outlines, handles, drop line, the Layers highlight), like Figma. In dark theme the top bar and side panels sit darker than the canvas (#121212), Framer-style. Icons are Lucide (1.25px lines at any size) plus a few of Tovi's own field icons. Light and dark themes both exist; dark is the default.
 
 Type: the Mac system font (SF Pro, like Paper) for the interface, set once as `--ui` in editor.css with Geist as the fallback (12px is the workhorse size); Geist Mono for code paths. Panel fields and toggles follow Paper's exact control style (24px, 6px corners, flat 5% track, soft raised chosen item). Spacing: 4 / 8 / 12 / 16. Radii: 4 / 6 / 10.
 

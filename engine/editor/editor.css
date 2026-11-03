@@ -1,9 +1,9 @@
 /* Interface font: the Mac's own (SF Pro), like Paper; Geist where there is no system font. Change it here only. */
 :root{--ui:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,Geist,sans-serif}
-:root{--canvas:#1B1B1E;--panel:#232327;--raised:#2D2D32;--line:#3A3A40;--ink:#EDEDF0;--ink2:#B0B0BA;--ink3:#8B8B95;--select:#F2F1EE;--onSelect:#111113;--logoA:#E9A3C6;--logoB:#FCBDDD;--sel:#2B66D9;--intent:#FCBDDD;--danger:#F06A5F;--hi:255,255,255;--menu:#1E1E21;--deep:#141416;--blueTx:#9DBBF5;--amberTx:#FCBDDD;--purpleTx:#B693FF;--greenTx:#7FD3A2;--redTx:#F3A39B;color-scheme:dark}
+:root{--canvas:#1C1C1C;--panel:#242424;--raised:#2F2F2F;--line:#3C3C3C;--ink:#EEEEEE;--ink2:#B3B3B3;--ink3:#8E8E8E;--select:#F2F1EE;--onSelect:#121212;--logoA:#E9A3C6;--logoB:#FCBDDD;--sel:#2B66D9;--intent:#FCBDDD;--danger:#F06A5F;--hi:255,255,255;--menu:#1F1F1F;--deep:#151515;--blueTx:#9DBBF5;--amberTx:#FCBDDD;--purpleTx:#B693FF;--greenTx:#7FD3A2;--redTx:#F3A39B;color-scheme:dark}
 /* Dark is the default. Light when Settings picks it, or when it picks System and the Mac is light. */
-@media (prefers-color-scheme: light){:root[data-theme="system"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#1B1B1E;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--sel:#2B66D9;--intent:#C2508A;--danger:#D93F33;--hi:0,0,0;--menu:#FFFFFF;--deep:#E6E6EA;--blueTx:#2459C4;--amberTx:#B33F7B;--purpleTx:#6E3FD6;--greenTx:#1E8A4F;--redTx:#C23A2E;color-scheme:light}}
-:root[data-theme="light"]{--canvas:#F4F4F6;--panel:#FFFFFF;--raised:#EEEEF1;--line:#E2E2E7;--ink:#1B1B1E;--ink2:#55555F;--ink3:#83838D;--select:#1B1B1E;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--sel:#2B66D9;--intent:#C2508A;--danger:#D93F33;--hi:0,0,0;--menu:#FFFFFF;--deep:#E6E6EA;--blueTx:#2459C4;--amberTx:#B33F7B;--purpleTx:#6E3FD6;--greenTx:#1E8A4F;--redTx:#C23A2E;color-scheme:light}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--canvas:#F5F5F5;--panel:#FFFFFF;--raised:#EFEFEF;--line:#E4E4E4;--ink:#1C1C1C;--ink2:#585858;--ink3:#868686;--select:#1C1C1C;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--sel:#2B66D9;--intent:#C2508A;--danger:#D93F33;--hi:0,0,0;--menu:#FFFFFF;--deep:#E7E7E7;--blueTx:#2459C4;--amberTx:#B33F7B;--purpleTx:#6E3FD6;--greenTx:#1E8A4F;--redTx:#C23A2E;color-scheme:light}}
+:root[data-theme="light"]{--canvas:#F5F5F5;--panel:#FFFFFF;--raised:#EFEFEF;--line:#E4E4E4;--ink:#1C1C1C;--ink2:#585858;--ink3:#868686;--select:#1C1C1C;--onSelect:#FFFFFF;--logoA:#C2508A;--logoB:#E58BB8;--sel:#2B66D9;--intent:#C2508A;--danger:#D93F33;--hi:0,0,0;--menu:#FFFFFF;--deep:#E7E7E7;--blueTx:#2459C4;--amberTx:#B33F7B;--purpleTx:#6E3FD6;--greenTx:#1E8A4F;--redTx:#C23A2E;color-scheme:light}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--canvas);color:var(--ink);font:400 12px/16px var(--ui);-webkit-font-smoothing:antialiased;overflow:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -72,7 +72,7 @@ aside[hidden]{display:none!important}
 .tb[disabled]{opacity:.35;cursor:default}
 .tb.sm{width:30px;height:32px}
 .tip{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:var(--ink);color:var(--canvas);font:500 12px/16px var(--ui);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity var(--t-fast)}
-.tip .k{color:#55555D;margin-left:6px;font:400 11px/16px 'Geist Mono',ui-monospace,monospace}
+.tip .k{color:#585858;margin-left:6px;font:400 11px/16px 'Geist Mono',ui-monospace,monospace}
 .tb:hover .tip,.tb:focus-visible .tip{opacity:1}
 .div{width:1px;height:28px;margin:0 6px;background:var(--line)}
 .shapes{display:flex;gap:2px;padding:2px;margin-left:2px;background:var(--canvas);border-radius:10px}
@@ -207,7 +207,7 @@ aside[hidden]{display:none!important}
 .pop{position:absolute;left:50%;bottom:84px;transform:translateX(-50%);width:420px;max-width:calc(100% - 32px);max-height:50%;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.35);z-index:26}
 .chg{display:flex;flex-direction:column;gap:2px;padding:6px 0;border-top:1px solid var(--line)}
 .chg span:last-child{color:var(--ink2);font:400 11px/16px 'Geist Mono',ui-monospace,monospace}
-.scrim{position:fixed;inset:0;display:grid;place-items:center;background:rgba(12,12,14,.62);padding:24px;z-index:50}
+.scrim{position:fixed;inset:0;display:grid;place-items:center;background:rgba(13,13,13,.62);padding:24px;z-index:50}
 .dialog{width:520px;max-width:100%;max-height:100%;overflow:auto;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:12px}
 .dialog .dh{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:16px 16px 12px}
 .dialog h2{margin:0;font-size:18px;line-height:24px;font-weight:600;letter-spacing:-.01em}
@@ -215,7 +215,7 @@ aside[hidden]{display:none!important}
 .dialog label{display:flex;flex-direction:column;gap:6px}
 .dialog .fld{padding:8px 10px;background:var(--raised);border:1px solid transparent;border-radius:6px;outline:none;line-height:18px;resize:none;color:var(--ink)}
 .dialog .fld:focus{border-color:var(--select)}
-.dialog .df{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:#1F1F23}
+.dialog .df{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:#202020}
 .files{border:1px solid var(--line);border-radius:8px}
 .files .fh{display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:500}
 .files .fr{display:flex;align-items:center;gap:8px;padding:6px 10px}
@@ -549,7 +549,7 @@ body.minUI #layers,body.minUI #panel{display:none!important}
 .mk{flex:0 0 auto;display:grid;place-items:center;width:16px;height:16px;margin-top:1px;border-radius:50%;font-style:normal;font-size:12px;line-height:1}
 .mk.todo{border:1.5px solid rgba(var(--hi),.28)}
 .mk.run{border:1.5px solid rgba(var(--hi),.15);border-top-color:var(--ink);animation:kspin .8s linear infinite}
-.mk.ok{background:#D9D9DE;color:#141416}
+.mk.ok{background:#DBDBDB;color:#151515}
 .mk.bad{background:rgba(240,106,95,.18);color:var(--danger)}
 .mk.skip{border:1.5px dashed rgba(var(--hi),.2)}
 .ed.skip .edB{opacity:.45}
@@ -854,10 +854,10 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .agent.on{opacity:1}
 .agent svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 .agLbl{position:absolute;left:14px;top:14px;display:inline-flex;align-items:center;gap:6px;}
-.agTag{display:inline-flex;align-items:center;padding:3px 9px;border-radius:4px;background:var(--ac);color:#1B1B1E;font:600 11px/16px var(--ui);white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25)}
-.agSay{position:absolute;left:14px;top:38px;max-width:240px;padding:6px 10px;border-radius:4px 12px 12px 12px;background:#1B1B1E;color:#EDEDF0;font:500 12px/16px var(--ui);box-shadow:0 0 0 1.5px var(--ac),0 6px 16px rgba(0,0,0,.3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:agPop .18s ease-out}
+.agTag{display:inline-flex;align-items:center;padding:3px 9px;border-radius:4px;background:var(--ac);color:#1C1C1C;font:600 11px/16px var(--ui);white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.agSay{position:absolute;left:14px;top:38px;max-width:240px;padding:6px 10px;border-radius:4px 12px 12px 12px;background:#1C1C1C;color:#EEEEEE;font:500 12px/16px var(--ui);box-shadow:0 0 0 1.5px var(--ac),0 6px 16px rgba(0,0,0,.3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:agPop .18s ease-out}
 @keyframes agPop{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
-.agAv{flex:0 0 auto;display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--ac);color:#1B1B1E;font:700 9px/1 var(--ui);font-style:normal;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55)}
+.agAv{flex:0 0 auto;display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--ac);color:#1C1C1C;font:700 9px/1 var(--ui);font-style:normal;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55)}
 .agTag .agAv{background:rgba(255,255,255,.85)}
 .agLbl .agAv.pic{width:22px;height:22px}
 @media (prefers-reduced-motion: reduce){.agent{transition:none}.agSay{animation:none}}
@@ -886,9 +886,9 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 .agBox{position:absolute;left:0;top:0;z-index:35;pointer-events:none;opacity:0;outline:calc(1.5px * var(--iz, 1)) dashed var(--ac);outline-offset:calc(2px * var(--iz, 1));border-radius:2px;transition:opacity var(--t-mod)}
 .agBox.on{opacity:.9}
 .agBox.edit{outline-style:solid;outline-width:calc(2px * var(--iz, 1));outline-offset:0;background:color-mix(in srgb, var(--ac) 7%, transparent)}
-.agBoxTag{position:absolute;left:calc(-2px * var(--iz, 1));top:0;transform:translateY(-100%) scale(var(--iz, 1));transform-origin:0 100%;padding:1px 6px;border-radius:3px 3px 0 0;background:var(--ac);color:#1B1B1E;font:600 10px/15px var(--ui);white-space:nowrap;opacity:0;transition:opacity var(--t-mod)}
+.agBoxTag{position:absolute;left:calc(-2px * var(--iz, 1));top:0;transform:translateY(-100%) scale(var(--iz, 1));transform-origin:0 100%;padding:1px 6px;border-radius:3px 3px 0 0;background:var(--ac);color:#1C1C1C;font:600 10px/15px var(--ui);white-space:nowrap;opacity:0;transition:opacity var(--t-mod)}
 .agBox.edit .agBoxTag{opacity:1}
-.agChip{position:absolute;left:0;top:0;z-index:41;pointer-events:none;transform-origin:0 0;opacity:0;max-width:280px;padding:4px 8px;border-radius:6px;background:#1B1B1E;color:#EDEDF0;border:1.5px solid var(--ac);font:500 11px/15px 'Geist Mono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 6px 16px rgba(0,0,0,.3);transition:opacity var(--t-mod)}
+.agChip{position:absolute;left:0;top:0;z-index:41;pointer-events:none;transform-origin:0 0;opacity:0;max-width:280px;padding:4px 8px;border-radius:6px;background:#1C1C1C;color:#EEEEEE;border:1.5px solid var(--ac);font:500 11px/15px 'Geist Mono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 6px 16px rgba(0,0,0,.3);transition:opacity var(--t-mod)}
 .agChip.on{opacity:1}
 @media (prefers-reduced-motion: reduce){.agent svg,.agBox,.agChip{transition:none}}
 .crewRow{display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:12px}
@@ -1164,7 +1164,7 @@ body[data-tool="interact"] #ov .box.hov{display:none!important}
 #panel .inp .u.step{flex-shrink:1;min-width:0;overflow:hidden;text-overflow:clip}
 /* Framer-style chrome (dark theme): the top bar and side panels sit darker than the canvas, so their
    fields and buttons stand out and the design in the middle gets the attention. Light theme unchanged. */
-:root{--chrome:#111113;--chromeLine:#232327;--field:rgba(255,255,255,.07)}
+:root{--chrome:#121212;--chromeLine:#242424;--field:rgba(255,255,255,.07)}
 :root[data-theme="light"]{--chrome:var(--panel);--chromeLine:var(--line);--field:rgba(0,0,0,.045)}
 @media (prefers-color-scheme: light){:root[data-theme="system"]{--chrome:var(--panel);--chromeLine:var(--line);--field:rgba(0,0,0,.045)}}
 #top,.side{background:var(--chrome)}
@@ -1183,7 +1183,7 @@ aside.side.r{border-left-color:var(--chromeLine)}
 /* Raised selected states, like Framer: a lighter fill, a hairline of light on the top edge, a hairline edge
    and a soft shadow underneath, so what's selected sits up off its track. Ivory buttons get the same depth. */
 :root{
-  --onFill:#3A3A41;
+  --onFill:#3C3C3C;
   --onEdge:inset 0 1px 0 rgba(255,255,255,.09),0 0 0 .5px rgba(0,0,0,.55),0 1px 2px rgba(0,0,0,.45),0 3px 8px -3px rgba(0,0,0,.5);
   --ivFill:linear-gradient(180deg,#FFFFFF,#E7E6E2);
   --ivEdge:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(0,0,0,.08),0 0 0 .5px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.45),0 3px 8px -3px rgba(0,0,0,.5);
@@ -1191,13 +1191,13 @@ aside.side.r{border-left-color:var(--chromeLine)}
 :root[data-theme="light"]{
   --onFill:#FFFFFF;
   --onEdge:0 0 0 .5px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.12),0 2px 6px -3px rgba(0,0,0,.15);
-  --ivFill:linear-gradient(180deg,#2E2E34,#151517);
+  --ivFill:linear-gradient(180deg,#303030,#161616);
   --ivEdge:inset 0 1px 0 rgba(255,255,255,.14),0 0 0 .5px rgba(0,0,0,.6),0 1px 2px rgba(0,0,0,.25),0 3px 8px -3px rgba(0,0,0,.3);
 }
 @media (prefers-color-scheme: light){:root[data-theme="system"]{
   --onFill:#FFFFFF;
   --onEdge:0 0 0 .5px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.12),0 2px 6px -3px rgba(0,0,0,.15);
-  --ivFill:linear-gradient(180deg,#2E2E34,#151517);
+  --ivFill:linear-gradient(180deg,#303030,#161616);
   --ivEdge:inset 0 1px 0 rgba(255,255,255,.14),0 0 0 .5px rgba(0,0,0,.6),0 1px 2px rgba(0,0,0,.25),0 3px 8px -3px rgba(0,0,0,.3);
 }}
 .seg button.on,.ib.on,.icon.on,.ptabs button.on,.bps button.on,.cpTabs button.on,.shIco.on,
@@ -1228,7 +1228,7 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .bar{background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,0) 60%),var(--raised);border-color:transparent;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 0 .5px rgba(0,0,0,.6),0 2px 4px rgba(0,0,0,.3),0 12px 32px rgba(0,0,0,.45)}
 .bar .modes{background:rgba(0,0,0,.28);box-shadow:inset 0 1px 2px rgba(0,0,0,.45),inset 0 0 0 .5px rgba(0,0,0,.35),0 1px 0 rgba(255,255,255,.05)}
 .bar .tb:not(.on):hover{background:rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
-:root[data-theme="light"] .bar{background:linear-gradient(180deg,#fff,#F6F6F8);box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 2px 4px rgba(0,0,0,.06),0 12px 32px rgba(0,0,0,.12)}
+:root[data-theme="light"] .bar{background:linear-gradient(180deg,#fff,#F7F7F7);box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 2px 4px rgba(0,0,0,.06),0 12px 32px rgba(0,0,0,.12)}
 :root[data-theme="light"] .bar .modes{background:rgba(0,0,0,.05);box-shadow:inset 0 1px 2px rgba(0,0,0,.1)}
 
 /* Chat: the selection chip is a quiet tag (no outline), and the composer sits on a soft shadow. */
@@ -1323,7 +1323,7 @@ aside.side.r{border-left-color:var(--chromeLine)}
 
 /* Dictating: the mic turns Tovi pink (Tovi is listening; red stays for errors). Its halo follows your voice
    (--lv, 0 to 1) and breathes slowly when you're quiet. */
-.kcB.rec{--lv:0;--mc:252,189,221;color:#111113;background:var(--intent);animation:micBreathe 2.4s ease-in-out infinite;box-shadow:0 0 0 calc(2px + var(--lv)*9px) rgba(var(--mc),calc(.3 - var(--lv)*.12)),0 0 calc(6px + var(--lv)*14px) rgba(var(--mc),calc(.16 + var(--lv)*.3));transition:box-shadow 60ms linear}
+.kcB.rec{--lv:0;--mc:252,189,221;color:#121212;background:var(--intent);animation:micBreathe 2.4s ease-in-out infinite;box-shadow:0 0 0 calc(2px + var(--lv)*9px) rgba(var(--mc),calc(.3 - var(--lv)*.12)),0 0 calc(6px + var(--lv)*14px) rgba(var(--mc),calc(.16 + var(--lv)*.3));transition:box-shadow 60ms linear}
 .kcB.rec svg{scale:calc(1 + var(--lv)*.12);transition:scale 60ms linear}
 @keyframes micBreathe{50%{filter:brightness(1.06)}}
 :root[data-theme="light"] .kcB.rec{--mc:194,80,138;color:#fff}
@@ -1353,7 +1353,7 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .inp .tg{font:500 12px/1 var(--ui)}
 
 /* You, top right next to Hand off (Figma, Paper). */
-.meAv{flex:0 0 auto;width:26px;height:26px;padding:0;margin:0 2px;border:0;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,var(--logoA),var(--logoB));color:#111113;font:600 11px/1 var(--ui);cursor:pointer;box-shadow:0 0 0 1px rgba(var(--hi),.1)}
+.meAv{flex:0 0 auto;width:26px;height:26px;padding:0;margin:0 2px;border:0;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,var(--logoA),var(--logoB));color:#121212;font:600 11px/1 var(--ui);cursor:pointer;box-shadow:0 0 0 1px rgba(var(--hi),.1)}
 .meAv img{width:100%;height:100%;object-fit:cover}
 .meAv:hover{box-shadow:0 0 0 2px rgba(var(--hi),.18)}
 .meAv:focus-visible{outline:none;box-shadow:0 0 0 2px var(--sel)}
@@ -1369,9 +1369,9 @@ aside.side.r{border-left-color:var(--chromeLine)}
 
 /* Lighter chrome (trial, dark theme): panels and the top bar at Paper's mid-grey so the raised fields read; the
    canvas stays darker behind them (like Figma and Paper). Menus and popovers step up one more so they still float. */
-:root:not([data-theme="light"]){--chrome:#2A2A2A;--chromeLine:#353538;--menu:#323235}
+:root:not([data-theme="light"]){--chrome:#2A2A2A;--chromeLine:#363636;--menu:#333333}
 @media (prefers-color-scheme: light){:root[data-theme="system"]{--chrome:var(--panel);--chromeLine:var(--line);--menu:#FFFFFF}}
-:root:not([data-theme="light"]) .side .bub,:root:not([data-theme="light"]) .side .kc{background:#343437}
+:root:not([data-theme="light"]) .side .bub,:root:not([data-theme="light"]) .side .kc{background:#353535}
 @media (prefers-color-scheme: light){:root[data-theme="system"] .side .bub,:root[data-theme="system"] .side .kc{background:var(--raised)}}
 
 /* Paper's exact controls (read from Paper's own CSS, dark theme). Fields: 24px tall, 6px corners, 12px text at 90%
@@ -1465,7 +1465,7 @@ aside.side.r{border-left-color:var(--chromeLine)}
 /* Light theme, after Paper's light mode: a light grey panel (#F2F2F2) with whiter fields on it (#F9F9F9) that sit
    slightly raised. Paper's dark halo reads heavy on light, so here the edge is a faint 8% hairline and a 1px soft drop; text black 80%, labels 40%; toggles a 5% black track with
    the chosen item in the field white. */
-:root[data-theme="light"]{--chrome:#F2F2F2;--chromeLine:#E4E4E6;--onFill:#F9F9F9;--onEdge:0 0 0 .5px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06)}
+:root[data-theme="light"]{--chrome:#F2F2F2;--chromeLine:#E5E5E5;--onFill:#F9F9F9;--onEdge:0 0 0 .5px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06)}
 :root[data-theme="light"] #panel .inp,:root[data-theme="light"] .scW{background:#F9F9F9;box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}
 :root[data-theme="light"] #panel .inp,:root[data-theme="light"] #panel .inp input,:root[data-theme="light"] #panel .inp select,:root[data-theme="light"] .scW{color:rgba(0,0,0,.8)}
 :root[data-theme="light"] #panel .inp .ic,:root[data-theme="light"] #panel .inp .tg,:root[data-theme="light"] #panel .inp .u,:root[data-theme="light"] .scW svg{color:rgba(0,0,0,.4);opacity:1}
@@ -1474,7 +1474,7 @@ aside.side.r{border-left-color:var(--chromeLine)}
 :root[data-theme="light"] #panel .seg button.on,:root[data-theme="light"] #panel .ibs .ib.on,:root[data-theme="light"] .ltabs .seg button.on,:root[data-theme="light"] .bps button.on{color:rgba(0,0,0,.85)}
 :root[data-theme="light"] .side .tasks,:root[data-theme="light"] .byNote .ngs,:root[data-theme="light"] .edits,:root[data-theme="light"] .pickBar,:root[data-theme="light"] .kSuggest,:root[data-theme="light"] .tryOn,:root[data-theme="light"] .kAlt,:root[data-theme="light"] .acts.tkFoot{background:#F9F9F9;box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}
 :root[data-theme="light"] .side .bub,:root[data-theme="light"] .side .kc{background:#FFFFFF}
-@media (prefers-color-scheme: light){:root[data-theme="system"]{--chrome:#F2F2F2;--chromeLine:#E4E4E6;--onFill:#F9F9F9;--onEdge:0 0 0 .5px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06)}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--chrome:#F2F2F2;--chromeLine:#E5E5E5;--onFill:#F9F9F9;--onEdge:0 0 0 .5px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06)}
 :root[data-theme="system"] #panel .inp,:root[data-theme="system"] .scW{background:#F9F9F9;box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}
 :root[data-theme="system"] #panel .inp,:root[data-theme="system"] #panel .inp input,:root[data-theme="system"] #panel .inp select,:root[data-theme="system"] .scW{color:rgba(0,0,0,.8)}
 :root[data-theme="system"] #panel .inp .ic,:root[data-theme="system"] #panel .inp .tg,:root[data-theme="system"] #panel .inp .u,:root[data-theme="system"] .scW svg{color:rgba(0,0,0,.4);opacity:1}
@@ -1587,3 +1587,4 @@ aside.side.r{border-left-color:var(--chromeLine)}
 #panel .m9 .mx:hover i{background:rgba(var(--hi),.7)}
 #panel .m9 .mx.on i{background:var(--select)}
 #panel .togs .ib{flex:1}
+#panel .inp.area textarea{overflow-wrap:anywhere;scrollbar-width:thin}

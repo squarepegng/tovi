@@ -221,7 +221,7 @@
   }
   const tabsHTML2 = () => { const tab = S.cpTab || 'custom'; return `<div class="cpTabs fpTabs"><button data-act="cpTab" data-v="custom" class="${tab === 'custom' ? 'on' : ''}">Custom</button><button data-act="cpTab" data-v="vars" class="${tab === 'vars' ? 'on' : ''}">Variables</button></div>`; };
   // A colour you can see through: solid on the left half, the real opacity over a checkerboard on the right (Figma).
-  const chipBg = (hex, a) => { if (!(a < 100) || !/^#[0-9a-f]{6}$/i.test(hex)) return hex; const x = `${hex}${('0' + Math.round(a * 2.55).toString(16)).slice(-2)}`; return `linear-gradient(90deg,${hex} 50%,transparent 50%),linear-gradient(${x},${x}),repeating-conic-gradient(#BDBDC2 0 25%,#fff 0 50%) 0 0/6px 6px`; };
+  const chipBg = (hex, a) => { if (!(a < 100) || !/^#[0-9a-f]{6}$/i.test(hex)) return hex; const x = `${hex}${('0' + Math.round(a * 2.55).toString(16)).slice(-2)}`; return `linear-gradient(90deg,${hex} 50%,transparent 50%),linear-gradient(${x},${x}),repeating-conic-gradient(#BFBFBF 0 25%,#fff 0 50%) 0 0/6px 6px`; };
   // The project's own colours, one click away under the custom picker.
   const themeDots = (p) => { const t = tokens().slice(0, 16); return t.length ? `<div class="cpDots">${t.map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" aria-label="${esc(n)}" style="background:${esc(swatch(v))}"></button>`).join('')}</div>` : ''; };
   function pickerHTML(p, tok) {
@@ -1581,7 +1581,7 @@
       if (el.tagName.toLowerCase() === 'svg') h += iconSection(el);
       else h += propsSection(inf);
       if (inf.classKind === 'dynamic') h += `<div class="sec"><span class="note warn">${esc(inf.classReason)}</span></div>`;
-      if (inf.text?.editable) h += sec('Content', `<label class="inp area"><textarea data-text="1" rows="1" aria-label="Text">${esc(inf.text.value)}</textarea></label>${inf.text.value.length > 60 ? '<span class="note">Double-click the text on the page to edit it in place.</span>' : ''}`);
+      if (inf.text?.editable) h += sec('Content', `<label class="inp area"><textarea data-text="1" rows="1" aria-label="Text">${esc(inf.text.value)}</textarea></label>`);
       else if (isText(el)) h += sec('Content', `<span class="note">${esc(inf.text?.reason || '')}</span>`);
       if (isText(el) || inf.text?.editable) {
         // next/font names fonts like "__geistSans_1e4310": show "Geist Sans".
@@ -1635,10 +1635,10 @@
     p.querySelector('.scroll').scrollTop = st;
     renderFpop();
   }
-  // The Content box grows with its text, up to about six lines, then scrolls.
+  // The Content box grows with its text, up to three lines, then scrolls.
   function growText(t) {
     t.style.height = 'auto';
-    t.style.height = Math.min(t.scrollHeight, 6 * 18 + 8) + 'px';
+    t.style.height = Math.min(t.scrollHeight, 3 * 18) + 'px';
   }
   document.addEventListener('input', (e) => { if (e.target.matches?.('textarea[data-text]')) growText(e.target); });
   document.addEventListener('keydown', (e) => {
