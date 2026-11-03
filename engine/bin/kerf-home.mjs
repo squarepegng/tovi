@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openProject, PROJECTS_DIR, projects, stopAll } from '../src/project.mjs';
-import { readRecent } from '../src/recent.mjs';
+import { readRecent, RECENT_FILE } from '../src/recent.mjs';
 import { readPrefs, savePrefs } from '../src/prefs.mjs';
 import { readPerson, savePerson } from '../src/person.mjs';
 import { execFile } from 'node:child_process';
@@ -32,6 +32,11 @@ execFile('gh', ['api', 'user', '--jq', '.login'], { timeout: 6000 }, (err, out) 
 // older copies of GitHub repos in ~/Kerf/projects are listed too.
 // The editor keeps a small picture of each app in its .kerf folder; its time tells the page when it changed.
 const thumbAt = (root) => { try { return Math.round(fs.statSync(path.join(root, '.kerf', 'thumb.jpg')).mtimeMs); } catch { return 0; } };
+// Your own names for projects, and projects you removed from the list (files are never touched;
+// a removed project comes back the next time you open it).
+const CARDS = path.join(path.dirname(RECENT_FILE), 'cards.json');
+const readCards = () => { try { const c = JSON.parse(fs.readFileSync(CARDS, 'utf8')); return { names: c.names || {}, hidden: c.hidden || {} }; } catch { return { names: {}, hidden: {} }; } };
+const saveCards = (c) => { fs.mkdirSync(path.dirname(CARDS), { recursive: true }); fs.writeFileSync(CARDS, JSON.stringify(c, null, 2)); };
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 function recent() {
   const seen = new Set(), out = [];
@@ -50,7 +55,8 @@ function recent() {
     const source = remote.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '') || dir;
     out.push({ id: dir, source, name: path.basename(source), url: running?.proc?.exitCode === null ? running.url : null, at: fs.statSync(dir).mtimeMs, thumb: thumbAt(dir) });
   }
-  return out.sort((a, b) => b.at - a.at);
+  const cards = readCards();
+  return out.filter((p) => !(cards.hidden[p.id] >= p.at)).map((p) => (cards.names[p.id] ? { ...p, name: cards.names[p.id] } : p)).sort((a, b) => b.at - a.at);
 }
 
 const send = (res, status, body, type = 'application/json') => {
@@ -121,6 +127,19 @@ http.createServer(async (req, res) => {
     return send(res, 200, savePrefs(JSON.parse(body || '{}')));
   }
   if (req.method === 'GET' && req.url === '/api/recent') return send(res, 200, recent());
+  // Card menu: rename, show in Finder, remove from the list. Only for projects in the list.
+  if (req.method === 'POST' && req.url === '/api/card') {
+    let body = '';
+    for await (const c of req) body += c;
+    const { id, act, name } = JSON.parse(body || '{}');
+    if (!recent().some((r) => r.id === id)) return send(res, 404, { error: 'That project isn’t in the list.' });
+    const cards = readCards();
+    if (act === 'rename') { const n = String(name || '').trim().slice(0, 80); if (n) cards.names[id] = n; else delete cards.names[id]; saveCards(cards); }
+    else if (act === 'remove') { cards.hidden[id] = Date.now(); saveCards(cards); }
+    else if (act === 'reveal') execFile('open', ['-R', id], () => {});
+    else return send(res, 400, { error: 'Unknown action.' });
+    return send(res, 200, { ok: true });
+  }
   // Only pictures of projects in the list are served.
   if (req.method === 'GET' && req.url.startsWith('/api/thumb?')) {
     const id = new URL(req.url, 'http://x').searchParams.get('id');
@@ -324,6 +343,14 @@ main{padding:28px 40px 72px;max-width:1280px}
 input:focus,select:focus{border-color:rgba(43,102,217,.75);box-shadow:0 0 0 3px rgba(43,102,217,.16)}
 @media (max-width:760px){.ncard,.nsec,.nfoot,.nsearch kbd{display:none!important}.me{width:auto;margin:0}.app{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px}.brand{padding:0 8px 0 4px}nav .sp,nav .ver{display:none}main{padding:28px 16px 48px}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+/* Card ⋯ button: shows on hover or keyboard focus, like Figma's file cards. */
+.proj{cursor:pointer}
+.info .more{flex:0 0 auto;width:28px;height:28px;padding:0;margin-right:-6px;border-radius:7px;background:transparent;color:var(--ink3);opacity:0;transition:opacity .12s}
+.proj:hover .more,.proj:focus-within .more,.more[aria-expanded="true"]{opacity:1}
+.info .more:hover{background:rgba(var(--hi),.08);color:var(--ink)}
+.mren{display:flex;flex-direction:column;gap:6px;padding:6px}
+.mren input{height:32px;border-radius:7px;font-size:13px}
+@media (hover:none){.info .more{opacity:1}}
 /* Settings, laid out like Wonder's: a centred column, horizontal tabs (Account, AI, Appearance, About),
    grouped cards where each row has its label and note on the left and its control on the right. */
 #v-settings{max-width:680px;width:100%;margin:0 auto;gap:20px}
@@ -357,6 +384,13 @@ input:focus,select:focus{border-color:rgba(43,102,217,.75);box-shadow:0 0 0 3px 
 :root[data-theme="light"] #v-settings .sm,:root[data-theme="light"] #v-settings .soft{background:rgba(0,0,0,.06)}
 :root[data-theme="light"] #v-settings .sm:hover,:root[data-theme="light"] #v-settings .soft:hover{background:rgba(0,0,0,.09)}
 @media (prefers-color-scheme: light){:root[data-theme="system"] #v-settings .rows{background:#fff;border-color:rgba(0,0,0,.08);box-shadow:0 1px 2px rgba(0,0,0,.03)}:root[data-theme="system"] #v-settings .srow+.srow::before{background:rgba(0,0,0,.06)}:root[data-theme="system"] #v-settings .ctl input,:root[data-theme="system"] #v-settings .ctl select,:root[data-theme="system"] #v-settings form.inl input{background-color:rgba(0,0,0,.035);border-color:rgba(0,0,0,.06)}:root[data-theme="system"] #v-settings .sm,:root[data-theme="system"] #v-settings .soft{background:rgba(0,0,0,.06)}:root[data-theme="system"] #v-settings .sm:hover,:root[data-theme="system"] #v-settings .soft:hover{background:rgba(0,0,0,.09)}}
+/* Settings fields and buttons get the editor's raised control look (Paper's): no border, a soft edge. */
+#v-settings .ctl input,#v-settings .ctl select,#v-settings form.inl input{border:0;background-color:rgba(var(--hi),.055);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+#v-settings .sm,#v-settings .soft{background:rgba(var(--hi),.08);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+:root[data-theme="light"] #v-settings .ctl input,:root[data-theme="light"] #v-settings .ctl select,:root[data-theme="light"] #v-settings form.inl input{background-color:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06)}
+:root[data-theme="light"] #v-settings .sm,:root[data-theme="light"] #v-settings .soft{background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06)}
+@media (prefers-color-scheme: light){:root[data-theme="system"] #v-settings .ctl input,:root[data-theme="system"] #v-settings .ctl select,:root[data-theme="system"] #v-settings form.inl input{background-color:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06)}:root[data-theme="system"] #v-settings .sm,:root[data-theme="system"] #v-settings .soft{background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06)}}
+#v-settings .ctl input:focus,#v-settings .ctl select:focus,#v-settings form.inl input:focus{box-shadow:0 0 0 2px rgba(43,102,217,.75)}
 @media (max-width:640px){#v-settings .srow{flex-direction:column;align-items:stretch}#v-settings .ctl{align-items:stretch}#v-settings .ctl input,#v-settings .ctl select{width:100%}#v-settings .ctl form input{width:auto;flex:1}}
 </style></head>
 <body><div class="app">
@@ -393,6 +427,7 @@ input:focus,select:focus{border-color:rgba(43,102,217,.75);box-shadow:0 0 0 3px 
   </section></div>
   <div class="mmenu" id="meMenu" role="menu" hidden><div class="mh" id="meWho"></div><a href="#settings" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a><a href="#help" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>Help</a><hr><a href="https://github.com/squarepegng/tovi" target="_blank" rel="noopener" role="menuitem"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>Tovi on GitHub</a></div>
 
+  <div class="mmenu" id="cardMenu" role="menu" hidden></div>
   <section class="view" id="v-settings" aria-labelledby="sT">
     <div class="sHead"><h1 id="sT">Settings</h1><p>Saved only on this Mac. Keys live in a git-ignored file, and Tovi never shows them again.</p></div>
     <div class="stabs" role="tablist" aria-label="Settings sections">
@@ -511,7 +546,7 @@ const ago=t=>{const s=(Date.now()-t)/1000;return s<60?'just now':s<3600?Math.rou
 const LOGO='<svg width="44" height="44" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="currentColor"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="currentColor"/></svg>';
 const MARK='<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoA)"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoB)"/></svg>';
 const nm=p=>p.name||String(p.source).split('/').filter(Boolean).pop();
-function card(p){return '<button class="proj" data-src="'+esc(p.source)+'"'+(p.url?' data-url="'+esc(p.url)+'"':'')+' title="'+esc(p.source)+'"><span class="shot"><span class="ph">'+LOGO+'</span>'+(p.thumb?'<img src="/api/thumb?id='+encodeURIComponent(p.id)+'&t='+p.thumb+'" alt="" loading="lazy" onerror="this.remove()">':'')+'</span><span class="info"><span class="ic">'+MARK+'</span><span class="tx"><b>'+esc(nm(p))+'</b><span class="when">'+(p.url?'<i>Running</i> · ':'')+'Opened '+ago(p.at)+'</span></span></span></button>'}
+function card(p){return '<div class="proj" role="button" tabindex="0" data-id="'+esc(p.id)+'" data-src="'+esc(p.source)+'"'+(p.url?' data-url="'+esc(p.url)+'"':'')+' title="'+esc(p.source)+'"><span class="shot"><span class="ph">'+LOGO+'</span>'+(p.thumb?'<img src="/api/thumb?id='+encodeURIComponent(p.id)+'&t='+p.thumb+'" alt="" loading="lazy" onerror="this.remove()">':'')+'</span><span class="info"><span class="ic">'+MARK+'</span><span class="tx"><b>'+esc(nm(p))+'</b><span class="when">'+(p.url?'<i>Running</i> · ':'')+'Opened '+ago(p.at)+'</span></span><button class="more" data-more aria-label="More options for '+esc(nm(p))+'" aria-haspopup="menu" title="More"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button></span></div>'}
 function renderList(){
   if(!$('recent'))return;
   const has=LIST.length;$('ptools').hidden=!has;
@@ -526,7 +561,7 @@ document.querySelector('.seg.vt').addEventListener('click',e=>{const b=e.target.
 $('q').addEventListener('input',e=>{Q=e.target.value.trim().toLowerCase();if(!['','#projects','#running'].includes(location.hash))location.hash='#projects';renderList()});
 addEventListener('keydown',e=>{const typing=e.target.closest('input,textarea,select');if(e.key==='/'&&!typing){e.preventDefault();$('q').focus()}else if(e.key==='n'&&!typing&&!e.metaKey&&!e.ctrlKey&&$('dlg').hidden){e.preventDefault();showDlg(true)}else if(e.key==='Escape'){if(!$('dlg').hidden)showDlg(false);$('meMenu').hidden=true;$('meBtn').setAttribute('aria-expanded','false')}});
 $('f').addEventListener('submit',e=>{e.preventDefault();const v=$('src').value.trim();if(v)open(v);else $('src').focus()});
-$('recent').addEventListener('click',e=>{const b=e.target.closest('[data-src]');if(!b)return;if(b.dataset.url){location.href=b.dataset.url;return}$('src').value=b.dataset.src;open(b.dataset.src)});
+$('recent').addEventListener('click',e=>{const m=e.target.closest('[data-more]');if(m){e.stopPropagation();return cardMenu(m.closest('.proj'),m)}const b=e.target.closest('[data-src]');if(!b)return;if(b.dataset.url){location.href=b.dataset.url;return}$('src').value=b.dataset.src;open(b.dataset.src)});
 // You: picture and name at the top of the sidebar; the menu under it.
 async function loadMe(){try{const m=await (await fetch('/api/me')).json();const ini=esc((m.name||'?').trim()[0]||'?').toUpperCase();const av=m.avatar?'<img src="'+esc(m.avatar)+'" alt="" data-i="'+ini+'" onerror="this.replaceWith(this.dataset.i)">':ini;$('meAv').innerHTML=av;$('setAv').innerHTML=av;$('meName').textContent=m.name||'You';$('meWho').textContent=m.login?'Signed in to GitHub as '+m.login:'Not signed in to GitHub';if(document.activeElement!==$('nmIn'))$('nmIn').value=m.name||''}catch{}}
 $('meBtn').addEventListener('click',e=>{const m=$('meMenu'),r=e.currentTarget.getBoundingClientRect();m.hidden=!m.hidden;e.currentTarget.setAttribute('aria-expanded',String(!m.hidden));m.style.left=r.left+'px';m.style.top=(r.bottom+4)+'px'});
@@ -565,6 +600,28 @@ $('aiModel').addEventListener('change',e=>{const v=e.target.value;if(v!=='__othe
 $('cmf').addEventListener('submit',e=>{e.preventDefault();const m=$('cmIn').value.trim();if(m)setModel(vp,m)});
 try{const v=localStorage.getItem('kerf.diagOn');if(v!=null)$('diagOn').checked=v==='1'}catch{}
 $('diagOn').addEventListener('change',e=>{try{localStorage.setItem('kerf.diagOn',e.target.checked?'1':'0')}catch{}});
+// Card menu (⋯): open, rename, show in Finder, GitHub, remove from the list. Removing never deletes files.
+const ICO={open:'<path d="M7 17 17 7M8 7h9v9"/>',ren:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',finder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',gh:'<path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.1-1.3-.3-2.5-1-3.5.3-1.1.3-2.3 0-3.5 0 0-1 0-3 1.5a10.4 10.4 0 0 0-6 0C8 2 7 2 7 2c-.3 1.2-.3 2.4 0 3.5-.7 1-1.1 2.2-1 3.5 0 3.5 3 5.5 6 5.5-.4.5-.7 1.1-.8 1.7-.2.6-.2 1.2-.2 1.8v4"/><path d="M9 18c-4.5 2-5-2-7-2"/>',rm:'<path d="M18 6 6 18M6 6l12 12"/>'};
+const svg=k=>'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+ICO[k]+'</svg>';
+const cardAct=(id,act,extra)=>fetch('/api/card',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,act,...extra})});
+function cardMenu(c,btn){
+  const m=$('cardMenu'),p=LIST.find(x=>x.id===c.dataset.id);if(!p)return;
+  if(!m.hidden&&m.dataset.id===p.id){m.hidden=true;return}
+  const gh=/^[A-Za-z0-9_.-]+[/][A-Za-z0-9_.-]+$/.test(p.source);
+  m.dataset.id=p.id;
+  m.innerHTML='<a href="#" data-c="open" role="menuitem">'+svg('open')+'Open</a><a href="#" data-c="rename" role="menuitem">'+svg('ren')+'Rename…</a><a href="#" data-c="reveal" role="menuitem">'+svg('finder')+'Show in Finder</a>'+(gh?'<a href="https://github.com/'+esc(p.source)+'" target="_blank" rel="noopener" role="menuitem">'+svg('gh')+'Open on GitHub</a>':'')+'<hr><a href="#" data-c="remove" role="menuitem">'+svg('rm')+'Remove from list</a>';
+  m.hidden=false;const r=btn.getBoundingClientRect(),w=m.offsetWidth,h=m.offsetHeight;
+  m.style.left=Math.max(8,Math.min(innerWidth-w-8,r.right-w))+'px';m.style.top=(r.bottom+h+8>innerHeight?r.top-h-4:r.bottom+4)+'px';
+}
+$('cardMenu').addEventListener('click',async e=>{const a=e.target.closest('[data-c]');if(!a)return;e.preventDefault();const m=$('cardMenu'),id=m.dataset.id,c=document.querySelector('.proj[data-id="'+CSS.escape(id)+'"]'),p=LIST.find(x=>x.id===id);
+  if(a.dataset.c==='rename'){m.innerHTML='<form class="mren"><input value="'+esc(nm(p))+'" aria-label="Project name" spellcheck="false"><span class="hint">Enter to save · only changes the name here</span></form>';const i=m.querySelector('input');i.focus();i.select();
+    m.querySelector('form').addEventListener('submit',async ev=>{ev.preventDefault();await cardAct(id,'rename',{name:i.value});m.hidden=true;loadRecent()});return}
+  m.hidden=true;
+  if(a.dataset.c==='open'){c?.click();return}
+  await cardAct(id,a.dataset.c);if(a.dataset.c==='remove')loadRecent()});
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('#cardMenu,[data-more]'))$('cardMenu').hidden=true});
+addEventListener('keydown',e=>{if(e.key==='Escape')$('cardMenu').hidden=true;const c=e.target.closest?.('.proj');if(c&&(e.key==='Enter'||e.key===' ')&&e.target===c){e.preventDefault();c.click()}});
+addEventListener('scroll',()=>{$('cardMenu').hidden=true},true);
 // Settings tabs (remembered on this Mac).
 function stab(t){t=['account','ai','look','about'].includes(t)?t:'account';document.querySelectorAll('.stabs [data-st]').forEach(b=>{b.classList.toggle('on',b.dataset.st===t);b.setAttribute('aria-selected',String(b.dataset.st===t))});document.querySelectorAll('.spane').forEach(p=>p.classList.toggle('on',p.dataset.sp===t));try{localStorage.setItem('kerf.stab',t)}catch{}}
 document.querySelector('.stabs').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(b)stab(b.dataset.st)});
