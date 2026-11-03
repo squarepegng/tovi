@@ -349,6 +349,13 @@ input:focus,select:focus{border-color:rgba(43,102,217,.75);box-shadow:0 0 0 3px 
 #v-settings .sm,#v-settings .soft{height:32px;padding:0 12px;border-radius:7px;border:0;background:rgba(var(--hi),.08);color:var(--ink);font-size:12px}
 #v-settings .sm:hover,#v-settings .soft:hover{background:rgba(var(--hi),.12)}
 #v-settings .ctl .err:empty{display:none}
+/* Light theme: white cards on the light-grey page, fields a faint grey inside them. */
+:root[data-theme="light"] #v-settings .rows{background:#fff;border-color:rgba(0,0,0,.08);box-shadow:0 1px 2px rgba(0,0,0,.03)}
+:root[data-theme="light"] #v-settings .srow+.srow::before{background:rgba(0,0,0,.06)}
+:root[data-theme="light"] #v-settings .ctl input,:root[data-theme="light"] #v-settings .ctl select,:root[data-theme="light"] #v-settings form.inl input{background-color:rgba(0,0,0,.035);border-color:rgba(0,0,0,.06)}
+:root[data-theme="light"] #v-settings .sm,:root[data-theme="light"] #v-settings .soft{background:rgba(0,0,0,.06)}
+:root[data-theme="light"] #v-settings .sm:hover,:root[data-theme="light"] #v-settings .soft:hover{background:rgba(0,0,0,.09)}
+@media (prefers-color-scheme: light){:root[data-theme="system"] #v-settings .rows{background:#fff;border-color:rgba(0,0,0,.08);box-shadow:0 1px 2px rgba(0,0,0,.03)}:root[data-theme="system"] #v-settings .srow+.srow::before{background:rgba(0,0,0,.06)}:root[data-theme="system"] #v-settings .ctl input,:root[data-theme="system"] #v-settings .ctl select,:root[data-theme="system"] #v-settings form.inl input{background-color:rgba(0,0,0,.035);border-color:rgba(0,0,0,.06)}:root[data-theme="system"] #v-settings .sm,:root[data-theme="system"] #v-settings .soft{background:rgba(0,0,0,.06)}:root[data-theme="system"] #v-settings .sm:hover,:root[data-theme="system"] #v-settings .soft:hover{background:rgba(0,0,0,.09)}}
 @media (max-width:640px){#v-settings .srow{flex-direction:column;align-items:stretch}#v-settings .ctl{align-items:stretch}#v-settings .ctl input,#v-settings .ctl select{width:100%}#v-settings .ctl form input{width:auto;flex:1}}
 </style></head>
 <body><div class="app">
