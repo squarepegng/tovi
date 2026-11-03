@@ -1566,7 +1566,8 @@
     const el = s.el, inf = info();
     const name = (activeLoc() === s.use ? s.useInfo?.tag : s.defInfo?.tag) || nameOf(el);
     const loc = activeLoc();
-    let h = `<div class="sec head"><div class="secH"><span class="nm">${ico(layerIcon(el))}${headName(el)}</span><span class="hbs">${hb('parent', 'up', 'Select parent')}</span></div>
+    // No name row: the selection is named in Layers and on the canvas. Select parent is ⇧↵ or the right-click menu.
+    let h = `<div class="sec head">
       ${scopeSentence(s, name, inf)}
       ${sourceHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}
