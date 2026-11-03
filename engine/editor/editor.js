@@ -4273,13 +4273,9 @@
     let h = '';
     const shown = (k) => S.reveal?.el === el && S.reveal[k];
     const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = ['mX', 'mT', 'mB'].some((k) => (+val(k) || 0) !== 0);
-    // Margin, one row like the rest: Horizontal | Vertical. The end button splits Vertical into Top and Bottom; it's
-    // split by itself when they already differ, and it never edits on its own.
-    const marDiff = (+val('mT') || 0) !== (+val('mB') || 0), marSplit = S.marSplit === el || marDiff;
-    const marSides = `<button class="ib hbtn${marSplit ? ' on' : ''}" data-act="marSplit" title="${marDiff ? 'Top and bottom are different' : marSplit ? 'Same top and bottom' : 'Top and bottom separately'}" aria-pressed="${marSplit}">${ico('marSides')}</button>`;
-    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? (marSplit
-      ? `<div class="r3 lab">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}${lf('Top', nf('mT', 'marT', 'Top margin'))}${lf('Bottom', nf('mB', 'marB', 'Bottom margin'))}</div>`
-      : `<div class="r2">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}${lf('Vertical', nf('mY', 'marV', 'Vertical margin'))}</div>`) : '', hasMargin || shown('margin') ? marSides : hb('reveal', 'plus', 'Add margin', 'margin'));
+    // Margin: always Horizontal | Top | Bottom in one row. Left and right are almost always equal; top and bottom
+    // usually aren't (space above a heading, none below), so there is no combined Vertical and no hidden mode.
+    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r3 lab">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}${lf('Top', nf('mT', 'marT', 'Top margin'))}${lf('Bottom', nf('mB', 'marB', 'Bottom margin'))}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
     // Like Figma: one field per axis, "W 468" with Fixed / Hug / Fill inside it. Typing a number makes it fixed.
     const MODES = [['fixed', 'Fixed'], ['hug', 'Hug'], ['fill', 'Fill'], ['auto', 'Auto']];
     const sizeField = (axis) => {
