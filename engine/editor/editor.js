@@ -714,12 +714,15 @@
     minus: '<path d="M3.5 8h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     chev: '<path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
     chevR: '<path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
+    tUnder: '<path d="M5 3v4.5a3 3 0 0 0 6 0V3M4 13h8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+    tStrike: '<path d="M10.8 4.6C10.3 3.6 9.3 3 8 3 6.4 3 5.2 3.9 5.2 5.2c0 .8.4 1.4 1.2 1.8M3 8h10M10.5 9.4c.2.3.3.7.3 1.1 0 1.5-1.3 2.5-2.9 2.5-1.4 0-2.5-.6-3-1.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+    tCase: '<path d="M1.5 4h6M4.5 4v8M8.5 4h6M11.5 4v8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     alL: '<path d="M3 4h10M3 8h6M3 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     alC: '<path d="M3 4h10M5 8h6M4 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     alR: '<path d="M3 4h10M7 8h6M5 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     corners: '<path d="M3 6V4.5A1.5 1.5 0 0 1 4.5 3H6M10 3h1.5A1.5 1.5 0 0 1 13 4.5V6M13 10v1.5a1.5 1.5 0 0 1-1.5 1.5H10M6 13H4.5A1.5 1.5 0 0 1 3 11.5V10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
     rad: '<path d="M4 12V8a4 4 0 0 1 4-4h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
-    opaSq: '<rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor"/><path d="M8 5.25h2.75V8H8zM10.75 8h2.75v2.75h-2.75zM5.25 8H8v2.75H5.25zM8 10.75h2.75v2.75H8z" fill="currentColor" opacity=".55"/>',
+    opaSq: '<rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor"/><path d="M13.5 5v6a2.5 2.5 0 0 1-2.5 2.5H5z" fill="currentColor"/>',
     radAll: '<path d="M2.75 6V4.25a1.5 1.5 0 0 1 1.5-1.5H6M10 2.75h1.75a1.5 1.5 0 0 1 1.5 1.5V6M13.25 10v1.75a1.5 1.5 0 0 1-1.5 1.5H10M6 13.25H4.25a1.5 1.5 0 0 1-1.5-1.5V10" fill="none" stroke="currentColor" stroke-linecap="round"/>',
     marH: '<path d="M2.5 3v10M13.5 3v10" stroke="currentColor" stroke-linecap="round"/><rect x="5.25" y="4.5" width="5.5" height="7" rx="1.25" fill="none" stroke="currentColor"/>',
     marT: '<path d="M3 2.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="5.25" width="7" height="8" rx="1.25" fill="none" stroke="currentColor"/>',
@@ -1245,7 +1248,7 @@
   function textStyleToggles() {
     const d = val('decor'), c = val('case');
     const t = (p, on, offV, onV, icon, title) => `<button class="ib${on ? ' on' : ''}" data-act="set" data-p="${p}" data-v="${on ? offV : onV}" title="${title}" aria-pressed="${on}">${ico(icon)}</button>`;
-    return `<div class="togs">${t('decor', d === 'underline', 'none', 'underline', 'underline', 'Underline')}${t('decor', d === 'strike', 'none', 'strike', 'strike', 'Strikethrough')}${t('case', c === 'upper', 'none', 'upper', 'caseUp', 'UPPERCASE')}</div>`;
+    return `<div class="ibs togs">${t('decor', d === 'underline', 'none', 'underline', 'tUnder', 'Underline')}${t('decor', d === 'strike', 'none', 'strike', 'tStrike', 'Strikethrough')}${t('case', c === 'upper', 'none', 'upper', 'tCase', 'UPPERCASE')}</div>`;
   }
   const isText = (el) => el && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
   // Text with nothing but words in it (a paragraph, a heading, a link), not a button or a frame.

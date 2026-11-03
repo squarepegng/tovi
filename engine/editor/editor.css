@@ -1545,10 +1545,6 @@ aside.side.r{border-left-color:var(--chromeLine)}
 #panel .sec.empty:hover .secH .ib{color:var(--ink)}
 /* Section titles at 12px, the panel's working size; weight and colour carry the hierarchy (Paper). */
 #panel .secH{font-size:12px;line-height:16px}
-#panel .togs{display:flex;gap:0;padding:1px;height:24px;border-radius:7px;background:rgba(var(--hi),.05);justify-self:start}
-#panel .togs .ib{width:30px;height:22px;border-radius:6px;color:rgba(var(--hi),.575)}
-#panel .togs .ib.on{color:var(--ink)}
-:root[data-theme="light"] #panel .togs{background:rgba(0,0,0,.05)}
 #panel .chkRow{display:flex;align-items:center;gap:8px;height:24px;padding:0;border:0;background:none;color:var(--ink);font:400 12px/1 var(--ui);cursor:pointer;justify-content:flex-start}
 #panel .chkRow .mk.cbox{width:14px;height:14px;border-radius:4px;display:grid;place-items:center}
 
@@ -1578,3 +1574,16 @@ aside.side.r{border-left-color:var(--chromeLine)}
 #panel .repBtn svg{color:var(--ink3)}
 #panel .repBtn:hover{background:rgba(var(--hi),.08)}
 :root[data-theme="light"] #panel .repBtn{background:#F9F9F9;box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}
+
+/* Fields with a leading icon: the icon sits in a square at the left edge
+   (like Figma), so the space left of the icon equals the space above it. */
+#panel .inp:has(> .ic:first-child){padding-left:4px}
+/* 9-dot alignment box: the same neutral fill and edge as the fields (the old
+   --raised grey had a blue cast), with neutral dots. */
+#panel .m9{background:rgba(var(--hi),.055);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+:root[data-theme="light"] #panel .m9{background:#F9F9F9;box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}
+@media (prefers-color-scheme: light){:root[data-theme="system"] #panel .m9{background:#F9F9F9;box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}}
+#panel .m9 .mx i{background:rgba(var(--hi),.32)}
+#panel .m9 .mx:hover i{background:rgba(var(--hi),.7)}
+#panel .m9 .mx.on i{background:var(--select)}
+#panel .togs .ib{flex:1}
