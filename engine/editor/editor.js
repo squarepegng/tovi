@@ -1508,9 +1508,11 @@
     const w = (key, label) => `<button class="scW" data-act="scopeMenu" data-v="${key}">${esc(label)}${ico('chev', 10)}</button>`;
     const whoTxt = who?.opts ? w('who', (who.opts.find(([v]) => v === who.cur) || who.opts[0])[1]) : who?.fixed ? `<b>${esc(who.fixed)}</b>` : '';
     const dev = S.device, only = S.sizeOnly[dev];
-    const whereTxt = sizes ? w('where', only ? `${DEV_LABEL[dev].toLowerCase()} only` : 'every screen') : '';
-    if (!whoTxt && !whereTxt) return '';
     const differs = (inf?.classes || []).some((c) => /^(sm|md|lg|xl|2xl):[^:]+$/.test(c));
+    // The screen-size choice only shows when it matters: on Tablet or Phone, or when this element already
+    // differs by size. On desktop, for something that looks the same everywhere, changes simply apply everywhere.
+    const whereTxt = sizes && (dev !== 'desktop' || differs || only) ? w('where', only ? `${DEV_LABEL[dev].toLowerCase()} only` : 'every screen') : '';
+    if (!who?.opts && !whereTxt) return '';
     return `<p class="scLine">Changes apply to ${whoTxt || `this ${esc(kindOf(s.el).toLowerCase())}`}${whereTxt ? ` on ${whereTxt}` : ''}${differs ? '<span class="note" title="This element is styled differently on other screen sizes">Differs by size</span>' : ''}</p>`;
   }
   function scopeMenu(key, btn) {
@@ -1567,12 +1569,12 @@
     const name = (activeLoc() === s.use ? s.useInfo?.tag : s.defInfo?.tag) || nameOf(el);
     const loc = activeLoc();
     // No name row: the selection is named in Layers and on the canvas. Select parent is ⇧↵ or the right-click menu.
-    let h = `<div class="sec head">
-      ${scopeSentence(s, name, inf)}
+    const headIn = `      ${scopeSentence(s, name, inf)}
       ${sourceHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}
       ${s.repeat > 1 && S.scope !== 'here' && !s.defInfo?.cva ? `<span class="note">Repeated ×${s.repeat} by the same code: edits apply to all of them.</span>` : ''}
-</div>`;
+`;
+    let h = headIn.trim() ? `<div class="sec head">${headIn}</div>` : '';
     if (!inf) h += `<div class="sec"><span class="note">Reading code…</span></div>`;
     else if (inf.offline) { h += `<div class="sec"><span class="note">Reconnecting to your app…</span></div>`; clearTimeout(S.infoRetry); S.infoRetry = setTimeout(() => { if (S.sel) loadInfo(); }, 2000); }
     else if (inf.error) h += `<div class="sec"><span class="note warn">${esc(inf.error)}</span></div>`;
