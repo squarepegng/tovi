@@ -1235,32 +1235,6 @@
     let h = `<div class="cr"><label class="inp" title="${title}${tokName ? ` · ${esc(tokName)} (from your design system)` : ''}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : chipBg(hex, alphaOf(p))}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"></label>${none ? '' : `<label class="inp ca" title="${title} opacity"><input type="text" inputmode="numeric" data-calpha="${p}" value="${alphaOf(p)}" aria-label="${title} opacity"><span class="u">%</span></label>`}</div>`;
     return h;
   }
-  // Sliders beside the number (Paper): opacity in 5% steps; corner radius steps through the design system's radius
-  // sizes, ending at Full, so a drag always lands on a real value.
-  const radiusSteps = () => [...new Set([0, ...(scaleSteps('radius') || [2, 4, 6, 8, 12, 16, 24]), 9999])].sort((a, b) => a - b);
-  function slider(p) {
-    const cur = +val(p) || 0;
-    if (p === 'opacity') return `<input type="range" class="sl" data-slide="opacity" min="0" max="100" step="5" value="${cur}" style="--p:${cur}%" aria-label="Opacity">`;
-    const st = radiusSteps();
-    let i = st.findIndex((x) => x >= cur - 0.5); if (i < 0) i = st.length - 1;
-    return `<input type="range" class="sl" data-slide="radius" min="0" max="${st.length - 1}" step="1" value="${i}" style="--p:${(i / (st.length - 1)) * 100}%" aria-label="Corner radius">`;
-  }
-  const slideVal = (t) => (t.dataset.slide === 'opacity' ? +t.value : radiusSteps()[+t.value]);
-  document.addEventListener('input', (e) => {
-    const t = e.target;
-    if (!t.matches?.('input.sl[data-slide]') || !S.sel?.el) return;
-    const p = t.dataset.slide, n = slideVal(t);
-    t.style.setProperty('--p', (+t.value - +t.min) / (+t.max - +t.min) * 100 + '%');
-    const f = t.closest('.slRow')?.querySelector(`input[data-prop="${p}"]`);
-    if (f) f.value = p === 'radius' && n >= 999 ? 'Full' : n;
-    preview(S.sel.el, p, n);
-  });
-  document.addEventListener('change', (e) => {
-    const t = e.target;
-    if (!t.matches?.('input.sl[data-slide]') || !S.sel?.el) return;
-    e.stopPropagation();
-    commit({ ops: [{ prop: t.dataset.slide, value: slideVal(t) }] });
-  }, true);
   // Clip content (Figma, Paper, Wonder): frames with something inside can cut off what spills past their edges.
   function clipRow(el) {
     if (!el || isTextOnly(el) || isMedia(el) || !el.childElementCount || el.tagName === 'BUTTON' || el.closest?.('button')) return '';
@@ -1624,7 +1598,7 @@
       h += layoutSections(el);
       if (el.tagName.toLowerCase() === 'svg') {
         h += sec('Icon color', colorRow('color', 'Icon color'));
-        h += sec('Appearance', lf('Opacity', `<div class="slRow b">${slider('opacity')}${nf('opacity', 'opaSq', 'Opacity', '%')}<span></span></div>`));
+        h += sec('Appearance', `<div class="r2">${lf('Opacity', nf('opacity', 'opaSq', 'Opacity', '%'))}<span></span></div>`);
         const st0 = p.querySelector('.scroll')?.scrollTop || 0;
         p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
         p.querySelector('.scroll').scrollTop = st0;
@@ -1635,8 +1609,12 @@
       const hasFill = g || (val('bg') && val('bg') !== 'transparent');
       // Rounding does nothing on bare text (no fill, stroke or radius yet), so the field only shows where it can be seen.
       const showRadius = !isTextOnly(el) || hasFill || val('borderW') > 0 || (+val('radius') || 0) > 0;
-      h += sec('Appearance', showRadius ? `${lf('Opacity', `<div class="slRow b">${slider('opacity')}${nf('opacity', 'opaSq', 'Opacity', '%')}<span></span></div>`)}${lf('Corner radius', `<div class="slRow b">${slider('radius')}${nf('radius', 'radAll', 'Corner radius')}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>`)}
-        ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}${clipRow(el)}` : lf('Opacity', `<div class="slRow b">${slider('opacity')}${nf('opacity', 'opaSq', 'Opacity', '%')}<span></span></div>`));
+      // Appearance in one compact row (no sliders: dragging a field's icon already changes it by eye). The "corners
+      // separately" toggle sits in the section header, like Paper's.
+      const opaF = lf('Opacity', nf('opacity', 'opaSq', 'Opacity', '%'));
+      const cornersBtn = showRadius ? `<button class="ib hbtn${indep ? ' on' : ''}" data-act="corners" title="Set each corner separately" aria-pressed="${!!indep}">${ico('corners')}</button>` : '';
+      h += sec('Appearance', showRadius ? `<div class="r2">${opaF}${lf('Corner radius', nf('radius', 'radAll', 'Corner radius'))}</div>
+        ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}${clipRow(el)}` : `<div class="r2">${opaF}<span></span></div>`, cornersBtn);
       // On text, "Fill" sits right under "Text color" and means the box behind it: call it Background there.
       const fillName = isTextOnly(el) ? 'Background' : 'Fill';
       h += sec(fillName, hasFill ? fillBody(g, el) : '', hasFill ? hb('rmFill', 'minus', `Remove ${fillName.toLowerCase()}`) : hb('addFill', 'plus', `Add ${fillName.toLowerCase()}`));
