@@ -65,7 +65,12 @@ export async function createKerf(webRoot) {
   const session = createSession(webRoot, editor);
   // The designer's GitHub account (when this Mac is signed in), for their picture in the editor.
   let ghLogin = null;
-  execFile('gh', ['api', 'user', '--jq', '.login'], { timeout: 6000 }, (err, out) => { if (!err && /^[\w-]{1,40}$/.test(String(out).trim())) ghLogin = String(out).trim(); });
+  const readLogin = () => new Promise((ok) => execFile('gh', ['api', 'user', '--jq', '.login'], { timeout: 6000 }, (err, out) => { if (!err && /^[\w-]{1,40}$/.test(String(out).trim())) ghLogin = String(out).trim(); ok(ghLogin); }));
+  readLogin();
+  // GitHub accounts this Mac is signed in to (names only; tokens are dropped and never leave gh).
+  const ghAccounts = () => new Promise((ok) => execFile('gh', ['auth', 'status', '--json', 'hosts'], { timeout: 6000 }, (err, out) => {
+    try { ok((JSON.parse(String(out)).hosts['github.com'] || []).filter((a) => a.state === 'success' && /^[\w-]{1,40}$/.test(a.login)).map((a) => ({ login: a.login, active: !!a.active }))); } catch { ok([]); }
+  }));
   const skip = /[\\/](node_modules|\.next|dist|build|out)[\\/]/;
   return {
     tag(code, file) {
@@ -95,6 +100,7 @@ export async function createKerf(webRoot) {
         }
         if (req.method === 'GET' && route === '/models') return send(200, await listModels(new URL(req.url, 'http://x').searchParams.get('provider')));
         if (req.method === 'GET' && route === '/prefs') return send(200, readPrefs());
+        if (req.method === 'GET' && route === '/accounts') return send(200, await ghAccounts());
         if (req.method === 'GET' && route === '/person') return send(200, { name: readPerson(webRoot), login: ghLogin, avatar: ghLogin ? `https://github.com/${ghLogin}.png?size=96` : null });
         if (req.method === 'GET' && route === '/versions') return send(200, session.list());
         if (req.method === 'GET' && route === '/chat') return send(200, session.chat());
@@ -155,6 +161,15 @@ export async function createKerf(webRoot) {
         const writes = ['/edit', '/undo', '/ai/apply', '/structure'];
         if (writes.includes(route) && session.isPeeking()) return send(409, { error: 'You’re looking at an earlier version. Close it to keep editing.' });
         if (route === '/person') return send(200, { name: savePerson(body?.name) });
+        // Switch which GitHub account this Mac uses (gh auth switch): only to an account already signed in.
+        if (route === '/account') {
+          const login = String(body?.login || '');
+          if (!(await ghAccounts()).some((a) => a.login === login)) return send(400, { error: 'That account isn’t signed in on this Mac.' });
+          const err = await new Promise((ok) => execFile('gh', ['auth', 'switch', '-h', 'github.com', '-u', login], { timeout: 10000 }, ok));
+          if (err) return send(500, { error: 'GitHub couldn’t switch accounts.' });
+          await readLogin();
+          return send(200, { name: readPerson(webRoot), login: ghLogin, avatar: ghLogin ? `https://github.com/${ghLogin}.png?size=96` : null });
+        }
         // Add a Google Font to the project (one undoable change across index.html and tailwind.config).
         if (route === '/fonts') {
           const f = await googleFontFiles(webRoot, theme, body?.family, body?.category);

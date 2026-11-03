@@ -10,7 +10,7 @@
   /* ---------- api ---------- */
   // Talk to Tovi's server. When the connection blips (the server restarting, the app reloading), requests that only
   // read are retried a few times before giving up; saves never are, so nothing is applied twice.
-  const READS = new Set(['/inspect', '/theme', '/project', '/versions', '/keys', '/models', '/prefs', '/person', '/chat', '/direction', '/tokens', '/changes']);
+  const READS = new Set(['/accounts', '/inspect', '/theme', '/project', '/versions', '/keys', '/models', '/prefs', '/person', '/chat', '/direction', '/tokens', '/changes']);
   const OFFLINE = 'Tovi lost touch with your app for a moment. Check that the app is still running.';
   const api = async (route, body) => {
     const path = route.split('?')[0], read = !body || READS.has(path) || (path === '/pr' && body?.dryRun);
@@ -813,13 +813,25 @@
         <span class="crumbs"><span class="proj" title="${esc(p.repo || p.name || '')}">${esc(String(p.name || 'Tovi').split('/').pop())}</span><span class="sep">/</span><button class="pageBtn" data-act="pagesMenu" title="Pages" aria-haspopup="menu">${esc(pageName(S.path))}${ico('chev', 10)}</button></span>
         <button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Side panel: Chat and Layers (⇧\\)" aria-label="Show or hide the side panel" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>`;
     $('topC').innerHTML = '';
-    $('topR').innerHTML = `<button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
-        <button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
+    $('topR').innerHTML = `<button class="meAv" data-act="meMenu" title="${esc(S.me?.name || 'You')}" aria-label="You: ${esc(S.me?.name || 'You')}" aria-haspopup="menu"><span class="meImg">${meAvatar()}</span>${ico('chev', 10)}</button>
         <span class="sp"></span>
-        <button class="meAv" data-act="meMenu" title="${esc(S.me?.name || 'You')}" aria-label="You: ${esc(S.me?.name || 'You')}" aria-haspopup="menu">${meAvatar()}</button>
+        <button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
+        <button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
         <button class="primary" data-act="pr" ${total ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>`;
   }
 
+  // Your menu (avatar, like Figma's): who you are, switch GitHub account, settings, back to projects.
+  async function meMenu(a) {
+    const r = a.getBoundingClientRect(), at = { x: r.left, y: r.bottom + 6 };
+    const accts = await api('/accounts').catch(() => []);
+    const sw = (login) => api('/account', { login }).then((p) => { S.me = p; renderTop(); toast(`Now using GitHub ${p.login}`, 'Hand offs and pull requests go from this account.'); }).catch((err) => toast(err.message, '', true));
+    openMenu([{ head: S.me?.login ? `${S.me.name} · GitHub ${S.me.login}` : S.me?.name || 'You' },
+      ...(accts.length > 1 ? [...accts.map((x) => ({ label: x.login, on: x.active, run: () => x.active || sw(x.login) })), '-'] : []),
+      { label: 'Add a GitHub account…', icon: 'plus', run: () => { navigator.clipboard?.writeText('gh auth login --web').catch(() => {}); toast('Run gh auth login --web in Terminal (copied)', 'Sign in on GitHub’s page, then pick the account here.'); } },
+      '-',
+      { label: 'Settings', icon: 'gear', kbd: '⌘,', run: () => document.querySelector('[data-act="settings"]')?.click() },
+      { label: 'Back to projects', icon: 'chevR', run: () => { location.href = 'http://localhost:4100/'; } }], at);
+  }
   /* menus: one popover for the Tovi menu, pages, zoom and right-click */
   function openMenu(items, at) {
     const m = $('menu');
@@ -2167,7 +2179,7 @@
       case 'deviceMenu': { const r = a.getBoundingClientRect(); openMenu([...Object.keys(DEVICES).map((d) => ({ label: DEV_LABEL[d], icon: d, sub: devRange(d), on: S.device === d, run: () => { S.device = d; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); } }))], { x: r.left, y: r.bottom + 6 }); break; }
       case 'zoom': setZoom(v); break;
       case 'kerfMenu': kerfMenu(below(a)); break;
-      case 'meMenu': { const r = a.getBoundingClientRect(); openMenu([{ head: S.me?.login ? `${S.me.name} · GitHub ${S.me.login}` : S.me?.name || 'You' }, { label: 'Settings', icon: 'gear', kbd: '⌘,', run: () => document.querySelector('[data-act="settings"]')?.click() }, { label: 'Back to projects', icon: 'chevR', run: () => { location.href = 'http://localhost:4100/'; } }], { x: r.right - 236, y: r.bottom + 6 }); break; }
+      case 'meMenu': meMenu(a); break;
       case 'pagesMenu': pagesMenu(below(a)); break;
       case 'zoomMenu': zoomMenu(below(a)); break;
       case 'shortcuts': shortcuts(); break;

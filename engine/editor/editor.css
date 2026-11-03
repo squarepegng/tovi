@@ -1604,3 +1604,21 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .phd.r .meAv{margin:0 10px 0 6px}
 /* Left header: the sidebar toggle sits at the right end. */
 #kerf #top [data-act="layersToggle"]{margin-left:auto}
+/* Your avatar sits first in the right header, like Figma: picture + chevron, opens your menu. */
+.phd.r .meAv{width:auto;height:28px;margin:0;padding:0 4px 0 2px;gap:3px;display:flex;align-items:center;border-radius:8px;background:transparent;box-shadow:none;overflow:visible;color:var(--ink3)}
+.phd.r .meAv:hover{background:rgba(var(--hi),.06);box-shadow:none;color:var(--ink2)}
+.phd.r .meAv:focus-visible{box-shadow:0 0 0 2px var(--sel)}
+.meImg{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:linear-gradient(135deg,var(--logoA),var(--logoB));color:#121212;font:600 10px/1 var(--ui);box-shadow:0 0 0 1px rgba(var(--hi),.1)}
+.meImg img{width:100%;height:100%;object-fit:cover}
+.phd.r .primary{margin-left:6px}
+/* Tovi pink is the primary colour (like Figma's blue): Hand off and the active tool in the bottom toolbar.
+   Dark: pale pink with near-black text. Light: deep pink with white text. */
+:root{--pkFill:linear-gradient(180deg,#FFD3E9,#F7B2D6);--pkEdge:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -1px 0 rgba(120,20,70,.12),0 0 0 .5px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.45),0 3px 8px -3px rgba(0,0,0,.5);--onPink:#1A0F14}
+:root[data-theme="light"]{--pkFill:linear-gradient(180deg,#CB5C95,#B8457F);--pkEdge:inset 0 1px 0 rgba(255,255,255,.22),0 0 0 .5px rgba(120,20,70,.6),0 1px 2px rgba(120,20,70,.25),0 3px 8px -3px rgba(120,20,70,.3);--onPink:#FFFFFF}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--pkFill:linear-gradient(180deg,#CB5C95,#B8457F);--pkEdge:inset 0 1px 0 rgba(255,255,255,.22),0 0 0 .5px rgba(120,20,70,.6),0 1px 2px rgba(120,20,70,.25),0 3px 8px -3px rgba(120,20,70,.3);--onPink:#FFFFFF}}
+.primary,#bar .tb.on,.modes .tb.on{background:var(--pkFill);color:var(--onPink);box-shadow:var(--pkEdge)}
+.has-pill.iv>.pill{background:var(--pkFill);box-shadow:var(--pkEdge)}
+.modes.has-pill>.tb.on{color:var(--onPink)}
+.primary .count{background:rgba(0,0,0,.1);color:inherit}
+:root[data-theme="light"] .primary .count{background:rgba(255,255,255,.22)}
+@media (prefers-color-scheme: light){:root[data-theme="system"] .primary .count{background:rgba(255,255,255,.22)}}
