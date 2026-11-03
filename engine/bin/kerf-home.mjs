@@ -276,7 +276,8 @@ main{padding:28px 40px 72px;max-width:1280px}
 .seg.vt button.on{color:var(--ink)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:24px}
 .proj{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;height:auto;padding:0;border-radius:12px;overflow:hidden;background:var(--panel);box-shadow:inset 0 0 0 1px rgba(var(--hi),.08);color:var(--ink);text-align:left;white-space:normal;font:inherit;transition:box-shadow .16s cubic-bezier(.2,0,0,1)}
-.proj:hover{box-shadow:inset 0 0 0 1px rgba(var(--hi),.2),0 8px 24px rgba(0,0,0,.25)}
+/* Hover: no drop shadow, just a slightly firmer edge (and the preview lifts a touch). */
+.proj:hover{box-shadow:inset 0 0 0 1px rgba(var(--hi),.14)}
 .proj:focus-visible{outline:none;box-shadow:inset 0 0 0 2px #2B66D9}
 .shot{position:relative;display:block;aspect-ratio:16/10;background:rgba(var(--hi),.035);border-bottom:1px solid rgba(var(--hi),.07);overflow:hidden}
 .shot img{position:absolute;left:12%;right:12%;top:12%;width:76%;height:auto;min-height:80%;border-radius:6px 6px 0 0;object-fit:cover;object-position:top;box-shadow:0 0 0 1px rgba(var(--hi),.08),0 6px 20px rgba(0,0,0,.35);transition:translate .2s cubic-bezier(.2,0,0,1)}
