@@ -1597,3 +1597,6 @@ aside.side.r{border-left-color:var(--chromeLine)}
 :root:not([data-theme="light"]) #panel .ibs .ib:not(.on):hover{color:rgba(255,255,255,.7)}
 :root[data-theme="light"] #panel .ibs .ib:not(.on){color:rgba(0,0,0,.34)}
 @media (prefers-color-scheme: light){:root[data-theme="system"] #panel .ibs .ib:not(.on){color:rgba(0,0,0,.34)}}
+/* Colour fields: the 14px swatch sits 5px from the top in a 24px field, so it
+   sits 5px from the left too (same rule as the icon fields). */
+#panel .inp:has(> .cchip:first-child),#panel .inp:has(> .sw1:first-child){padding-left:5px}
