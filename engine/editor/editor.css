@@ -1600,3 +1600,7 @@ aside.side.r{border-left-color:var(--chromeLine)}
 /* Colour fields: the 14px swatch sits 5px from the top in a 24px field, so it
    sits 5px from the left too (same rule as the icon fields). */
 #panel .inp:has(> .cchip:first-child),#panel .inp:has(> .sw1:first-child){padding-left:5px}
+/* Right header: a little more room between your avatar and Hand off. */
+.phd.r .meAv{margin:0 10px 0 6px}
+/* Left header: the sidebar toggle sits at the right end. */
+#kerf #top [data-act="layersToggle"]{margin-left:auto}

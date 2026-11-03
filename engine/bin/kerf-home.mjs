@@ -323,6 +323,33 @@ main{padding:28px 40px 72px;max-width:1280px}
 input:focus,select:focus{border-color:rgba(43,102,217,.75);box-shadow:0 0 0 3px rgba(43,102,217,.16)}
 @media (max-width:760px){.ncard,.nsec,.nfoot,.nsearch kbd{display:none!important}.me{width:auto;margin:0}.app{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px}.brand{padding:0 8px 0 4px}nav .sp,nav .ver{display:none}main{padding:28px 16px 48px}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
+/* Settings, laid out like Wonder's: a centred column, horizontal tabs (Account, AI, Appearance, About),
+   grouped cards where each row has its label and note on the left and its control on the right. */
+#v-settings{max-width:680px;width:100%;margin:0 auto;gap:20px}
+#v-settings .sHead h1{font-size:22px;line-height:28px}
+.stabs{display:flex;gap:20px;border-bottom:1px solid rgba(var(--hi),.08);margin-bottom:8px}
+.stabs button{height:36px;padding:0;margin-bottom:-1px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--ink3);font-weight:500}
+.stabs button:hover{color:var(--ink2)}
+.stabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+.spane{display:none;flex-direction:column;gap:28px}
+.spane.on{display:flex}
+.spane h2{margin:0 0 10px 2px;font-size:13px;font-weight:500}
+#v-settings .rows{border-radius:10px;border-color:rgba(var(--hi),.07);background:rgba(var(--hi),.025)}
+#v-settings .srow{position:relative;padding:14px 18px;border:0;min-height:64px}
+#v-settings .srow+.srow::before{content:'';position:absolute;top:0;left:18px;right:18px;height:1px;background:rgba(var(--hi),.06)}
+#v-settings .srow .tx{gap:2px;flex:1}
+#v-settings .srow .tx b{font-size:13px}
+#v-settings .ctl{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+#v-settings .ctl form{display:flex;gap:6px;margin:0;width:auto}
+#v-settings .ctl input,#v-settings .ctl select,#v-settings form.inl input{flex:none;width:240px;min-width:0;height:32px;padding:0 10px;border-radius:7px;border:1px solid rgba(var(--hi),.07);background-color:rgba(var(--hi),.04);font-size:13px;align-self:auto}
+#v-settings .ctl form input{width:200px}
+#v-settings .ctl select{padding-right:30px;background-position:right 10px center}
+#v-settings form.inl{display:flex;gap:6px;margin-top:8px}
+#v-settings form.inl input{width:auto;flex:1}
+#v-settings .sm,#v-settings .soft{height:32px;padding:0 12px;border-radius:7px;border:0;background:rgba(var(--hi),.08);color:var(--ink);font-size:12px}
+#v-settings .sm:hover,#v-settings .soft:hover{background:rgba(var(--hi),.12)}
+#v-settings .ctl .err:empty{display:none}
+@media (max-width:640px){#v-settings .srow{flex-direction:column;align-items:stretch}#v-settings .ctl{align-items:stretch}#v-settings .ctl input,#v-settings .ctl select{width:100%}#v-settings .ctl form input{width:auto;flex:1}}
 </style></head>
 <body><div class="app">
 <nav aria-label="Tovi">
@@ -359,33 +386,55 @@ input:focus,select:focus{border-color:rgba(43,102,217,.75);box-shadow:0 0 0 3px 
   <div class="mmenu" id="meMenu" role="menu" hidden><div class="mh" id="meWho"></div><a href="#settings" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a><a href="#help" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>Help</a><hr><a href="https://github.com/squarepegng/tovi" target="_blank" rel="noopener" role="menuitem"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>Tovi on GitHub</a></div>
 
   <section class="view" id="v-settings" aria-labelledby="sT">
-    <div><h1 id="sT">Settings</h1><p>Saved only on this Mac. Keys live in a git-ignored file, and Tovi never shows them again.</p></div>
-    <div><div class="secH"><h2>You</h2></div>
-      <div class="rows"><div class="srow"><div class="tx"><b>Your name</b><span class="hint">Shown at the top of the sidebar and on the versions and changes you make.</span>
-        <form id="nmf"><input id="nmIn" autocomplete="off" spellcheck="false" aria-label="Your name"><button class="sm">Save</button></form></div><span class="av" id="setAv" style="width:40px;height:40px;font-size:15px"></span></div></div></div>
-    <div><div class="secH"><h2>AI</h2></div>
-      <div class="rows">
-        <div class="srow"><div class="tx"><b>Provider</b><span class="hint" id="aiNow">Checking…</span></div>
-          <select id="aiProv" aria-label="Provider"><option value="anthropic">Claude</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option></select></div>
-        <div class="srow" data-key="anthropic"><div class="tx"><b>Anthropic key</b><span class="hint" id="keystat">Checking…</span>
-          <form id="kf"><input id="kin" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" aria-label="Anthropic API key"><button class="sm" id="ksave">Save</button></form><span class="err" id="kerr"></span></div></div>
-        ${[['openai', 'OpenAI key', 'Paste key', 'https://platform.openai.com/api-keys', 'platform.openai.com'], ['gemini', 'Gemini key', 'Paste key', 'https://aistudio.google.com/apikey', 'aistudio.google.com']].map(([p, n, ph, url, host]) => `<div class="srow" data-key="${p}" hidden><div class="tx"><b>${n}</b><span class="hint" id="st-${p}" data-url="${url}" data-host="${host}">Checking…</span>
-          <form class="aif" data-p="${p}"><input type="password" placeholder="${ph}" autocomplete="off" spellcheck="false" aria-label="${n}"><button class="sm">Save</button></form><span class="err"></span></div></div>`).join('')}
-        <div class="srow"><div class="tx"><b>Model</b><span class="hint" id="aiFrom">Checking…</span>
-          <form id="cmf" hidden><input id="cmIn" placeholder="Model name from your provider’s docs" autocomplete="off" spellcheck="false" aria-label="Model name"><button class="sm">Use</button></form><span class="err" id="cmErr"></span></div>
-          <select id="aiModel" aria-label="Model"></select></div>
-        <div class="srow"><div class="tx"><b>Unsplash photos <span class="hint">(optional, free)</span></b><span class="hint" id="ustat">Checking…</span><span class="hint">Create an app at <a href="https://unsplash.com/oauth/applications" target="_blank" rel="noopener">unsplash.com/developers</a> and paste its Access Key.</span>
-          <form id="uf"><input id="uin" type="password" placeholder="Unsplash Access Key" autocomplete="off" spellcheck="false" aria-label="Unsplash Access Key"><button class="sm">Save</button></form><span class="err" id="uerr"></span></div></div>
+    <div class="sHead"><h1 id="sT">Settings</h1><p>Saved only on this Mac. Keys live in a git-ignored file, and Tovi never shows them again.</p></div>
+    <div class="stabs" role="tablist" aria-label="Settings sections">
+      <button role="tab" data-st="account">Account</button><button role="tab" data-st="ai">AI</button><button role="tab" data-st="look">Appearance</button><button role="tab" data-st="about">About</button>
+    </div>
+    <div class="spane" data-sp="account" role="tabpanel">
+      <div><h2>Profile</h2>
+        <div class="rows">
+          <div class="srow"><div class="tx"><b>Avatar</b><span class="hint">Your GitHub picture, when this Mac is signed in to GitHub.</span></div><span class="av" id="setAv" style="width:40px;height:40px;font-size:15px"></span></div>
+          <div class="srow"><div class="tx"><b>Your name</b><span class="hint">Shown in the sidebar and on the versions and changes you make.</span></div>
+            <div class="ctl"><form id="nmf"><input id="nmIn" autocomplete="off" spellcheck="false" aria-label="Your name"></form></div></div>
+        </div>
       </div>
     </div>
-    <div><div class="secH"><h2>Appearance</h2></div>
-      <div class="rows"><div class="srow"><div class="tx"><b>Theme</b><span class="hint">Dark unless you choose otherwise. System follows your Mac. The editor uses the same setting.</span></div>
-        <select id="themeSel" aria-label="Theme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div></div></div>
-    <div><div class="secH"><h2>About</h2></div>
-      <div class="rows">
-        <div class="srow"><div class="tx"><b>Projects folder</b><span class="hint" id="adir"></span></div></div>
-        <div class="srow"><div class="tx"><b>Version</b><span class="hint" id="aver"></span></div><a class="btn ghost sm" href="https://github.com/squarepegng/tovi" target="_blank" rel="noopener">GitHub</a></div>
-        <div class="srow"><div class="tx"><b>In the editor</b><span class="hint">Editor preferences (Tovi at work, AI style, look-alikes…) are in the editor: Tovi menu → Settings, or ⌘,</span></div></div>
+    <div class="spane" data-sp="ai" role="tabpanel">
+      <div><h2>Model</h2>
+        <div class="rows">
+          <div class="srow"><div class="tx"><b>Provider</b><span class="hint" id="aiNow">Checking…</span></div>
+            <div class="ctl"><select id="aiProv" aria-label="Provider"><option value="anthropic">Claude</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option></select></div></div>
+          <div class="srow" data-key="anthropic"><div class="tx"><b>Anthropic key</b><span class="hint" id="keystat">Checking…</span></div>
+            <div class="ctl"><form id="kf"><input id="kin" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" aria-label="Anthropic API key"><button class="sm" id="ksave">Save</button></form><span class="err" id="kerr"></span></div></div>
+          ${[['openai', 'OpenAI key', 'Paste key', 'https://platform.openai.com/api-keys', 'platform.openai.com'], ['gemini', 'Gemini key', 'Paste key', 'https://aistudio.google.com/apikey', 'aistudio.google.com']].map(([p, n, ph, url, host]) => `<div class="srow" data-key="${p}" hidden><div class="tx"><b>${n}</b><span class="hint" id="st-${p}" data-url="${url}" data-host="${host}">Checking…</span></div>
+            <div class="ctl"><form class="aif" data-p="${p}"><input type="password" placeholder="${ph}" autocomplete="off" spellcheck="false" aria-label="${n}"><button class="sm">Save</button></form><span class="err"></span></div></div>`).join('')}
+          <div class="srow"><div class="tx"><b>Model</b><span class="hint" id="aiFrom">Checking…</span>
+            <form id="cmf" class="inl" hidden><input id="cmIn" placeholder="Model name from your provider’s docs" autocomplete="off" spellcheck="false" aria-label="Model name"><button class="sm">Use</button></form><span class="err" id="cmErr"></span></div>
+            <div class="ctl"><select id="aiModel" aria-label="Model"></select></div></div>
+        </div>
+      </div>
+      <div><h2>Photos</h2>
+        <div class="rows">
+          <div class="srow"><div class="tx"><b>Unsplash <span class="hint">(optional, free)</span></b><span class="hint" id="ustat">Checking…</span><span class="hint">Create an app at <a href="https://unsplash.com/oauth/applications" target="_blank" rel="noopener">unsplash.com/developers</a> and paste its Access Key.</span></div>
+            <div class="ctl"><form id="uf"><input id="uin" type="password" placeholder="Access Key" autocomplete="off" spellcheck="false" aria-label="Unsplash Access Key"><button class="sm">Save</button></form><span class="err" id="uerr"></span></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="spane" data-sp="look" role="tabpanel">
+      <div><h2>Theme</h2>
+        <div class="rows"><div class="srow"><div class="tx"><b>Theme</b><span class="hint">System follows your Mac. The editor uses the same setting.</span></div>
+          <div class="ctl"><select id="themeSel" aria-label="Theme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div></div></div>
+      </div>
+      <div><h2>In the editor</h2>
+        <div class="rows"><div class="srow"><div class="tx"><b>Editor preferences</b><span class="hint">Tovi at work, AI style and look-alikes live in the editor: Tovi menu → Settings, or ⌘,</span></div></div></div>
+      </div>
+    </div>
+    <div class="spane" data-sp="about" role="tabpanel">
+      <div><h2>This Mac</h2>
+        <div class="rows">
+          <div class="srow"><div class="tx"><b>Projects folder</b><span class="hint" id="adir"></span></div></div>
+          <div class="srow"><div class="tx"><b>Version</b><span class="hint" id="aver"></span></div><div class="ctl"><a class="btn sm soft" href="https://github.com/squarepegng/tovi" target="_blank" rel="noopener">GitHub</a></div></div>
+        </div>
       </div>
     </div>
   </section>
@@ -508,5 +557,10 @@ $('aiModel').addEventListener('change',e=>{const v=e.target.value;if(v!=='__othe
 $('cmf').addEventListener('submit',e=>{e.preventDefault();const m=$('cmIn').value.trim();if(m)setModel(vp,m)});
 try{const v=localStorage.getItem('kerf.diagOn');if(v!=null)$('diagOn').checked=v==='1'}catch{}
 $('diagOn').addEventListener('change',e=>{try{localStorage.setItem('kerf.diagOn',e.target.checked?'1':'0')}catch{}});
+// Settings tabs (remembered on this Mac).
+function stab(t){t=['account','ai','look','about'].includes(t)?t:'account';document.querySelectorAll('.stabs [data-st]').forEach(b=>{b.classList.toggle('on',b.dataset.st===t);b.setAttribute('aria-selected',String(b.dataset.st===t))});document.querySelectorAll('.spane').forEach(p=>p.classList.toggle('on',p.dataset.sp===t));try{localStorage.setItem('kerf.stab',t)}catch{}}
+document.querySelector('.stabs').addEventListener('click',e=>{const b=e.target.closest('[data-st]');if(b)stab(b.dataset.st)});
+try{stab(localStorage.getItem('kerf.stab'))}catch{stab('account')}
+$('nmIn').addEventListener('change',()=>$('nmf').requestSubmit());
 loadKey();loadRecent();loadAbout();loadMe();poll();
 </script></body></html>`;

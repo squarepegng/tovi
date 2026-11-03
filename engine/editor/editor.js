@@ -809,9 +809,9 @@
     const total = S.versions.draft.length + S.versions.versions.reduce((a, v) => a + v.changes.length, 0), n = Math.max(0, total - (S.versions.sent || 0));
     // No top bar (like Paper): the left column's header has the menu, project and page; the right column's header has
     // history, you, zoom and Hand off; screen sizes and Present float at the top of the canvas.
-    $('top').innerHTML = `<button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Side panel: Chat and Layers (⇧\\)" aria-label="Show or hide the side panel" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>
-        <button class="logoBtn" data-act="kerfMenu" title="Tovi menu" aria-label="Tovi menu" aria-haspopup="menu">${ico('kerf', 16)}${ico('chev', 10)}</button>
-        <span class="crumbs"><span class="proj" title="${esc(p.repo || p.name || '')}">${esc(String(p.name || 'Tovi').split('/').pop())}</span><span class="sep">/</span><button class="pageBtn" data-act="pagesMenu" title="Pages" aria-haspopup="menu">${esc(pageName(S.path))}${ico('chev', 10)}</button></span>`;
+    $('top').innerHTML = `<button class="logoBtn" data-act="kerfMenu" title="Tovi menu" aria-label="Tovi menu" aria-haspopup="menu">${ico('kerf', 16)}${ico('chev', 10)}</button>
+        <span class="crumbs"><span class="proj" title="${esc(p.repo || p.name || '')}">${esc(String(p.name || 'Tovi').split('/').pop())}</span><span class="sep">/</span><button class="pageBtn" data-act="pagesMenu" title="Pages" aria-haspopup="menu">${esc(pageName(S.path))}${ico('chev', 10)}</button></span>
+        <button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Side panel: Chat and Layers (⇧\\)" aria-label="Show or hide the side panel" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>`;
     $('topC').innerHTML = '';
     $('topR').innerHTML = `<button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
         <button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
