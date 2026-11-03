@@ -1562,3 +1562,20 @@ aside.side.r{border-left-color:var(--chromeLine)}
 #panel .sl:focus-visible{outline:2px solid #2B66D9;outline-offset:1px}
 :root[data-theme="light"] #panel .sl{background:linear-gradient(to right,rgba(0,0,0,.2) 0 var(--p),rgba(0,0,0,.07) var(--p) 100%)}
 :root[data-theme="light"] #panel .sl::-webkit-slider-thumb{background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.15),0 1px 2px rgba(0,0,0,.15)}
+
+/* Margin split: three equal fields in one row. */
+#panel .r3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+#panel .secH .ib.hbtn{width:24px;height:24px;color:var(--ink3)}
+#panel .secH .ib.hbtn.on{color:var(--ink);background:rgba(var(--hi),.08)}
+/* Size field: "Auto ▾" always fits inside the 24px field. */
+#panel .szf{padding-right:2px}
+#panel .szf input{min-width:2.5ch}
+#panel .szm{flex:0 0 auto;height:20px;padding:0 4px 0 5px;gap:2px;font-size:11px}
+#panel .szm svg{width:9px;height:9px}
+/* Slimmer sliders: a 4px track and a small round thumb, sized for 24px rows. */
+#panel .sl{height:4px;border-radius:2px;margin:10px 0}
+#panel .sl::-webkit-slider-thumb{width:12px;height:12px;border-radius:50%;background:#F2F2F2;box-shadow:0 0 0 .5px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.4)}
+/* "Differs on other screen sizes": a quiet corner dot, explained on hover (no bright outline). */
+#panel .inp.sized{box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+#panel .inp.sized::after{top:3px;right:3px;width:4px;height:4px;background:var(--ink3)}
+:root[data-theme="light"] #panel .inp.sized{box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.035)}

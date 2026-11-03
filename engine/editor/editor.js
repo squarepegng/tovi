@@ -724,6 +724,7 @@
     marH: '<path d="M2.5 3v10M13.5 3v10" stroke="currentColor" stroke-linecap="round"/><rect x="5.25" y="4.5" width="5.5" height="7" rx="1.25" fill="none" stroke="currentColor"/>',
     marT: '<path d="M3 2.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="5.25" width="7" height="8" rx="1.25" fill="none" stroke="currentColor"/>',
     marB: '<path d="M3 13.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="2.75" width="7" height="8" rx="1.25" fill="none" stroke="currentColor"/>',
+    marSides: '<rect x="5" y="5" width="6" height="6" rx="1.25" fill="none" stroke="currentColor"/><path d="M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5" stroke="currentColor" stroke-linecap="round"/>',
     marV: '<path d="M3 2.5h10M3 13.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="5.25" width="7" height="5.5" rx="1.25" fill="none" stroke="currentColor"/>',
     gap: '<path d="M3 3v10M13 3v10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M6 8h4M7 6.5L5.5 8 7 9.5M9 6.5l1.5 1.5L9 9.5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>',
     padH: '<rect x="2.5" y="3.5" width="11" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M5 6v4M11 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
@@ -1229,7 +1230,9 @@
   });
   function colorRow(p, title, removeAct) {
     const hex = val(p), tok = tokenOf(p), none = hex === 'transparent';
-    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : chipBg(hex, alphaOf(p))}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label>${none ? '' : `<label class="inp ca" title="${title} opacity"><input type="text" inputmode="numeric" data-calpha="${p}" value="${alphaOf(p)}" aria-label="${title} opacity"><span class="u">%</span></label>`}</div>`;
+    // The design-system name (content, muted…) lives in the tooltip, not as a tag in the field.
+    const tokName = tok && !tok.startsWith('#') ? tok : '';
+    let h = `<div class="cr"><label class="inp" title="${title}${tokName ? ` · ${esc(tokName)} (from your design system)` : ''}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : chipBg(hex, alphaOf(p))}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"></label>${none ? '' : `<label class="inp ca" title="${title} opacity"><input type="text" inputmode="numeric" data-calpha="${p}" value="${alphaOf(p)}" aria-label="${title} opacity"><span class="u">%</span></label>`}</div>`;
     return h;
   }
   // Sliders beside the number (Paper): opacity in 5% steps; corner radius steps through the design system's radius
@@ -1621,7 +1624,7 @@
       h += layoutSections(el);
       if (el.tagName.toLowerCase() === 'svg') {
         h += sec('Icon color', colorRow('color', 'Icon color'));
-        h += sec('Appearance', lf('Opacity', `<div class="slRow">${slider('opacity')}${nf('opacity', 'opaSq', 'Opacity', '%')}</div>`));
+        h += sec('Appearance', lf('Opacity', `<div class="slRow b">${slider('opacity')}${nf('opacity', 'opaSq', 'Opacity', '%')}<span></span></div>`));
         const st0 = p.querySelector('.scroll')?.scrollTop || 0;
         p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
         p.querySelector('.scroll').scrollTop = st0;
@@ -1632,8 +1635,8 @@
       const hasFill = g || (val('bg') && val('bg') !== 'transparent');
       // Rounding does nothing on bare text (no fill, stroke or radius yet), so the field only shows where it can be seen.
       const showRadius = !isTextOnly(el) || hasFill || val('borderW') > 0 || (+val('radius') || 0) > 0;
-      h += sec('Appearance', showRadius ? `${lf('Opacity', `<div class="slRow">${slider('opacity')}${nf('opacity', 'opaSq', 'Opacity', '%')}</div>`)}${lf('Corner radius', `<div class="slRow b">${slider('radius')}${nf('radius', 'radAll', 'Corner radius')}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>`)}
-        ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}${clipRow(el)}` : lf('Opacity', `<div class="slRow">${slider('opacity')}${nf('opacity', 'opaSq', 'Opacity', '%')}</div>`));
+      h += sec('Appearance', showRadius ? `${lf('Opacity', `<div class="slRow b">${slider('opacity')}${nf('opacity', 'opaSq', 'Opacity', '%')}<span></span></div>`)}${lf('Corner radius', `<div class="slRow b">${slider('radius')}${nf('radius', 'radAll', 'Corner radius')}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>`)}
+        ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}${clipRow(el)}` : lf('Opacity', `<div class="slRow b">${slider('opacity')}${nf('opacity', 'opaSq', 'Opacity', '%')}<span></span></div>`));
       // On text, "Fill" sits right under "Text color" and means the box behind it: call it Background there.
       const fillName = isTextOnly(el) ? 'Background' : 'Fill';
       h += sec(fillName, hasFill ? fillBody(g, el) : '', hasFill ? hb('rmFill', 'minus', `Remove ${fillName.toLowerCase()}`) : hb('addFill', 'plus', `Add ${fillName.toLowerCase()}`));
@@ -2172,6 +2175,11 @@
       case 'left': S.left = v; try { localStorage.setItem('kerf.left', v); } catch {} renderLeft(v === 'chat'); break;
       case 'device': S.device = v; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); break;
       // The frame's label is the screen-size switch (like Framer's breakpoint labels): no bar over the canvas.
+      case 'marSplit': {
+        const el = S.sel?.el; if (!el) break;
+        if ((+val('mT') || 0) !== (+val('mB') || 0)) { toast('Top and bottom are different. Type the same number in both to join them.'); break; }
+        S.marSplit = S.marSplit === el ? null : el; renderPanel(); break;
+      }
       case 'deviceMenu': { const r = a.getBoundingClientRect(); openMenu([...Object.keys(DEVICES).map((d) => ({ label: DEV_LABEL[d], icon: d, sub: devRange(d), on: S.device === d, run: () => { S.device = d; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); } }))], { x: r.left, y: r.bottom + 6 }); break; }
       case 'zoom': setZoom(v); break;
       case 'kerfMenu': kerfMenu(below(a)); break;
@@ -4114,7 +4122,7 @@
         <span class="icSwap">Swap${ico('chev', 10)}</span></button>`;
     const ctl = [
       sw ? `<div class="kv"><span>Stroke</span><label class="inp"><input type="text" inputmode="decimal" data-propnum="strokeWidth" value="${sw.value ?? ''}" placeholder="2" aria-label="Stroke width"></label></div>` : '',
-      abs ? `<div class="kv"><span title="Keep the lines the same thickness when the icon is resized">Fixed stroke</span><div class="seg"><button data-act="setProp" data-p="absoluteStrokeWidth" data-v="false" class="${abs.value !== true ? 'on' : ''}">Off</button><button data-act="setProp" data-p="absoluteStrokeWidth" data-v="true" class="${abs.value === true ? 'on' : ''}">On</button></div></div>` : '',
+      abs ? `<div class="kv"><span title="Keep the lines the same thickness when the icon is resized">Same line when resized</span><div class="seg"><button data-act="setProp" data-p="absoluteStrokeWidth" data-v="false" class="${abs.value !== true ? 'on' : ''}">Off</button><button data-act="setProp" data-p="absoluteStrokeWidth" data-v="true" class="${abs.value === true ? 'on' : ''}">On</button></div></div>` : '',
       wt ? `<div class="kv"><span>Weight</span><label class="inp"><select data-propsel="weight" aria-label="Icon weight">${wt.value == null ? '<option value="" selected>Default</option>' : ''}${wt.options.map((o) => `<option${o === wt.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${ico('chev', 12)}</label></div>` : '',
     ].join('');
     return sec('Icon', row + ctl);
@@ -4265,7 +4273,13 @@
     let h = '';
     const shown = (k) => S.reveal?.el === el && S.reveal[k];
     const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = ['mX', 'mT', 'mB'].some((k) => (+val(k) || 0) !== 0);
-    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}<span></span></div><div class="r2">${lf('Top', nf('mT', 'marT', 'Top margin'))}${lf('Bottom', nf('mB', 'marB', 'Bottom margin'))}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
+    // Margin, one row like the rest: Horizontal | Vertical. The end button splits Vertical into Top and Bottom; it's
+    // split by itself when they already differ, and it never edits on its own.
+    const marDiff = (+val('mT') || 0) !== (+val('mB') || 0), marSplit = S.marSplit === el || marDiff;
+    const marSides = `<button class="ib hbtn${marSplit ? ' on' : ''}" data-act="marSplit" title="${marDiff ? 'Top and bottom are different' : marSplit ? 'Same top and bottom' : 'Top and bottom separately'}" aria-pressed="${marSplit}">${ico('marSides')}</button>`;
+    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? (marSplit
+      ? `<div class="r3 lab">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}${lf('Top', nf('mT', 'marT', 'Top margin'))}${lf('Bottom', nf('mB', 'marB', 'Bottom margin'))}</div>`
+      : `<div class="r2">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}${lf('Vertical', nf('mY', 'marV', 'Vertical margin'))}</div>`) : '', hasMargin || shown('margin') ? marSides : hb('reveal', 'plus', 'Add margin', 'margin'));
     // Like Figma: one field per axis, "W 468" with Fixed / Hug / Fill inside it. Typing a number makes it fixed.
     const MODES = [['fixed', 'Fixed'], ['hug', 'Hug'], ['fill', 'Fill'], ['auto', 'Auto']];
     const sizeField = (axis) => {
