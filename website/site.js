@@ -2,204 +2,229 @@
   const $ = (id) => document.getElementById(id);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const T = still ? 0 : 1;
 
-  /* ---------- rulers: the page is a canvas ---------- */
-  const rx = $('rx'), ry = $('ry'), ryt = $('ryt');
-  function rulers() {
-    if (getComputedStyle(rx).display === 'none') return;
-    rx.innerHTML = '';
-    for (let x = 100; x < innerWidth; x += 100) { const s = document.createElement('span'); s.textContent = x; s.style.left = x + 'px'; rx.appendChild(s); }
-  }
-  let lastY = -1;
-  function rulerY() {
-    if (getComputedStyle(ry).display === 'none') return;
-    const y = Math.round(scrollY);
-    if (y === lastY) return; lastY = y;
-    ryt.style.translate = `0 ${-(y % 50)}px`;
-    ry.querySelectorAll('span').forEach((n) => n.remove());
-    for (let v = Math.ceil(y / 100) * 100; v < y + innerHeight; v += 100) { const s = document.createElement('span'); s.textContent = v; s.style.top = v - y + 6 + 'px'; ry.appendChild(s); }
-  }
-  rulers(); rulerY();
-  addEventListener('resize', rulers);
-  addEventListener('scroll', () => requestAnimationFrame(rulerY), { passive: true });
+  /* nav: a hairline once the page scrolls */
+  const nav = $('nav');
+  addEventListener('scroll', () => nav.classList.toggle('scrolled', scrollY > 8), { passive: true });
 
-  /* ---------- hero: the headline is a live, selected element ---------- */
-  const STEPS = [[36, '4xl'], [48, '5xl'], [60, '6xl'], [72, '7xl'], [96, '8xl']];
-  const MIN = 36, MAX = 96;
-  const h1 = $('h1'), slider = $('slider'), knob = $('knob'), fill = $('fill'), toast = $('toast'), cursor = $('cursor'), stage = $('stage');
-  let size = 60, saved = 60, toastT, dimsT;
-  const stepOf = (v) => STEPS.reduce((a, b) => (Math.abs(b[0] - v) < Math.abs(a[0] - v) ? b : a));
-  const pct = (v) => (v - MIN) / (MAX - MIN);
-  STEPS.forEach(([v, n]) => {
-    const t = document.createElement('span'); t.className = 'tick'; t.style.left = pct(v) * 100 + '%'; slider.insertBefore(t, knob);
-    const l = document.createElement('span'); l.className = 'lbl'; l.dataset.v = v; l.textContent = n; l.style.left = pct(v) * 100 + '%'; slider.appendChild(l);
-  });
-  const k = () => parseFloat(getComputedStyle(h1).getPropertyValue('--k')) || 1;
-  function paint(v, snap) {
-    const s = stepOf(v), shown = snap ? s[0] : Math.round(v);
-    h1.style.setProperty('--fs', shown);
-    $('sizeV').textContent = shown;
-    $('stepV').textContent = snap || Math.abs(shown - s[0]) < 2 ? s[1] : 'custom';
-    knob.style.left = fill.style.width = pct(shown) * 100 + '%';
-    slider.setAttribute('aria-valuenow', shown);
-    slider.querySelectorAll('.lbl').forEach((l) => l.classList.toggle('on', +l.dataset.v === s[0]));
-    clearTimeout(dimsT);
-    dimsT = setTimeout(() => { $('dims').textContent = `${Math.round(h1.getBoundingClientRect().width / k())} × ${shown}`; }, 580);
-  }
-  function note(msg, code, ms = 3200) { $('tMsg').textContent = msg; $('tCode').innerHTML = code; toast.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove('on'), ms); }
-  function save(v) {
-    const from = stepOf(saved)[1], to = stepOf(v)[1];
-    saved = stepOf(v)[0];
-    if (from !== to) note(`Heading, size ${saved}`, `Saved to Hero.jsx · text-${from} → <em>text-${to}</em>`);
-  }
-  paint(60, true);
-  let dragging = false, demo = true;
-  const fromX = (x) => { const r = slider.getBoundingClientRect(); return MIN + Math.min(1, Math.max(0, (x - r.left) / r.width)) * (MAX - MIN); };
-  slider.addEventListener('pointerdown', (e) => { stopDemo(); dragging = true; slider.setPointerCapture(e.pointerId); size = fromX(e.clientX); paint(size); });
-  slider.addEventListener('pointermove', (e) => { if (dragging) { size = fromX(e.clientX); paint(size); } });
-  const release = () => { if (!dragging) return; dragging = false; size = stepOf(size)[0]; paint(size, true); save(size); };
-  slider.addEventListener('pointerup', release); slider.addEventListener('pointercancel', release);
-  slider.addEventListener('keydown', (e) => {
-    const i = STEPS.findIndex(([v]) => v === stepOf(size)[0]);
-    const j = ['ArrowRight', 'ArrowUp'].includes(e.key) ? Math.min(STEPS.length - 1, i + 1) : ['ArrowLeft', 'ArrowDown'].includes(e.key) ? Math.max(0, i - 1) : -1;
-    if (j < 0) return; e.preventDefault(); stopDemo(); size = STEPS[j][0]; paint(size, true); save(size);
-  });
-  $('undo').addEventListener('click', () => { stopDemo(); const was = stepOf(saved)[1]; size = saved = 60; paint(60, true); note('Undone', `Hero.jsx · text-${was} → <em>text-6xl</em>`, 2200); });
-  const rel = (el, fx, fy) => { const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect(); return [r.left - s.left + r.width * fx, r.top - s.top + r.height * fy]; };
-  const move = (x, y) => { cursor.style.translate = `${x}px ${y}px`; };
-  const onKnob = () => { const r = slider.getBoundingClientRect(), s = stage.getBoundingClientRect(); move(r.left - s.left + pct(size) * r.width - 3, r.top - s.top + 6); };
-  function stopDemo() { demo = false; cursor.classList.remove('on'); }
-  function glide(from, to, ms) {
-    const t0 = performance.now();
-    return new Promise((res) => { const f = (t) => { if (!demo) return res(); const x = Math.min(1, (t - t0) / ms), e = x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; size = from + (to - from) * e; paint(size); onKnob(); x < 1 ? requestAnimationFrame(f) : res(); }; requestAnimationFrame(f); });
-  }
-  (async () => {
-    if (still) return;
-    await wait(1200);
-    let rounds = 0;
-    while (demo && rounds < 3) {
-      if (getComputedStyle($('panel')).position !== 'absolute' || scrollY > 500) { await wait(3000); continue; }
-      rounds++;
-      move(...rel($('panel'), 0.2, 1.4)); cursor.classList.add('on'); await wait(700); if (!demo) break;
-      onKnob(); await wait(800); if (!demo) break;
-      await glide(60, 74, 1100); if (!demo) break;
-      size = 72; paint(72, true); save(72); await wait(3400); if (!demo) break;
-      move(...rel($('undo'), 0.4, 0.55)); await wait(900); if (!demo) break;
-      const was = stepOf(saved)[1]; size = saved = 60; paint(60, true); note('Undone', `Hero.jsx · text-${was} → <em>text-6xl</em>`, 1600);
-      await wait(1400); move(...rel($('panel'), 0.9, 1.6)); await wait(500); cursor.classList.remove('on'); await wait(4000);
+  /* Plays a card's demo once, the first time it comes into view. */
+  const onView = (el, fn) => new IntersectionObserver((es, o) => { if (es.some((e) => e.isIntersecting)) { o.disconnect(); fn(); } }, { threshold: 0.45 }).observe(el);
+
+  /* ---------- 1. Edit by hand: fields that scrub, a card that follows, code that updates ---------- */
+  {
+    const place = $('ePlace'), img = $('eImg'), txt = $('eTxt'), sel = $('eSel'), code = $('eCode');
+    const STEPS = { radius: [0, 2, 4, 6, 8, 12, 16, 24, 32], pad: [0, 4, 8, 12, 16, 20, 24] };
+    const RCLS = { 0: 'rounded-none', 2: 'rounded-sm', 4: 'rounded', 6: 'rounded-md', 8: 'rounded-lg', 12: 'rounded-xl', 16: 'rounded-2xl', 24: 'rounded-3xl', 32: 'rounded-[32px]' };
+    const st = { radius: 12, pad: 0, fill: 'surface', color: '#14161C', changed: null };
+    const pcls = (v) => (v ? `p-${v / 4}` : 'p-0');
+    function draw() {
+      place.style.borderRadius = st.radius + 'px';
+      place.style.padding = st.pad + 'px';
+      place.style.background = st.color;
+      img.style.borderRadius = st.pad ? Math.max(0, st.radius - st.pad) + 'px' : '0';
+      txt.style.padding = st.pad ? '0 2px 4px' : '0 14px 14px';
+      document.querySelectorAll('#cEdit .f[data-p] b').forEach((b) => { b.textContent = st[b.parentNode.dataset.p]; });
+      $('eSw').style.background = st.color; $('eFill').textContent = st.fill;
+      const h = (k, s) => (st.changed === k ? `<span class="hl">${s}</span>` : s);
+      code.innerHTML = `&lt;<span class="k">article</span> className=<span class="s">"${h('radius', RCLS[st.radius])} ${h('pad', pcls(st.pad))} ${h('fill', 'bg-' + st.fill)} overflow-hidden"</span>&gt;`;
+      requestAnimationFrame(place2);
     }
-    cursor.classList.remove('on');
-  })();
-
-  /* ---------- the Tovi window: a scripted session on the Aster site ---------- */
-  const tv = $('tv'), wrap = $('tvwrap');
-  let S = 1;
-  const fit = () => { S = wrap.clientWidth / 1240; wrap.style.setProperty('--S', S); };
-  fit(); addEventListener('resize', fit);
-  let seen = false;
-  new IntersectionObserver((es) => es.forEach((e) => { seen = e.isIntersecting; }), { threshold: 0.25 }).observe(wrap);
-  const R = (el) => { const r = el.getBoundingClientRect(), t = tv.getBoundingClientRect(); return { x: (r.left - t.left) / S, y: (r.top - t.top) / S, w: r.width / S, h: r.height / S }; };
-  const cur = $('tvCur'), tov = $('tvTov');
-  const go = (el, fx = 0.5, fy = 0.5, c = cur) => { const r = R(el); c.style.translate = `${r.x + r.w * fx - 4}px ${r.y + r.h * fy - 3}px`; };
-  const press = async () => { cur.classList.add('press'); await wait(140); cur.classList.remove('press'); };
-  const box = (el, b, pad = 0) => { const r = R(el); Object.assign(b.style, { left: r.x - pad + 'px', top: r.y - pad + 'px', width: r.w + pad * 2 + 'px', height: r.h + pad * 2 + 'px' }); return r; };
-  const panel = (n) => ['tvP0', 'tvP1', 'tvP2'].forEach((id, i) => { $(id).style.opacity = i === n ? 1 : 0; });
-  const chat = $('tvChat');
-  function add(html, cls) { const d = document.createElement('div'); d.className = 'tv-msg ' + cls; d.innerHTML = html; chat.appendChild(d); requestAnimationFrame(() => d.classList.add('on')); return d; }
-  async function type(el, text, ms = 32) { el.innerHTML = '<span class="car"></span>'; const car = el.firstChild; for (const ch of text) { car.before(ch); await wait(ms + Math.random() * 25); } }
-  const tvToast = $('tvToast');
-  const aH1 = $('aH1'), grid = $('aGrid'), sel = $('tvSel'), hov = $('tvHov'), aster = tv.querySelector('.aster');
-  let follow = null;
-  const track = (el, ms) => { const t0 = performance.now(); cancelAnimationFrame(follow); const f = (t) => { const r = box(el, sel, 3); $('tvSelD').textContent = `${Math.round(r.w / 0.62109)} × ${Math.round(r.h / 0.62109)}`; if (t - t0 < ms) follow = requestAnimationFrame(f); }; follow = requestAnimationFrame(f); };
-  async function until() { while (!seen || document.hidden) await wait(300); }
-  function reset() {
-    [...chat.querySelectorAll('.tv-msg')].forEach((m) => m.remove());
-    $('tvEmpty').style.opacity = 1; $('tvChip').textContent = 'Whole screen'; $('tvInput').innerHTML = ''; $('tvSend').classList.remove('go');
-    aH1.style.fontSize = ''; grid.classList.remove('premium'); aster.style.translate = '';
-    $('tvSizeV').textContent = '72'; $('tvStep').textContent = '7xl'; $('tvSize').classList.remove('hot'); $('tvRad').firstChild.textContent = '14'; $('tvRadS').textContent = 'xl'; $('tvFill').textContent = '11131A';
-    $('tvN').textContent = '0'; sel.classList.remove('on'); hov.classList.remove('on'); panel(0);
-    [0, 1, 2, 3].forEach((i) => $('pk' + i).classList.remove('on')); tov.classList.remove('on'); $('tvPR').classList.remove('on'); tvToast.classList.remove('on');
-  }
-  function finalState() {
-    aH1.style.fontSize = '96px'; grid.classList.add('premium'); $('tvN').textContent = '5'; panel(1); $('tvSizeV').textContent = '96'; $('tvStep').textContent = '8xl';
-  }
-  async function scene() {
-    reset();
-    cur.style.translate = '640px 520px'; cur.classList.add('on');
-    await until(); await wait(900);
-    // 1. Select the headline.
-    go(aH1, 0.35, 0.45); await wait(800);
-    box(aH1, hov, 3); hov.classList.add('on'); await wait(350);
-    await press(); hov.classList.remove('on');
-    $('tvSelT').textContent = 'Title “Nights under the…”'; track(aH1, 50); sel.classList.add('on'); panel(1); $('tvChip').textContent = 'Title “Nights under the…”';
-    await wait(1100); await until();
-    // 2. Drag its size from 72 to 96 in the panel; it snaps to the scale and is saved to the code.
-    go($('tvSize'), 0.35, 0.5); await wait(850); await press(); $('tvSize').classList.add('hot');
-    for (const v of [74, 78, 83, 88, 92, 95, 96]) { $('tvSizeV').textContent = v; await wait(70); }
-    $('tvStep').textContent = '8xl'; aH1.style.fontSize = '96px'; track(aH1, 950);
-    await wait(500); $('tvSize').classList.remove('hot');
-    $('tvTM').textContent = 'Title, size 96'; $('tvTC').innerHTML = 'Saved to Hero.jsx · text-7xl → <em>text-8xl</em>'; tvToast.classList.add('on'); $('tvN').textContent = '1';
-    await wait(2300); tvToast.classList.remove('on'); await until();
-    // 3. Scroll down to the cards, then select one: Tovi knows the four look alike.
-    sel.classList.remove('on'); aster.style.translate = '0 -96px'; await wait(1000);
-    const card = grid.children[0];
-    go(card, 0.5, 0.82); await wait(850); await press();
-    $('tvSelT').textContent = 'Card “Lofoten”'; track(card, 50); panel(2); $('tvChip').textContent = 'Card “Lofoten” · 4 look alike';
-    await wait(900);
-    // 4. Ask Tovi.
-    go($('tvInput'), 0.3, 0.5); await wait(850); await press();
-    await type($('tvInput'), 'Make these cards feel more premium');
-    $('tvSend').classList.add('go'); await wait(300); go($('tvSend')); await wait(700); await press();
-    $('tvEmpty').style.opacity = 0; $('tvInput').innerHTML = ''; $('tvSend').classList.remove('go');
-    add('Make these cards feel more premium', 'tv-you');
-    const st = add('<span class="tv-av"></span><span class="tv-shim">Looking at 4 cards · Thinking</span>', 'tv-status');
-    sel.classList.remove('on');
-    cur.style.translate = '640px 690px';
-    await wait(600);
-    [...grid.children].forEach((c, i) => { box(c, $('pk' + i), 4); setTimeout(() => $('pk' + i).classList.add('on'), i * 110); });
-    tov.classList.add('on'); go(grid.children[0], 0.6, 0.35, tov); await wait(900);
-    go(grid.children[2], 0.5, 0.45, tov); await wait(900);
-    st.querySelector('.tv-shim').textContent = 'Changing 4 cards';
-    grid.classList.add('premium');
-    $('tvRad').firstChild.textContent = '22'; $('tvRadS').textContent = '2xl'; $('tvFill').textContent = '151824';
-    const t0 = performance.now(); const f = (t) => { [...grid.children].forEach((c, i) => box(c, $('pk' + i), 4)); if (t - t0 < 1300) requestAnimationFrame(f); }; requestAnimationFrame(f);
-    go(grid.children[3], 0.4, 0.5, tov); await wait(1100);
-    st.remove(); tov.classList.remove('on');
-    add('I gave the cards more room, softer corners and your display font for the titles.<div class="tv-card"><span class="ok"><svg width="8" height="8" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="#0B2A18" stroke-width="2.6" stroke-linecap="round"/></svg></span>Applied to 4 cards<span class="u">Undo</span></div>', 'tv-reply');
-    $('tvN').textContent = '5';
-    await wait(800); [0, 1, 2, 3].forEach((i) => $('pk' + i).classList.remove('on'));
-    await wait(1600); await until();
-    // 5. Hand off.
-    go($('tvHand'), 0.4, 0.5); await wait(900); await press();
-    $('tvPR').classList.add('on');
-    await wait(3600);
-    cur.classList.remove('on'); $('tvPR').classList.remove('on');
-    await wait(700);
-  }
-  (async () => {
-    if (still) { finalState(); return; }
-    await wait(600);
-    for (;;) { await scene(); }
-  })();
-
-  /* ---------- the AI band: a chat box that types itself ---------- */
-  const ctxt = $('ctxt');
-  const lines = ['Make the cards feel more premium', 'Tighten the spacing in the footer', 'Give this heading more contrast', 'Use our display font for every title'];
-  let aiSeen = false;
-  new IntersectionObserver((es) => es.forEach((e) => { aiSeen = e.isIntersecting; }), { threshold: 0.3 }).observe($('ai'));
-  (async () => {
-    if (still) { ctxt.textContent = lines[0]; return; }
-    for (let i = 0; ; i = (i + 1) % lines.length) {
-      while (!aiSeen) await wait(400);
-      ctxt.innerHTML = '<span class="car"></span>';
-      const car = ctxt.firstChild;
-      for (const ch of lines[i]) { car.before(ch); await wait(40 + Math.random() * 35); }
-      await wait(2200);
-      while (car.previousSibling) { car.previousSibling.remove(); await wait(14); }
-      await wait(300);
+    function place2() {
+      const r = place.getBoundingClientRect(), c = place.parentNode.getBoundingClientRect();
+      Object.assign(sel.style, { left: r.left - c.left - 1 + 'px', top: r.top - c.top - 1 + 'px', width: r.width + 2 + 'px', height: r.height + 2 + 'px' });
     }
-  })();
+    function step(p, dir) {
+      const s = STEPS[p], i = s.indexOf(st[p]);
+      const n = s[Math.max(0, Math.min(s.length - 1, (i < 0 ? 0 : i) + dir))];
+      if (n === st[p]) return;
+      st[p] = n; st.changed = p; draw();
+    }
+    document.querySelectorAll('#cEdit .f[data-p]').forEach((f) => {
+      const p = f.dataset.p;
+      const [less, more] = f.querySelectorAll('.st button');
+      less.addEventListener('click', () => step(p, -1));
+      more.addEventListener('click', () => step(p, 1));
+      // Drag the icon to scrub, like Figma: every 14px moves one step on the scale.
+      const ic = f.querySelector('.ic');
+      ic.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); ic.setPointerCapture(e.pointerId);
+        let x0 = e.clientX;
+        const move = (ev) => { const d = Math.trunc((ev.clientX - x0) / 14); if (d) { step(p, Math.sign(d)); x0 = ev.clientX; } };
+        const up = () => { ic.removeEventListener('pointermove', move); ic.removeEventListener('pointerup', up); };
+        ic.addEventListener('pointermove', move); ic.addEventListener('pointerup', up);
+      });
+    });
+    $('eSws').addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      $('eSws').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+      st.fill = b.dataset.t; st.color = b.dataset.c; st.changed = 'fill'; draw();
+    });
+    addEventListener('resize', place2);
+    draw();
+    // A short demo the first time: round the corners, add padding, change the fill.
+    onView($('cEdit'), async () => { if (still) return; await wait(500); for (const k of [1, 1]) { step('radius', k); await wait(380); } await wait(250); for (const k of [1, 1, 1]) { step('pad', k); await wait(320); } await wait(300); $('eSws').children[2].click(); });
+  }
 
-  // No sign-up service is connected yet: the form only confirms on the page.
+  /* ---------- 2. UX audit: a sweep, then notes pinned to what's off ---------- */
+  {
+    const run = $('aRun'), sweep = $('aSweep'), list = $('aList'), tags = [...document.querySelectorAll('#cAudit .tagM')];
+    async function audit() {
+      run.classList.add('gone'); list.classList.remove('on'); tags.forEach((t) => t.classList.remove('on'));
+      sweep.classList.remove('run'); void sweep.offsetWidth; sweep.classList.add('run');
+      await wait(1100 * T);
+      for (const t of tags) { t.classList.add('on'); await wait(220 * T); }
+      list.classList.add('on');
+      await wait(400);
+      run.textContent = 'Run again'; run.classList.add('again'); run.classList.remove('gone');
+    }
+    run.addEventListener('click', audit);
+    list.addEventListener('mouseover', (e) => { const r = e.target.closest('[data-i]'); tags.forEach((t) => t.classList.toggle('hl', !!r && t.dataset.i === r.dataset.i)); });
+    list.addEventListener('mouseleave', () => tags.forEach((t) => t.classList.remove('hl')));
+    onView($('cAudit'), () => { if (!still) setTimeout(audit, 600); });
+  }
+
+  /* ---------- 3. AI improvements: same request, your system or an exploration ---------- */
+  {
+    const plan = $('iPlan'), steps = $('iSteps'), go = $('iGo');
+    let mode = 'sys', busy = false;
+    const CONTENT = {
+      sys: { n: 'Starter', p: '$12', li: ['3 projects', 'Unlimited edits', 'Email support'], b: 'Choose plan', s: ['Reading the card', 'Applying your tokens', 'Checking the result'] },
+      ex: { n: 'Starter', p: '$12', li: ['3 projects', 'Unlimited edits', 'Email support'], b: 'Start free', s: ['Reading the card', 'Trying a new direction', 'Checking contrast'] },
+    };
+    document.querySelectorAll('#cAI .modes button').forEach((b) => b.addEventListener('click', () => {
+      mode = b.dataset.m;
+      document.querySelectorAll('#cAI .modes button').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
+      plan.className = 'plan'; plan.querySelector('.go').textContent = 'Choose plan';
+    }));
+    async function improve() {
+      if (busy) return; busy = true;
+      plan.className = 'plan';
+      const c = CONTENT[mode], rows = [...steps.children];
+      rows.forEach((r, i) => { r.textContent = c.s[i]; r.classList.remove('ok'); });
+      steps.classList.add('on');
+      for (const r of rows) { await wait(420 * T); r.classList.add('ok'); }
+      plan.classList.add(mode); plan.querySelector('.go').textContent = c.b;
+      await wait(900 * T); steps.classList.remove('on'); busy = false;
+    }
+    go.addEventListener('click', improve);
+    onView($('cAI'), () => { if (!still) setTimeout(improve, 700); });
+  }
+
+  /* ---------- 4. Notes: click to add, Apply works through them ---------- */
+  {
+    const area = $('nArea'), tagsEl = $('nTags'), tasks = $('nTasks'), page = $('nPage');
+    const START = [{ x: 210, y: 18, t: 'Heading feels timid' }, { x: 150, y: 132, t: 'Round the photos' }];
+    let notes = START.map((n) => ({ ...n })), done = false;
+    const IDEAS = ['Button needs more weight', 'Caption too faint', 'Tighten this gap', 'Align with the title'];
+    function draw() {
+      tagsEl.innerHTML = notes.map((n, i) => `<div class="nTag${done ? ' done' : ''}" style="left:${n.x}px;top:${n.y}px"><i></i><b>${done ? '✓' : i + 1}</b></div>`).join('');
+      tasks.innerHTML = notes.map((n, i) => `<div class="tk${done ? ' done' : ''}"><em>${i + 1}</em>${n.t}</div>`).join('') +
+        `<div class="ft">${done ? '<span style="color:var(--ok)">All fixed</span><button class="linkB" data-r>Reset</button>' : `<span style="color:var(--ink3)">${notes.length} tasks</span><button class="pinkBtn" data-a>Apply</button>`}</div>`;
+    }
+    area.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-r]')) { notes = START.map((n) => ({ ...n })); done = false; page.classList.remove('fixed'); draw(); return; }
+      if (e.target.closest('[data-a]')) { done = true; page.classList.add('fixed'); draw(); return; }
+      if (e.target.closest('.tasks') || done || notes.length >= 5) return;
+      const r = area.getBoundingClientRect();
+      notes.push({ x: e.clientX - r.left - 3, y: e.clientY - r.top - 16, t: IDEAS[(notes.length - 2) % IDEAS.length] });
+      draw();
+    });
+    draw();
+  }
+
+  /* ---------- 5. Design system: one token, every screen ---------- */
+  {
+    const tint = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+    function apply(c) {
+      $('dSw').style.background = c; $('dBtn').style.background = c; $('dBar').style.background = c;
+      $('dBadge').style.background = tint(c, 0.12); $('dBadge').style.color = c; $('dLink').style.color = c;
+    }
+    $('dSws').addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      $('dSws').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+      apply(b.dataset.c);
+    });
+    apply('#2563EB');
+  }
+
+  /* ---------- 6. GitHub: connect, pick a repository, ready ---------- */
+  {
+    const box = $('gBox');
+    const GH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>';
+    const REPO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>';
+    const repos = [['acme/storefront', 'Next.js'], ['acme/dashboard', 'Vite'], ['acme/marketing', 'Next.js']];
+    const start = () => { box.innerHTML = `<button class="ghBtn">${GH}Connect GitHub</button><span style="font-size:12px;color:var(--ink3)">Sign-in happens on GitHub's own page</span>`; };
+    box.addEventListener('click', async (e) => {
+      if (e.target.closest('.ghBtn')) { box.innerHTML = `<div class="ghCard">${repos.map(([n, f]) => `<button class="repo" data-n="${n}">${REPO}${n}<small>${f}</small></button>`).join('')}</div><span style="font-size:12px;color:var(--ink3)">Pick a repository</span>`; return; }
+      const r = e.target.closest('.repo');
+      if (r) {
+        box.innerHTML = `<div class="ghCard"><div class="repo" style="cursor:default">${REPO}<b style="font-weight:600">${r.dataset.n}</b><small>main</small></div><div class="ghDone"><div>React and Tailwind found</div><div>App installed and started</div><div>Opened with its real pages</div></div></div><button class="linkB" data-back>Start again</button>`;
+        for (const d of box.querySelectorAll('.ghDone div')) { await wait(380 * T); d.classList.add('on'); }
+        return;
+      }
+      if (e.target.closest('[data-back]')) start();
+    });
+    start();
+  }
+
+  /* ---------- 7. Hand off: the pull request builds itself ---------- */
+  {
+    const card = $('pCard'), state = $('pState'), checks = [...$('pChecks').children], go = $('pGo');
+    let busy = false;
+    async function handoff() {
+      if (busy) return; busy = true;
+      card.classList.remove('on'); state.textContent = 'Draft'; state.style.background = '#6E7781'; checks.forEach((c) => c.classList.remove('ok'));
+      await wait(200 * T); card.classList.add('on');
+      for (const c of checks) { await wait(450 * T); c.classList.add('ok'); }
+      await wait(200 * T); state.textContent = 'Open'; state.style.background = '#1F883D';
+      go.querySelector('span').textContent = '0'; busy = false;
+      setTimeout(() => { go.querySelector('span').textContent = '3'; }, 2500);
+    }
+    go.addEventListener('click', handoff);
+    onView($('cPR'), () => { if (!still) setTimeout(handoff, 700); else { card.classList.add('on'); checks.forEach((c) => c.classList.add('ok')); state.textContent = 'Open'; } });
+  }
+
+  /* ---------- 8. Code tracking: every visual change, its exact diff ---------- */
+  {
+    const CH = [
+      { t: 'Hero title', s: 'Size 72 → 96', f: 'src/sections/Hero.jsx', n: '1 line', d: [['c', '<section className="relative min-h-[760px]">'], ['m', '-  <h1 className="font-display text-7xl text-content">'], ['p', '+  <h1 className="font-display text-8xl text-content">'], ['c', '     Nights under the northern sky'], ['c', '   </h1>']] },
+      { t: 'Place cards', s: 'Corners 14 → 20, all 4', f: 'src/components/PlaceCard.jsx', n: '1 line', d: [['c', 'export function PlaceCard({ place }) {'], ['c', '  return ('], ['m', '-    <article className="rounded-xl bg-surface p-4">'], ['p', '+    <article className="rounded-2xl bg-surface p-4">']] },
+      { t: 'Book button', s: 'Fill surface → primary', f: 'src/components/Button.jsx', n: '2 lines', d: [['c', 'const variants = {'], ['m', '-  solid: "bg-surface text-content",'], ['p', '+  solid: "bg-primary text-primary-fg",'], ['m', '-  ghost: "border border-border",'], ['p', '+  ghost: "border border-border/60",'], ['c', '};']] },
+    ];
+    const list = $('cList');
+    list.innerHTML = CH.map((c, i) => `<button data-i="${i}"><b>${c.t}</b><small>${c.s}</small></button>`).join('');
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    function show(i) {
+      const c = CH[i];
+      list.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.i === i));
+      $('cFile').innerHTML = `${c.f}<span>${c.n} changed</span>`;
+      const d = $('cDiff'); d.classList.remove('sw'); void d.offsetWidth; d.classList.add('sw');
+      d.innerHTML = c.d.map(([k, l]) => `<div class="${k}">${esc(l)}</div>`).join('');
+    }
+    list.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) show(+b.dataset.i); });
+    list.addEventListener('mouseover', (e) => { const b = e.target.closest('button'); if (b && !b.classList.contains('on')) show(+b.dataset.i); });
+    show(0);
+  }
+
+  /* ---------- 9. Version history: drag to compare, pick a version ---------- */
+  {
+    const cmp = $('hCmp'), A = $('hA'), LA = $('hLA');
+    const set = (x) => cmp.style.setProperty('--x', Math.max(4, Math.min(96, x)) + '%');
+    const at = (e) => { const r = cmp.getBoundingClientRect(); set(((e.clientX - r.left) / r.width) * 100); };
+    cmp.addEventListener('pointerdown', (e) => { cmp.setPointerCapture(e.pointerId); cmp.classList.add('drag'); at(e); const mv = (ev) => at(ev); cmp.addEventListener('pointermove', mv); cmp.addEventListener('pointerup', () => { cmp.removeEventListener('pointermove', mv); cmp.classList.remove('drag'); }, { once: true }); });
+    // Earlier versions differ step by step: v1 the original, v2 bigger title, v3 rounder button.
+    const V = { 1: ['22px', '4px', '#888', '#fff', 'v1 · Start'], 2: ['27px', '4px', '#888', '#fff', 'v2 · Title'], 3: ['27px', '99px', '#9A9A9A', '#fff', 'v3 · Button'] };
+    $('hTl').addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b || b.dataset.v === '4') return;
+      $('hTl').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b || x.dataset.v === '4'));
+      const [fs, br, bg, c, lab] = V[b.dataset.v];
+      A.querySelector('.t').style.fontSize = fs; const btn = A.querySelector('.b'); btn.style.borderRadius = br; btn.style.background = bg; btn.style.color = c; LA.textContent = lab;
+    });
+    $('hTl').children[0].click();
+    onView($('cHist'), async () => { if (still) return; for (const x of [50, 62, 36, 50]) { set(x); await wait(520); } });
+  }
+
+  /* invite form: no sign-up service is connected yet, so it only confirms on the page */
   $('form').addEventListener('submit', (e) => { e.preventDefault(); $('thanks').textContent = "Thanks. You're on the list."; e.target.reset(); });
 })();
