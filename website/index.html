@@ -4,380 +4,473 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tovi · Fix the real product</title>
-<meta name="description" content="Tovi opens the app your team already built, so you can fix it by hand like in Figma, or with AI. Every edit lands in your code and goes to developers as one pull request.">
+<meta name="description" content="Tovi opens the app your team already built, so you can fix it by hand like in Figma, or let its AI do it. Every edit lands in your code and goes to developers as one pull request.">
+<meta name="theme-color" content="#0A0A0B">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Inter:wght@400;500;600&family=Caveat:wght@500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#F5F5F5;--card:#FFFFFF;--ink:#1C1C1C;--ink2:#5A5A5A;--ink3:#8E8E8E;--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.12);
-  --brand:#C2508A;--brandSoft:#FCBDDD;--brandWash:#FBEFF5;--sel:#2B66D9;--ok:#1E8A4F;--bad:#C23A2E;
-  --display:"Newsreader",Georgia,serif;--ui:Inter,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;
-  --fast:80ms;--mod:160ms;--slow:240ms;--ease:cubic-bezier(.2,0,0,1);
+  --bg:#0A0A0B;--bg2:#111113;--card:#141416;--card2:#1A1A1D;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.13);
+  --ink:#F2F2F3;--ink2:rgba(242,242,243,.64);--ink3:rgba(242,242,243,.42);
+  --pink:#FCBDDD;--rose:#E58BB8;--deep:#C2508A;--sel:#2B66D9;--ok:#3FB950;
+  --display:"Newsreader",Georgia,serif;--ui:Inter,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;--hand:"Caveat",cursive;
+  --ease:cubic-bezier(.2,0,0,1);
 }
 *{box-sizing:border-box}
-html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--ui)}
+html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth;background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--ui);overflow-x:hidden}
 img{display:block;max-width:100%}
 a{color:inherit}
 button{font:inherit;color:inherit}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .wrap{max-width:1200px;margin:0 auto;padding:0 32px}
 
+/* The page is a canvas: a quiet ruler along the top edge, like a design tool. */
+.ruler{position:fixed;left:0;right:0;top:0;height:20px;z-index:40;pointer-events:none;background-color:#0A0A0B;border-bottom:1px solid var(--line);font:500 9px/20px var(--mono);color:rgba(255,255,255,.26);overflow:hidden;
+  background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.12) 0 1px,transparent 1px 10px);background-size:100% 4px;background-repeat:no-repeat;background-position:0 100%}
+.ruler span{position:absolute;top:0;padding-left:3px;border-left:1px solid rgba(255,255,255,.18);height:20px}
+
 /* nav */
-.nav{position:sticky;top:0;z-index:30;background:rgba(245,245,245,.82);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid transparent;transition:border-color var(--mod) var(--ease)}
+.nav{position:sticky;top:20px;z-index:30;background:rgba(10,10,11,.7);backdrop-filter:saturate(1.4) blur(16px);-webkit-backdrop-filter:saturate(1.4) blur(16px);border-bottom:1px solid transparent;transition:border-color .16s var(--ease)}
 .nav.scrolled{border-bottom-color:var(--line)}
-.nav .wrap{display:flex;align-items:center;gap:28px;height:64px}
+.nav .wrap{display:flex;align-items:center;gap:28px;height:60px}
 .brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:17px;text-decoration:none;letter-spacing:-.01em}
 .brand svg{width:20px;height:20px}
 .nav nav{display:flex;gap:22px;font-size:14px;color:var(--ink2)}
-.nav nav a{text-decoration:none;transition:color var(--fast) var(--ease)}
+.nav nav a{text-decoration:none;transition:color .08s var(--ease)}
 .nav nav a:hover{color:var(--ink)}
 .nav .sp{flex:1}
-.signin{font-size:14px;color:var(--ink2);text-decoration:none}
-/* the main button: a near-black pill, lit from above, with a thin pink ring (once per screen) */
-.cta{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border:0;border-radius:999px;cursor:pointer;text-decoration:none;font-weight:500;font-size:14px;color:#fff;
-  background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 55%),#161616;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -2px 4px rgba(0,0,0,.6),0 0 0 2.5px #fff,0 0 0 4px rgba(194,80,138,.55),0 2px 6px rgba(0,0,0,.18);transition:transform var(--fast) var(--ease),box-shadow var(--mod) var(--ease)}
-.cta:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 -2px 4px rgba(0,0,0,.6),0 0 0 2.5px #fff,0 0 0 4px rgba(194,80,138,.85),0 3px 10px rgba(0,0,0,.2)}
+/* Main button: tactile, lit from above, Tovi pink, with a soft ring (once per screen). */
+.cta{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border:0;border-radius:999px;cursor:pointer;text-decoration:none;font-weight:500;font-size:14px;color:#1A0F14;
+  background:linear-gradient(180deg,#FFD9EC,#F4A9CF);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.75),inset 0 -2px 4px rgba(150,40,95,.25),0 0 0 1px rgba(0,0,0,.5),0 0 0 4px rgba(252,189,221,.14),0 6px 20px -6px rgba(229,139,184,.55);transition:transform .08s var(--ease),box-shadow .16s var(--ease)}
+.cta:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.75),inset 0 -2px 4px rgba(150,40,95,.25),0 0 0 1px rgba(0,0,0,.5),0 0 0 5px rgba(252,189,221,.22),0 8px 26px -6px rgba(229,139,184,.7)}
 .cta:active{transform:scale(.97)}
 .cta.lg{height:48px;padding:0 24px;font-size:15px}
-.ghost{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:999px;background:#fff;box-shadow:0 0 0 1px var(--line2),0 1px 2px rgba(0,0,0,.04);text-decoration:none;font-size:14px;font-weight:500;border:0;cursor:pointer;transition:box-shadow var(--fast) var(--ease)}
-.ghost:hover{box-shadow:0 0 0 1px rgba(0,0,0,.2),0 1px 2px rgba(0,0,0,.05)}
+.ghost{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 16px;border-radius:999px;background:rgba(255,255,255,.05);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 0 0 1px var(--line2);text-decoration:none;font-size:14px;font-weight:500;transition:background .08s var(--ease)}
+.ghost:hover{background:rgba(255,255,255,.09)}
+
+/* Light: slow aurora in Tovi's colours, drifting behind the hero and the last call. */
+.aurora{position:absolute;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.aurora i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.55;mix-blend-mode:screen;will-change:transform}
+.aurora .a1{width:62vw;height:34vw;left:-12vw;top:-6vw;background:radial-gradient(closest-side,rgba(252,189,221,.75),transparent);animation:drift1 26s ease-in-out infinite alternate}
+.aurora .a2{width:50vw;height:30vw;right:-10vw;top:-4vw;background:radial-gradient(closest-side,rgba(150,120,255,.55),transparent);animation:drift2 32s ease-in-out infinite alternate}
+.aurora .a3{width:40vw;height:22vw;left:30vw;top:18vw;background:radial-gradient(closest-side,rgba(110,230,190,.28),transparent);animation:drift3 22s ease-in-out infinite alternate}
+@keyframes drift1{to{transform:translate(14vw,6vw) scale(1.15) rotate(8deg)}}
+@keyframes drift2{to{transform:translate(-12vw,8vw) scale(.9) rotate(-10deg)}}
+@keyframes drift3{to{transform:translate(-16vw,-6vw) scale(1.25)}}
+/* a faint dot grid that fades out downwards */
+.grid{position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(rgba(255,255,255,.09) 1px,transparent 1px) 0 0/22px 22px;-webkit-mask:linear-gradient(180deg,#000 0,rgba(0,0,0,.6) 40%,transparent 85%);mask:linear-gradient(180deg,#000 0,rgba(0,0,0,.6) 40%,transparent 85%)}
 
 /* hero */
-.hero{position:relative;padding:88px 0 0;overflow:hidden}
-.hero::before{content:"";position:absolute;inset:-120px 0 auto;height:760px;z-index:-1;background:
-  radial-gradient(48% 60% at 18% 30%,rgba(252,189,221,.55),transparent 70%),
-  radial-gradient(40% 55% at 80% 20%,rgba(214,206,255,.45),transparent 70%),
-  radial-gradient(60% 50% at 50% 90%,rgba(245,245,245,1),transparent 70%)}
-.heroTop{display:grid;grid-template-columns:1.1fr 1fr;gap:56px;align-items:end}
-h1{margin:0;font:500 clamp(48px,7vw,84px)/0.98 var(--display);letter-spacing:-.025em;text-wrap:balance}
-.lede{margin:0 0 22px;font-size:20px;line-height:1.5;color:var(--ink);text-wrap:pretty;max-width:470px}
-.heroActs{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.hero{position:relative;padding:96px 0 0;isolation:isolate}
+.heroTop{display:grid;grid-template-columns:1.15fr 1fr;gap:56px;align-items:end}
+.badge{display:inline-flex;align-items:center;gap:8px;margin-bottom:22px;padding:4px 12px 4px 6px;border-radius:999px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--line2);font-size:13px;color:var(--ink2)}
+.badge b{padding:1px 8px;border-radius:999px;background:var(--pink);color:#1A0F14;font-size:11.5px;font-weight:600}
+h1{margin:0;font:400 clamp(50px,7.2vw,92px)/.96 var(--display);letter-spacing:-.03em;text-wrap:balance}
+h1 em{font-style:italic;color:var(--pink)}
+.lede{margin:0 0 24px;font-size:19px;line-height:1.55;color:var(--ink2);text-wrap:pretty;max-width:460px}
+.lede b{color:var(--ink);font-weight:500}
+.heroActs{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .fine{margin:16px 0 0;font-size:13px;color:var(--ink3)}
-.shot{position:relative;margin:64px auto 0;max-width:1240px;padding:0 32px}
-.win{border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 2px 4px rgba(0,0,0,.04),0 24px 60px -20px rgba(40,20,40,.28)}
-.winBar{display:flex;align-items:center;gap:7px;height:30px;padding:0 12px;background:#FAFAFA;border-bottom:1px solid var(--line)}
-.winBar i{width:11px;height:11px;border-radius:50%;background:#E3E3E3}
-.win img{width:100%;height:auto}
+.stageWrap{position:relative;margin:72px auto 0;max-width:1260px;padding:0 32px}
+.hand{position:absolute;z-index:3;font:500 24px/1 var(--hand);color:var(--pink);pointer-events:none;white-space:nowrap}
+.hand svg{position:absolute;overflow:visible}
+.hand path{fill:none;stroke:var(--pink);stroke-width:1.6;stroke-linecap:round}
 
-/* works with */
-.works{padding:56px 0 8px;text-align:center}
-.works p{margin:0 0 22px;font-size:14px;color:var(--ink3)}
-.logos{display:flex;flex-wrap:wrap;justify-content:center;gap:14px 40px;color:#9A9A9A}
-.logos span{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:500;color:#8A8A8A;transition:color var(--mod) var(--ease)}
-.logos span:hover{color:var(--ink)}
-.logos svg{width:20px;height:20px;fill:currentColor}
+/* ---------- the editor replica (base 1200×740, scaled to fit) ---------- */
+.fit{position:relative;width:100%}
+.fit>.base{position:absolute;left:0;top:0;transform-origin:0 0}
+.ed{width:1200px;height:740px;border-radius:14px;overflow:hidden;background:#1C1C1C;font:400 12px/1.4 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#EEE;
+  box-shadow:0 0 0 1px rgba(255,255,255,.1),0 40px 120px -30px rgba(229,139,184,.35),0 30px 80px -20px rgba(0,0,0,.8);display:grid;grid-template-columns:250px 1fr 262px;position:relative}
+.ed .col{display:flex;flex-direction:column;background:#2A2A2A;min-height:0}
+.ed .colL{border-right:1px solid #353538;padding-bottom:58px}
+.ed .colR{border-left:1px solid #353538}
+.phd{display:flex;align-items:center;gap:8px;height:44px;padding:0 10px;flex:0 0 auto}
+.phd .dots{display:flex;gap:6px;margin-right:6px}
+.phd .dots i{width:10px;height:10px;border-radius:50%;background:#4A4A4D}
+.logoM{display:flex;gap:2px}.logoM i{width:5px;height:10px;border-radius:1.5px;background:#E9A3C6}.logoM i+i{background:#FCBDDD}
+.crumb{color:rgba(255,255,255,.55)}.crumb b{color:#EEE;font-weight:500}
+.tabs{display:flex;margin:0 10px 8px;padding:1px;border-radius:7px;background:rgba(255,255,255,.05)}
+.tabs span{flex:1;height:22px;display:grid;place-items:center;border-radius:6px;color:rgba(255,255,255,.55)}
+.tabs span.on{background:rgba(255,255,255,.05);color:#EEE;box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff22,0 1px .5px #00000018,0 0 3px -1px #000000aa}
+.chat{flex:1;display:flex;flex-direction:column;gap:10px;padding:8px 12px;overflow:hidden;justify-content:flex-end}
+.cEmpty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;color:rgba(255,255,255,.5);padding:0 18px;transition:opacity .24s var(--ease)}
+.cEmpty b{color:#EEE;font-size:13px}
+.blob{width:44px;height:40px;border-radius:50% 50% 46% 46%;background:radial-gradient(circle at 35% 35%,#C9A5F2,#8E62D9 70%);position:relative;margin-bottom:6px}
+.blob::before,.blob::after{content:"";position:absolute;top:16px;width:4px;height:5px;border-radius:50%;background:#2A1645}.blob::before{left:15px}.blob::after{right:15px}
+.uMsg{align-self:flex-end;max-width:200px;padding:7px 10px;border-radius:12px;background:#3A3A3D;font-size:12px;animation:in .24s var(--ease)}
+.kMsg{display:flex;flex-direction:column;gap:6px;font-size:12px;color:rgba(255,255,255,.82);animation:in .24s var(--ease)}
+@keyframes in{from{opacity:0;transform:translateY(6px)}}
+.stepL{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.stepL div{display:flex;align-items:center;gap:7px;color:rgba(255,255,255,.4)}
+.stepL div::before{content:"";width:10px;height:10px;border-radius:50%;border:1.5px solid rgba(255,255,255,.25);box-sizing:border-box}
+.stepL div.run{color:#EEE}
+.stepL div.run::before{border-color:var(--pink);border-right-color:transparent;animation:spin .7s linear infinite}
+.stepL div.ok{color:rgba(255,255,255,.75)}
+.stepL div.ok::before{border:0;background:var(--pink);box-shadow:inset 0 0 0 3px #2A2A2A}
+@keyframes spin{to{transform:rotate(360deg)}}
+.applied{display:flex;align-items:center;gap:8px;color:rgba(255,255,255,.55)}
+.applied i{color:var(--ok);font-style:normal}
+.applied u{margin-left:auto;text-decoration:none;color:rgba(255,255,255,.75)}
+.compose{margin:8px 10px 10px;padding:8px 10px;border-radius:12px;background:#323235;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);position:relative;transition:box-shadow .24s var(--ease)}
+.compose.busy{box-shadow:inset 0 0 0 1px rgba(252,189,221,.55),0 0 0 3px rgba(252,189,221,.12),0 0 24px -4px rgba(252,189,221,.35)}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.06);font-size:11px;color:rgba(255,255,255,.75)}
+.inp{min-height:34px;padding:8px 2px 4px;color:#EEE}
+.inp.ph{color:rgba(255,255,255,.35)}
+.inp .caret{display:inline-block;width:1.5px;height:13px;margin-left:1px;vertical-align:-2px;background:var(--pink);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.crow{display:flex;align-items:center;justify-content:space-between;color:rgba(255,255,255,.45);font-size:11px}
+.send{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#4A4A4D;transition:background .16s var(--ease)}
+.send.on{background:var(--pink)}
+.canvasE{position:relative;background:#1C1C1C radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px) 0 0/16px 16px;overflow:hidden}
+.fLab{position:absolute;left:28px;top:14px;color:rgba(255,255,255,.55);font-size:11px}.fLab b{color:#EEE;font-weight:500;margin-right:6px}
+.frame{position:absolute;left:28px;top:36px;width:632px;height:700px;overflow:hidden;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+.aster{width:1024px;transform:scale(.6171875);transform-origin:0 0;background:#090A0E;color:#F0F2F7;font-family:Inter,sans-serif}
+.a-nav{display:flex;align-items:center;gap:32px;padding:22px 40px;position:absolute;left:0;right:0;top:0;z-index:2}
+.a-logo{font:400 32px/1 "Newsreader",serif}
+.a-links{display:flex;gap:28px;margin-left:auto;font-size:15px;color:rgba(240,242,247,.8)}
+.a-book{padding:10px 18px;border-radius:99px;background:#F0F2F7;color:#090A0E;font-size:15px;font-weight:500}
+.a-hero{position:relative;height:720px;display:flex;align-items:flex-end}
+.a-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.a-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(9,10,14,.15),rgba(9,10,14,.2) 40%,#090A0E)}
+.a-hc{position:relative;z-index:1;padding:0 40px 70px}
+.a-eye{font-size:12px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:#84F0BA;transition:color .6s var(--ease)}
+.a-h1{margin:14px 0 18px;font:400 72px/.95 "Newsreader",serif;max-width:640px;letter-spacing:0;transition:font-size .9s var(--ease),letter-spacing .9s var(--ease),max-width .9s var(--ease)}
+.a-p{max-width:520px;font-size:19px;line-height:1.5;color:rgba(240,242,247,.75);margin:0 0 28px}
+.a-btns{display:flex;gap:12px}
+.a-btn{padding:14px 24px;border-radius:8px;background:#84F0BA;color:#090A0E;font-size:16px;font-weight:600;transition:border-radius .7s var(--ease),background .7s var(--ease),color .7s var(--ease)}
+.a-btn2{padding:14px 24px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(240,242,247,.3);font-size:16px;transition:border-radius .7s var(--ease)}
+.a-places{padding:40px}
+.a-h2{margin:10px 0 24px;font:400 46px/1 "Newsreader",serif}
+.a-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.a-card{border-radius:6px;overflow:hidden;background:#14161C;transition:border-radius .7s var(--ease)}
+.a-card img{width:100%;aspect-ratio:4/3;object-fit:cover}
+.a-card div{padding:12px 14px 16px;font:400 22px/1 "Newsreader",serif}
+.sel{position:absolute;z-index:4;pointer-events:none;border:1.5px solid var(--sel);opacity:0;transition:all .3s var(--ease)}
+.sel.on{opacity:1}
+.sel .tg{position:absolute;left:-1.5px;top:-20px;padding:1px 6px;border-radius:4px;background:var(--sel);color:#fff;font-size:10.5px;line-height:16px;white-space:nowrap}
+.sel.pk{border-color:var(--pink);border-style:dashed}
+.sel.pk .tg{background:var(--pink);color:#1A0F14}
+.sel i{position:absolute;width:7px;height:7px;background:#fff;border:1.5px solid var(--sel)}
+.sel i:nth-of-type(1){left:-4px;top:-4px}.sel i:nth-of-type(2){right:-4px;top:-4px}.sel i:nth-of-type(3){left:-4px;bottom:-4px}.sel i:nth-of-type(4){right:-4px;bottom:-4px}
+.sel.pk i{display:none}
+.tbar{position:absolute;left:50%;bottom:14px;translate:-50% 0;z-index:5;display:flex;gap:4px;padding:5px;border-radius:14px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 12px 30px -10px rgba(0,0,0,.7)}
+.tbar span{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:rgba(255,255,255,.7)}
+.tbar span.on{background:linear-gradient(180deg,#FFD3E9,#F7B2D6);color:#1A0F14;box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 0 0 .5px rgba(0,0,0,.5)}
+.tbar svg{width:17px;height:17px}
+.av{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#E9A3C6,#FCBDDD);display:grid;place-items:center;color:#2A1020;font-size:10px;font-weight:600}
+.hoff{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;height:26px;padding:0 5px 0 10px;border-radius:7px;color:#1A0F14;font-weight:500;background:linear-gradient(180deg,#FFD3E9,#F7B2D6);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -1px 0 rgba(120,20,70,.12),0 0 0 .5px rgba(0,0,0,.5);transition:transform .16s var(--ease)}
+.hoff .n{min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:rgba(0,0,0,.1);display:grid;place-items:center;font-size:10.5px}
+.hoff.bump{transform:scale(1.08)}
+.pnl{flex:1;overflow:hidden;position:relative}
+.ps{position:absolute;inset:0;transition:opacity .24s var(--ease)}
+.pS{padding:10px 12px;border-bottom:1px solid #353538}
+.pH{font-weight:500;font-size:12px;margin-bottom:8px}
+.lab{font-size:11px;color:rgba(255,255,255,.4);margin:6px 0 4px}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.f{display:flex;align-items:center;gap:6px;height:24px;padding:0 8px 0 5px;border-radius:6px;background:rgba(255,255,255,.055);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa;color:rgba(255,255,255,.9);font-variant-numeric:tabular-nums;transition:box-shadow .3s var(--ease)}
+.f .k{width:16px;text-align:center;color:rgba(255,255,255,.4);font-size:11px}
+.f.flash{box-shadow:0 0 0 1.5px var(--pink),0 0 12px -2px rgba(252,189,221,.5)}
+.sw{width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+.selHint{margin:10px 12px;padding:18px 12px;border-radius:10px;border:1px dashed rgba(255,255,255,.12);text-align:center;color:rgba(255,255,255,.5)}
+.selHint b{display:block;color:#EEE;margin-bottom:3px}
+.cur{position:absolute;z-index:20;left:0;top:0;pointer-events:none;transition:transform .75s cubic-bezier(.3,.1,.2,1);will-change:transform}
+.cur svg{width:20px;height:20px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.cur.click svg{animation:clk .22s var(--ease)}
+@keyframes clk{50%{transform:scale(.85)}}
+.cur .nm{position:absolute;left:16px;top:16px;padding:1px 7px;border-radius:6px;background:var(--pink);color:#1A0F14;font:600 10.5px/16px -apple-system,system-ui,sans-serif}
+.toast{position:absolute;z-index:15;right:16px;top:54px;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:#323235;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 16px 40px -12px rgba(0,0,0,.7);opacity:0;transform:translateY(10px) scale(.97);transition:all .24s var(--ease)}
+.toast.on{opacity:1;transform:none}
+.toast i{width:22px;height:22px;border-radius:50%;background:rgba(63,185,80,.18);color:var(--ok);display:grid;place-items:center;font-style:normal;font-weight:700}
+.toast b{display:block;font-weight:500}.toast small{color:rgba(255,255,255,.5)}
 
-/* section heads, like Sketch: pill label, serif headline, one paragraph, a quiet button on the right */
-.sec{padding:120px 0 0}
-.secHead{display:grid;grid-template-columns:1fr auto;align-items:end;gap:24px;margin-bottom:36px}
-.pill{display:inline-block;margin-bottom:16px;padding:3px 10px;border-radius:999px;background:var(--brandWash);color:#9C3A6C;font-size:12px;font-weight:500}
-h2{margin:0;font:500 clamp(36px,4.6vw,60px)/1.02 var(--display);letter-spacing:-.02em;text-wrap:balance;max-width:720px}
-.secHead p{margin:16px 0 0;font-size:18px;color:var(--ink2);max-width:600px;text-wrap:pretty}
+/* works with: a slow marquee */
+.works{padding:64px 0 0;text-align:center}
+.works p{margin:0 0 24px;font-size:13px;color:var(--ink3)}
+.marq{overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.mtrack{display:flex;gap:56px;width:max-content;animation:marq 40s linear infinite}
+.mtrack span{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:500;color:rgba(255,255,255,.5)}
+.mtrack svg{width:22px;height:22px;fill:currentColor}
+@keyframes marq{to{transform:translateX(-50%)}}
+
+/* sections */
+.sec{position:relative;padding:140px 0 0}
+.secHead{display:grid;grid-template-columns:1fr auto;align-items:end;gap:24px;margin-bottom:40px}
+.pill{display:inline-block;margin-bottom:18px;padding:3px 10px;border-radius:999px;background:rgba(252,189,221,.1);box-shadow:inset 0 0 0 1px rgba(252,189,221,.18);color:var(--pink);font-size:12px;font-weight:500}
+h2{margin:0;font:400 clamp(40px,5vw,66px)/1 var(--display);letter-spacing:-.025em;text-wrap:balance;max-width:760px}
+h2 em{font-style:italic;color:var(--pink)}
+.secHead p{margin:18px 0 0;font-size:18px;color:var(--ink2);max-width:600px;text-wrap:pretty}
+.glow{position:absolute;left:0;right:0;bottom:-200px;height:420px;z-index:-1;pointer-events:none;background:radial-gradient(50% 60% at 30% 50%,rgba(252,189,221,.12),transparent 70%),radial-gradient(40% 50% at 75% 50%,rgba(150,120,255,.1),transparent 70%)}
 
 /* bento */
-.bento{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-.card{position:relative;display:flex;flex-direction:column;min-height:440px;border-radius:20px;background:var(--card);box-shadow:0 0 0 1px var(--line);overflow:hidden;isolation:isolate}
+.bento{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.card{position:relative;display:flex;flex-direction:column;border-radius:20px;background:var(--card);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 0 1px var(--line);overflow:hidden;isolation:isolate}
 .card.w2{grid-column:span 2}
-.card.dark{background:#141414;color:#F2F2F2;box-shadow:none}
-.card.wash{background:linear-gradient(180deg,#FDF1F7,#F6E9F1)}
-.card.photo{background:#0E1014 center/cover;color:#F2F2F2;box-shadow:none}
-.ct{padding:26px 28px 0;position:relative;z-index:2}
-.ct h3{margin:0 0 6px;font-size:19px;font-weight:600;letter-spacing:-.01em}
-.ct p{margin:0;font-size:15px;line-height:1.5;color:var(--ink2);max-width:420px}
-.dark .ct p,.photo .ct p{color:rgba(255,255,255,.66)}
-.stage{position:relative;flex:1;margin-top:22px;min-height:260px}
-.hint{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12.5px;color:var(--ink3)}
-.dark .hint,.photo .hint{color:rgba(255,255,255,.5)}
-.hint i{width:6px;height:6px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 3px rgba(194,80,138,.18)}
+.card.lit{background:radial-gradient(120% 90% at 0% 100%,rgba(252,189,221,.16),transparent 60%),var(--card)}
+.card.lit2{background:radial-gradient(120% 90% at 100% 0%,rgba(150,120,255,.16),transparent 60%),var(--card)}
+.card.light{background:#ECE9EC;color:#1C1C1C;box-shadow:none}
+.card.light .ct p{color:rgba(28,28,28,.6)}
+.card.photo{background:#0E1014 center/cover}
+.vis{position:relative;height:300px;overflow:hidden;pointer-events:none}
+.card.tall .vis{height:340px}
+.ct{padding:22px 26px 26px}
+.ct p{margin:0;font-size:17px;line-height:1.5;color:var(--ink2);max-width:440px;text-wrap:pretty}
+.ct p b{color:var(--ink);font-weight:500}
+.card.light .ct p b{color:#1C1C1C}
+.ui{font:400 12px/1.4 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#EEE}
+.uiPanel{background:#2A2A2A;border-radius:12px;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 24px 50px -20px rgba(0,0,0,.8)}
 
-/* the zoomed-in Tovi interface pieces inside the cards */
-.ui{font:400 12px/1.4 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#1C1C1C}
-.panel{background:#F2F2F2;border-radius:12px 0 0 0;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 20px 40px -18px rgba(0,0,0,.25)}
-.pH{font-weight:600;font-size:12px;margin:0 0 8px}
-.pS{padding:12px 14px;border-bottom:1px solid #E5E5E5}
-.pS:last-child{border-bottom:0}
-.lab{font-size:11px;color:rgba(0,0,0,.45);margin-bottom:4px}
-.r2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.f{display:flex;align-items:center;gap:6px;height:26px;padding:0 8px 0 5px;border-radius:6px;background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.07),0 1px 1px rgba(0,0,0,.035),0 1px 2px -1px rgba(0,0,0,.06);font-variant-numeric:tabular-nums;user-select:none}
-.f .ic{width:16px;height:16px;display:grid;place-items:center;color:rgba(0,0,0,.4);cursor:ew-resize;touch-action:none}
-.f .ic svg{width:14px;height:14px}
-.f b{font-weight:400;flex:1}
-.f .st{display:flex;gap:2px}
-.f .st button{width:16px;height:16px;padding:0;border:0;border-radius:4px;background:transparent;color:rgba(0,0,0,.4);cursor:pointer;display:grid;place-items:center}
-.f .st button:hover{background:rgba(0,0,0,.06);color:#1C1C1C}
-.f .sw{width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
-.sws{display:flex;gap:6px;margin-top:8px}
-.sws button{width:22px;height:22px;border-radius:50%;border:0;padding:0;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);transition:box-shadow var(--fast) var(--ease)}
-.sws button.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.12),0 0 0 2px #F2F2F2,0 0 0 3.5px var(--sel)}
-.selBox{position:absolute;pointer-events:none;border:1.5px solid var(--sel);border-radius:2px;transition:all var(--mod) var(--ease)}
-.selBox::before{content:attr(data-k);position:absolute;left:-1.5px;top:-21px;padding:1px 6px;border-radius:4px;background:var(--sel);color:#fff;font:500 10.5px/16px -apple-system,system-ui,sans-serif}
-.code{font:400 12px/1.7 var(--mono);color:#3A3A3A}
-.code .k{color:#9C3A6C}.code .s{color:#1E6B45}.code .hl{background:rgba(252,189,221,.5);border-radius:3px;transition:background var(--slow) var(--ease)}
-
-/* 1. manual editing */
-.edit{position:absolute;inset:0;display:grid;grid-template-columns:1fr 250px;grid-template-rows:1fr auto}
-.edit .canvas{position:relative;display:grid;place-items:center;background:#E9E9E9 radial-gradient(rgba(0,0,0,.09) 1px,transparent 1px) 0 0/14px 14px;border-top:1px solid var(--line)}
-.place{position:relative;width:min(230px,70%);background:#14161C;color:#F0F2F7;overflow:hidden;transition:border-radius var(--mod) var(--ease),padding var(--mod) var(--ease),background var(--mod) var(--ease);box-shadow:0 18px 40px -16px rgba(0,0,0,.45)}
-.place img{width:100%;aspect-ratio:4/3;object-fit:cover;transition:border-radius var(--mod) var(--ease)}
-.place h4{margin:12px 0 2px;font:400 26px/1 "Newsreader",serif}
-.place span{font-size:12px;color:rgba(240,242,247,.65)}
-.edit .panel{border-radius:0;border-left:1px solid #E2E2E2;box-shadow:none;border-top:1px solid var(--line)}
-.edit .code{grid-column:1/-1;padding:10px 16px;background:#FAFAFA;border-top:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 1. edit by hand */
+.v1 .cv{position:absolute;left:0;top:0;bottom:0;right:270px;display:grid;place-items:center;background:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px) 0 0/16px 16px}
+.v1 .pc{position:relative;width:200px;background:#14161C;overflow:hidden;transition:border-radius .5s var(--ease),padding .5s var(--ease),background .5s var(--ease);box-shadow:0 18px 40px -16px rgba(0,0,0,.8)}
+.v1 .pc img{width:100%;aspect-ratio:4/3;object-fit:cover;transition:border-radius .5s var(--ease)}
+.v1 .pc div{padding:10px 12px 12px;font:400 22px/1 "Newsreader",serif}
+.v1 .pc small{display:block;margin-top:4px;font:400 11px/1.3 Inter,sans-serif;color:rgba(240,242,247,.6)}
+.v1 .panelC{position:absolute;right:0;top:0;bottom:0;width:270px;border-radius:12px 0 0 0;background:#2A2A2A;border-left:1px solid #353538}
+.v1 .code{position:absolute;left:24px;bottom:18px;right:290px;padding:8px 12px;border-radius:9px;background:rgba(0,0,0,.45);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);font:11.5px/1.5 var(--mono);color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.code .k{color:#F7B2D6}.code .s{color:#9BE3BF}.code .hl{background:rgba(252,189,221,.25);color:#fff;border-radius:3px;transition:background .3s}
 
 /* 2. audit */
-.audit{position:absolute;left:28px;right:-1px;bottom:-1px;top:0;border-radius:12px 0 0 0;overflow:hidden;background:#0B0C10;box-shadow:0 0 0 1px rgba(0,0,0,.1)}
-.mini{position:absolute;inset:0;padding:22px 20px;color:#EDEFF4;font-family:Inter,sans-serif;background:#0B0C10 url(img/bg/green-aurora.jpg) center/cover}
-.mini::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,12,16,.1),rgba(11,12,16,.85) 70%)}
-.mini *{position:relative;z-index:1}
-.mini .eye{font-size:8px;letter-spacing:.18em;color:#84F0BA;font-weight:600}
-.mini .t{margin:6px 0 6px;font:400 27px/0.95 "Newsreader",serif;max-width:220px}
-.mini .d{font-size:9.5px;color:rgba(237,239,244,.45);max-width:200px}
-.mini .b{display:inline-block;margin-top:12px;padding:5px 10px;border-radius:99px;background:#84F0BA;color:#0B0C10;font-size:8.5px;font-weight:600}
-.sweep{position:absolute;left:0;right:0;top:0;height:60px;z-index:3;pointer-events:none;opacity:0;background:linear-gradient(180deg,transparent,rgba(252,189,221,.35) 80%,rgba(252,189,221,.9));border-bottom:1.5px solid #FCBDDD}
-.sweep.run{animation:sweep 1.4s var(--ease) forwards}
-@keyframes sweep{0%{opacity:1;transform:translateY(-60px)}90%{opacity:1}100%{opacity:0;transform:translateY(260px)}}
-.tagM{position:absolute;z-index:4;display:flex;align-items:flex-start;opacity:0;transform:translateY(4px);transition:opacity var(--slow) var(--ease),transform var(--slow) var(--ease)}
+.v2 .shot{position:absolute;left:26px;right:-1px;top:6px;bottom:-1px;border-radius:12px 0 0 0;overflow:hidden;background:#0B0C10 url(img/bg/green-aurora.jpg) center/cover;box-shadow:0 0 0 1px rgba(255,255,255,.1)}
+.v2 .shot::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,12,16,.05),rgba(11,12,16,.85) 75%)}
+.v2 .mini{position:absolute;z-index:1;left:20px;top:56px;color:#EDEFF4;font-family:Inter,sans-serif}
+.v2 .mini .e{font-size:8px;letter-spacing:.18em;color:#84F0BA;font-weight:600}
+.v2 .mini .t{margin:6px 0;font:400 26px/.95 "Newsreader",serif;max-width:200px}
+.v2 .mini .d{font-size:9.5px;color:rgba(237,239,244,.35);max-width:190px}
+.v2 .mini .b{display:inline-block;margin-top:10px;padding:4px 9px;border-radius:99px;background:#84F0BA;color:#0B0C10;font-size:8px;font-weight:600}
+.sweep{position:absolute;left:0;right:0;top:-80px;height:80px;z-index:3;background:linear-gradient(180deg,transparent,rgba(252,189,221,.28) 80%,rgba(252,189,221,.85));border-bottom:1.5px solid var(--pink);opacity:0}
+.sweep.go{animation:sweep 1.5s var(--ease) forwards}
+@keyframes sweep{0%{opacity:1;transform:translateY(0)}90%{opacity:1}100%{opacity:0;transform:translateY(380px)}}
+.tagM{position:absolute;z-index:4;display:flex;align-items:flex-start;opacity:0;transform:translateY(5px);transition:opacity .24s var(--ease),transform .24s var(--ease)}
 .tagM.on{opacity:1;transform:none}
-.tagM i{width:7px;height:7px;margin-top:13px;border-radius:50%;background:#FCBDDD;box-shadow:0 0 0 1.5px #fff}
-.tagM b{margin-left:3px;padding:1px 7px;border-radius:6px;background:#FCBDDD;color:#1A0F14;font:500 10.5px/16px -apple-system,system-ui,sans-serif;transition:box-shadow var(--fast) var(--ease)}
-.tagM.hl b{box-shadow:0 0 0 1.5px #fff}
-.issues{position:absolute;left:12px;right:12px;bottom:12px;z-index:5;padding:6px;border-radius:12px;background:rgba(255,255,255,.96);box-shadow:0 10px 30px -10px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity var(--slow) var(--ease),transform var(--slow) var(--ease)}
+.tagM i{width:7px;height:7px;margin-top:13px;border-radius:50%;background:var(--pink);box-shadow:0 0 0 1.5px #fff}
+.tagM b{margin-left:3px;padding:1px 7px;border-radius:6px;background:var(--pink);color:#1A0F14;font:600 10.5px/16px -apple-system,system-ui,sans-serif;white-space:nowrap;transition:box-shadow .16s}
+.tagM.hl b{box-shadow:0 0 0 2px #fff}
+.issues{position:absolute;left:12px;right:12px;bottom:12px;z-index:5;padding:5px;border-radius:12px;background:rgba(42,42,42,.96);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 12px 30px -10px rgba(0,0,0,.8);opacity:0;transform:translateY(8px);transition:all .24s var(--ease)}
 .issues.on{opacity:1;transform:none}
-.issues div{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:7px;cursor:default}
-.issues div:hover{background:#F3F3F3}
-.issues em{font-style:normal;width:16px;height:16px;border-radius:50%;background:#FCBDDD;color:#1A0F14;display:grid;place-items:center;font-size:9.5px;font-weight:600}
-.issues small{margin-left:auto;color:var(--ink3)}
-.runBtn{position:absolute;left:50%;top:44%;z-index:6;translate:-50% -50%;transition:opacity var(--mod) var(--ease)}
-.runBtn.again{left:auto;right:12px;top:12px;translate:none;height:28px;padding:0 10px;font-size:12px;background:rgba(255,255,255,.14);color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.18);backdrop-filter:blur(6px)}
-.runBtn.gone{opacity:0;pointer-events:none}
+.issues div{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:7px;transition:background .16s}
+.issues div.hl{background:rgba(255,255,255,.07)}
+.issues em{font-style:normal;width:16px;height:16px;border-radius:50%;background:var(--pink);color:#1A0F14;display:grid;place-items:center;font-size:9.5px;font-weight:700}
+.issues small{margin-left:auto;color:rgba(255,255,255,.4)}
 
 /* 3. AI improvements */
-.ai{position:absolute;inset:0 0 0 0;display:flex;flex-direction:column;gap:12px;padding:0 24px 22px}
-.modes{display:inline-flex;align-self:flex-start;padding:2px;border-radius:9px;background:rgba(0,0,0,.05)}
-.modes button{height:26px;padding:0 10px;border:0;border-radius:7px;background:transparent;font-size:12px;color:var(--ink2);cursor:pointer;transition:background var(--mod) var(--ease),box-shadow var(--mod) var(--ease),color var(--mod) var(--ease)}
-.modes button.on{background:#fff;color:var(--ink);box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.08)}
-.prev{position:relative;flex:1;display:grid;place-items:center;border-radius:14px;background:#EFEFEF radial-gradient(rgba(0,0,0,.08) 1px,transparent 1px) 0 0/12px 12px;overflow:hidden}
-.plan{width:210px;padding:16px;border-radius:8px;background:#fff;border:1px solid #D9D9D9;font-family:Inter,sans-serif;transition:all var(--slow) var(--ease)}
-.plan .n{font-size:11px;color:#666;transition:all var(--slow) var(--ease)}
-.plan .p{margin:4px 0 10px;font-size:22px;font-weight:700;transition:all var(--slow) var(--ease)}
-.plan ul{margin:0 0 12px;padding:0 0 0 14px;font-size:10px;color:#555;transition:all var(--slow) var(--ease)}
-.plan .go{display:block;width:100%;height:28px;border:1px solid #BBB;border-radius:4px;background:#F2F2F2;font-size:11px;transition:all var(--slow) var(--ease)}
-.plan.sys{border-color:transparent;border-radius:16px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 12px 30px -12px rgba(0,0,0,.25)}
-.plan.sys .n{text-transform:uppercase;letter-spacing:.12em;font-size:9px;color:#8E8E8E}
-.plan.sys .p{font:500 30px/1 "Newsreader",serif;letter-spacing:-.01em}
-.plan.sys ul{list-style:none;padding:0;color:#3A3A3A;line-height:1.9}
-.plan.sys .go{border:0;border-radius:99px;background:#141414;color:#fff;height:32px}
-.plan.ex{border:0;border-radius:18px;background:linear-gradient(160deg,#1B1230,#3B1C3A 60%,#C2508A);color:#fff;box-shadow:0 16px 36px -14px rgba(120,30,80,.6)}
-.plan.ex .n{color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.12em;font-size:9px}
+.v3 .prev{position:absolute;inset:6px 24px 66px;border-radius:14px;display:grid;place-items:center;background:rgba(255,255,255,.03) radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px) 0 0/12px 12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.plan{width:190px;padding:14px;border-radius:6px;background:#F4F4F4;color:#222;border:1px solid #CFCFCF;font-family:Inter,sans-serif;transition:all .5s var(--ease)}
+.plan .n{font-size:10px;color:#666;transition:all .5s var(--ease)}
+.plan .p{margin:2px 0 8px;font-size:20px;font-weight:700;transition:all .5s var(--ease)}
+.plan ul{margin:0 0 10px;padding:0 0 0 14px;font-size:9.5px;color:#555;line-height:1.6;transition:all .5s var(--ease)}
+.plan .go{height:26px;border:1px solid #BBB;border-radius:3px;background:#E8E8E8;font-size:10px;display:grid;place-items:center;transition:all .5s var(--ease)}
+.plan.sys{background:#fff;border-color:transparent;border-radius:16px;box-shadow:0 18px 40px -16px rgba(0,0,0,.6)}
+.plan.sys .n{text-transform:uppercase;letter-spacing:.14em;font-size:8.5px;color:#999}
+.plan.sys .p{font:500 30px/1 "Newsreader",serif}
+.plan.sys ul{list-style:none;padding:0;color:#333}
+.plan.sys .go{border:0;border-radius:99px;background:#141414;color:#fff;height:30px}
+.plan.ex{background:linear-gradient(160deg,#21143A,#46204A 60%,#C2508A);color:#fff;border-color:transparent;border-radius:18px;box-shadow:0 18px 40px -14px rgba(194,80,138,.6)}
+.plan.ex .n{color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.14em;font-size:8.5px}
 .plan.ex .p{font:500 32px/1 "Newsreader",serif}
-.plan.ex ul{list-style:none;padding:0;color:rgba(255,255,255,.75);line-height:1.9}
-.plan.ex .go{border:0;border-radius:99px;background:#FCBDDD;color:#1A0F14;height:32px}
-.comp{display:flex;align-items:center;gap:8px;height:42px;padding:0 6px 0 14px;border-radius:12px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.05);font-size:13px}
-.comp span{flex:1;color:var(--ink)}
-.comp button{width:30px;height:30px;border:0;border-radius:50%;background:#161616;color:#fff;cursor:pointer;display:grid;place-items:center}
-.steps{position:absolute;left:12px;top:12px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.95);box-shadow:0 6px 18px -8px rgba(0,0,0,.3);font-size:11px;display:none;flex-direction:column;gap:3px}
-.steps.on{display:flex}
-.steps div{display:flex;align-items:center;gap:6px;color:var(--ink3)}
-.steps div.ok{color:var(--ink)}
-.steps div.ok::before{content:"✓";color:var(--ok);font-weight:600}
-.steps div:not(.ok)::before{content:"";width:8px;height:8px;border-radius:50%;border:1.5px solid #CFCFCF}
+.plan.ex ul{list-style:none;padding:0;color:rgba(255,255,255,.75)}
+.plan.ex .go{border:0;border-radius:99px;background:var(--pink);color:#1A0F14;height:30px}
+.v3 .comp{position:absolute;left:24px;right:24px;bottom:14px;display:flex;align-items:center;gap:8px;height:42px;padding:0 6px 0 12px;border-radius:12px;background:#323235;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);transition:box-shadow .24s}
+.v3 .comp.busy{box-shadow:inset 0 0 0 1px rgba(252,189,221,.55),0 0 18px -4px rgba(252,189,221,.4)}
+.v3 .comp .txt{flex:1;color:#EEE}
+.v3 .mode{position:absolute;left:36px;top:18px;z-index:2;padding:2px 8px;border-radius:99px;background:rgba(0,0,0,.5);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);font-size:10.5px;color:rgba(255,255,255,.8)}
+.v3 .stepL{position:absolute;right:36px;top:16px;z-index:2;background:rgba(30,30,32,.92);opacity:0;transition:opacity .2s}
+.v3 .stepL.on{opacity:1}
 
 /* 4. notes */
-.notes{position:absolute;inset:0 0 0 28px;border-radius:12px 0 0 0;overflow:hidden;background:#FBF8F5;box-shadow:0 0 0 1px rgba(0,0,0,.08);cursor:crosshair}
-.np{position:absolute;inset:0;padding:22px;font-family:Inter,sans-serif}
-.np .t{font:500 26px/1 "Newsreader",serif;color:#2A2420;max-width:200px;transition:all var(--slow) var(--ease)}
-.np .d{margin:8px 0 12px;font-size:10px;color:#9A928A;max-width:220px;transition:all var(--slow) var(--ease)}
-.np .row{display:flex;gap:8px}
-.np .row i{display:block;width:72px;height:58px;border-radius:4px;background:#E7DED5 center/cover;transition:all var(--slow) var(--ease)}
-.np .b{display:inline-block;margin-top:12px;padding:4px 8px;border-radius:3px;background:#B9B2AA;color:#fff;font-size:9px;transition:all var(--slow) var(--ease)}
-.np.fixed .t{font-size:30px;color:#1C1714}
-.np.fixed .d{color:#6B6158}
-.np.fixed .row{gap:10px}
-.np.fixed .row i{border-radius:10px}
-.np.fixed .b{padding:6px 12px;border-radius:99px;background:#2A2420;font-size:10px}
-.nTag{position:absolute;display:flex;align-items:flex-start;pointer-events:none;animation:pop var(--mod) var(--ease)}
-@keyframes pop{from{opacity:0;transform:translateY(4px)}}
-.nTag i{width:7px;height:7px;margin-top:13px;border-radius:50%;background:#FCBDDD;box-shadow:0 0 0 1.5px #fff}
-.nTag b{margin-left:3px;padding:1px 7px;border-radius:6px;background:rgba(28,28,28,.92);color:#F2F2F2;font:500 10.5px/16px -apple-system,system-ui,sans-serif;white-space:nowrap;transition:background var(--mod) var(--ease)}
-.nTag.done b{background:#1E8A4F}
-.tasks{position:absolute;right:12px;bottom:12px;width:210px;padding:6px;border-radius:12px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 12px 28px -12px rgba(0,0,0,.3);cursor:default;font-size:11.5px}
-.tasks .tk{display:flex;gap:6px;align-items:center;padding:4px 6px;color:var(--ink)}
-.tasks .tk em{font-style:normal;color:var(--ink3)}
-.tasks .tk.done{color:var(--ink3);text-decoration:line-through}
-.tasks .ft{display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding:6px 4px 2px;border-top:1px solid var(--line)}
-.pinkBtn{height:26px;padding:0 12px;border:0;border-radius:7px;color:#fff;font-size:11.5px;font-weight:500;cursor:pointer;background:linear-gradient(180deg,#CB5C95,#B8457F);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 0 0 .5px rgba(120,20,70,.6),0 1px 2px rgba(120,20,70,.25)}
-.pinkBtn:active{transform:scale(.97)}
-.linkB{border:0;background:none;color:var(--ink3);font-size:11px;cursor:pointer}
+.v4 .pg{position:absolute;inset:6px 0 0 26px;border-radius:12px 0 0 0;overflow:hidden;background:#F7F3EE;box-shadow:0 0 0 1px rgba(255,255,255,.1);color:#2A2420;font-family:Inter,sans-serif;padding:22px}
+.v4 .t{font:500 25px/1 "Newsreader",serif;max-width:190px;transition:all .5s var(--ease)}
+.v4 .d{margin:8px 0 12px;font-size:9.5px;color:#A39A90;max-width:200px;transition:color .5s}
+.v4 .row{display:flex;gap:8px}
+.v4 .row i{display:block;width:70px;height:56px;border-radius:3px;background:#E7DED5 center/cover;transition:border-radius .5s var(--ease)}
+.v4 .b{display:inline-block;margin-top:12px;padding:4px 8px;border-radius:3px;background:#B9B2AA;color:#fff;font-size:8.5px;transition:all .5s var(--ease)}
+.v4 .pg.fixed .t{font-size:27px;max-width:215px;color:#1C1714}
+.v4 .pg.fixed .d{color:#6B6158}
+.v4 .pg.fixed .row i{border-radius:10px}
+.v4 .pg.fixed .b{padding:6px 12px;border-radius:99px;background:#2A2420;font-size:9.5px}
+.nT{position:absolute;z-index:4;display:flex;align-items:flex-start;animation:in .24s var(--ease)}
+.nT i{width:7px;height:7px;margin-top:13px;border-radius:50%;background:var(--pink);box-shadow:0 0 0 1.5px #fff}
+.nT b{margin-left:3px;padding:1px 7px;border-radius:6px;background:rgba(28,28,28,.92);color:#F2F2F2;font:500 10.5px/16px -apple-system,system-ui,sans-serif;white-space:nowrap;transition:background .3s}
+.nT.done b{background:#238636}
+.tasksM{position:absolute;right:12px;bottom:12px;z-index:5;width:196px;padding:5px;border-radius:12px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 14px 30px -10px rgba(0,0,0,.6);font-size:11px}
+.tasksM .tk{display:flex;gap:6px;padding:4px 6px;color:#EEE;animation:in .24s var(--ease)}
+.tasksM .tk em{font-style:normal;color:rgba(255,255,255,.4)}
+.tasksM .tk.done{color:rgba(255,255,255,.4);text-decoration:line-through}
+.tasksM .ft{display:flex;align-items:center;justify-content:space-between;margin-top:3px;padding:6px 4px 2px;border-top:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.45)}
+.pinkB{padding:4px 11px;border-radius:7px;color:#1A0F14;font-weight:500;background:linear-gradient(180deg,#FFD3E9,#F7B2D6);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 0 0 .5px rgba(0,0,0,.5)}
+.typing{position:absolute;z-index:6;padding:6px 8px;border-radius:9px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 10px 24px -8px rgba(0,0,0,.6);font-size:11px;color:#EEE;min-width:150px;opacity:0;transition:opacity .16s}
+.typing.on{opacity:1}
 
 /* 5. design system */
-.ds{position:absolute;inset:0;display:grid;grid-template-columns:160px 1fr;gap:0;border-top:1px solid var(--line)}
-.ds .panel{border-radius:0;box-shadow:none;border-right:1px solid #E2E2E2;padding:12px 14px}
-.tok{display:flex;align-items:center;gap:8px;height:24px;font-size:12px}
-.tok .sp{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);transition:background var(--slow) var(--ease)}
-.tok.act{font-weight:500}
-.dsPrev{display:flex;flex-direction:column;justify-content:center;gap:10px;padding:18px;background:#fff}
-.dsPrev .dsCard{padding:14px;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 8px 20px -10px rgba(0,0,0,.2)}
-.dsPrev .btn2{padding:7px 12px;border-radius:99px;font-size:11px;font-weight:500;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
-.dsLink{font-size:11px;font-weight:500;transition:color var(--slow) var(--ease)}
-.dsPrev{background:#FAFAFA!important}
-.dsPrev .btn{align-self:flex-start;padding:7px 12px;border-radius:99px;color:#fff;font-size:11px;font-weight:500;transition:background var(--slow) var(--ease)}
-.dsPrev .badge{align-self:flex-start;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:500;transition:all var(--slow) var(--ease)}
-.dsPrev .bar{height:6px;border-radius:99px;background:#EEE;overflow:hidden}
-.dsPrev .bar i{display:block;height:100%;width:64%;border-radius:99px;transition:background var(--slow) var(--ease)}
-.dsPrev .ln{font-size:11px;transition:color var(--slow) var(--ease)}
+.v5{display:grid;grid-template-columns:150px 1fr}
+.v5 .tokP{background:#2A2A2A;padding:14px;border-right:1px solid #353538;border-top:1px solid #353538}
+.tokR{display:flex;align-items:center;gap:8px;height:24px}
+.tokR .sp{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);transition:background .5s var(--ease)}
+.tokR.act{color:#fff;font-weight:500}
+.tokR.act .sp{box-shadow:0 0 0 2px #2A2A2A,0 0 0 3.5px var(--sel)}
+.v5 .scr{position:relative;display:flex;flex-direction:column;gap:10px;padding:18px 16px;background:#F4F4F4;border-top:1px solid #353538}
+.v5 .oc{padding:12px;border-radius:12px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 8px 20px -10px rgba(0,0,0,.25);color:#1C1C1C;font-family:Inter,sans-serif}
+.v5 .bd{display:inline-block;padding:2px 8px;border-radius:99px;font-size:9.5px;font-weight:600;transition:all .5s var(--ease)}
+.v5 .bar{height:5px;margin:10px 0;border-radius:99px;background:#EEE;overflow:hidden}
+.v5 .bar i{display:block;height:100%;width:64%;border-radius:99px;transition:background .5s var(--ease)}
+.v5 .btn{display:inline-block;padding:6px 12px;border-radius:99px;color:#fff;font-size:10px;font-weight:500;transition:background .5s var(--ease)}
+.v5 .lk{font-size:10.5px;font-weight:600;transition:color .5s var(--ease)}
 
 /* 6. github */
-.gh{position:absolute;inset:0 24px 22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
-.ghCard{width:100%;max-width:300px;padding:6px;border-radius:14px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 14px 30px -14px rgba(0,0,0,.3)}
-.ghCard .repo{display:flex;align-items:center;gap:10px;width:100%;padding:8px;border:0;border-radius:9px;background:transparent;text-align:left;cursor:pointer;font-size:13px;transition:background var(--fast) var(--ease)}
-.ghCard .repo:hover{background:#F3F3F3}
-.ghCard .repo small{margin-left:auto;color:var(--ink3);font-size:11px}
-.ghCard .repo svg{width:16px;height:16px;flex:0 0 auto}
-.ghDone{display:flex;flex-direction:column;gap:6px;padding:8px}
-.ghDone div{display:flex;align-items:center;gap:8px;font-size:12.5px;opacity:0;transform:translateY(4px);transition:all var(--slow) var(--ease)}
-.ghDone div.on{opacity:1;transform:none}
-.ghDone div::before{content:"✓";width:16px;height:16px;border-radius:50%;background:#E6F4EC;color:var(--ok);font-size:10px;display:grid;place-items:center;font-weight:700}
-.ghBtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border:0;border-radius:10px;background:#161616;color:#fff;font-size:13.5px;font-weight:500;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.15),0 2px 6px rgba(0,0,0,.2)}
-.ghBtn svg{width:16px;height:16px;fill:#fff}
+.v6{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.ghB{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 16px;border-radius:10px;background:#F2F2F3;color:#111;font-size:13px;font-weight:500;box-shadow:inset 0 -1px 0 rgba(0,0,0,.1),0 6px 18px -6px rgba(0,0,0,.6);transition:transform .16s}
+.ghB svg{width:16px;height:16px}
+.ghC{width:270px;padding:5px;border-radius:14px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 16px 36px -14px rgba(0,0,0,.8)}
+.ghC .rp{display:flex;align-items:center;gap:9px;padding:8px;border-radius:9px;transition:background .16s;font-size:12.5px}
+.ghC .rp.hl{background:rgba(255,255,255,.07)}
+.ghC .rp small{margin-left:auto;color:rgba(255,255,255,.4);font-size:10.5px}
+.ghC .rp svg{width:15px;height:15px;color:rgba(255,255,255,.5)}
+.ghD{display:flex;flex-direction:column;gap:7px;padding:8px}
+.ghD div{display:flex;align-items:center;gap:8px;font-size:12px;opacity:0;transform:translateY(4px);transition:all .24s var(--ease)}
+.ghD div.on{opacity:1;transform:none}
+.ghD div::before{content:"✓";width:16px;height:16px;border-radius:50%;background:rgba(63,185,80,.18);color:var(--ok);font-size:10px;font-weight:700;display:grid;place-items:center}
+.v6 .note{font-size:11.5px;color:rgba(255,255,255,.4)}
 
 /* 7. pull request */
-.pr{position:absolute;inset:0;display:grid;grid-template-columns:200px 1fr;align-items:center;gap:20px;padding:0 0 0 28px}
-.hoff{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
-.hoffBtn{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 6px 0 14px;border:0;border-radius:9px;cursor:pointer;color:#1A0F14;font-size:13px;font-weight:500;background:linear-gradient(180deg,#FFD3E9,#F7B2D6);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -1px 0 rgba(120,20,70,.12),0 0 0 .5px rgba(0,0,0,.4),0 1px 2px rgba(0,0,0,.3),0 3px 8px -3px rgba(0,0,0,.4)}
-.hoffBtn:active{transform:scale(.97)}
-.hoffBtn span{min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:rgba(0,0,0,.1);display:grid;place-items:center;font-size:11px}
-.chg{font-size:12px;color:rgba(255,255,255,.6);line-height:1.8}
-.chg b{color:#fff;font-weight:500}
-.prCard{align-self:end;margin-bottom:-1px;border-radius:12px 0 0 0;background:#fff;color:var(--ink);box-shadow:0 0 0 1px rgba(255,255,255,.1);padding:18px 20px 22px;min-height:270px;transform:translateY(30px);opacity:.35;transition:transform var(--slow) var(--ease),opacity var(--slow) var(--ease)}
-.prCard.on{transform:none;opacity:1}
-.prTop{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3)}
-.prState{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:#1F883D;color:#fff;font-size:11.5px;font-weight:500}
-.prCard h5{margin:10px 0 2px;font-size:17px;font-weight:600}
-.prCard .br{font:12px var(--mono);color:var(--ink2)}
-.prImgs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
-.prImgs figure{margin:0;font-size:10.5px;color:var(--ink3)}
-.prImgs .im{height:84px;border-radius:6px;background:#0E1014 center/cover;margin-bottom:4px;display:flex;align-items:flex-end;padding:8px;color:#fff;font:400 14px/1 "Newsreader",serif}
-.prImgs .im.a{font-size:19px}
-.checks div{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;color:var(--ink3);transition:color var(--mod) var(--ease)}
-.checks div::before{content:"";width:12px;height:12px;border-radius:50%;border:1.5px solid #D0D0D0;transition:all var(--mod) var(--ease)}
-.checks div.ok{color:var(--ink)}
-.checks div.ok::before{border-color:#1F883D;background:#1F883D;box-shadow:inset 0 0 0 2px #fff}
+.v7{display:grid;grid-template-columns:210px 1fr;align-items:center;gap:22px;padding-left:26px}
+.v7 .chg{font-size:12px;color:rgba(255,255,255,.55);line-height:1.8;margin-top:12px}
+.v7 .chg b{color:#fff;font-weight:500}
+.prC{align-self:end;margin-bottom:-1px;border-radius:14px 0 0 0;background:#0D1117;color:#E6EDF3;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 -20px 60px -20px rgba(0,0,0,.6);padding:18px 20px 22px;height:270px;transform:translateY(40px);opacity:.3;transition:transform .4s var(--ease),opacity .4s var(--ease)}
+.prC.on{transform:none;opacity:1}
+.prT{display:flex;align-items:center;gap:8px;font-size:12px;color:#8B949E}
+.prS{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;background:#6E7681;color:#fff;font-size:11.5px;font-weight:500;transition:background .3s}
+.prS.open{background:#238636}
+.prC h5{margin:10px 0 2px;font-size:17px;font-weight:600}
+.prC .br{font:11.5px var(--mono);color:#8B949E}
+.prI{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.prI figure{margin:0;font-size:10.5px;color:#8B949E}
+.prI .im{height:78px;border-radius:6px;background:#0E1014 center/cover;margin-bottom:4px;display:flex;align-items:flex-end;padding:8px;color:#fff;font:400 13px/1 "Newsreader",serif}
+.prI .im.a{font-size:18px}
+.ck div{display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;color:#8B949E;transition:color .2s}
+.ck div::before{content:"";width:12px;height:12px;border-radius:50%;border:1.5px solid #484F58;transition:all .2s}
+.ck div.ok{color:#E6EDF3}
+.ck div.ok::before{border-color:#238636;background:#238636;box-shadow:inset 0 0 0 2px #0D1117}
 
-/* 8. code tracking */
-.ctrack{position:absolute;inset:0;display:grid;grid-template-columns:250px 1fr;border-top:1px solid var(--line)}
-.chList{padding:10px;background:#F2F2F2;border-right:1px solid #E2E2E2;display:flex;flex-direction:column;gap:2px}
-.chList button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 10px;border:0;border-radius:8px;background:transparent;text-align:left;cursor:pointer;transition:background var(--fast) var(--ease)}
-.chList button:hover{background:rgba(0,0,0,.04)}
-.chList button.on{background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.06)}
-.chList b{font-size:12.5px;font-weight:500}
-.chList small{font-size:11px;color:var(--ink3)}
-.diff{background:#fff;overflow:hidden}
-.diffH{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);font:12px var(--mono);color:var(--ink2)}
-.diffH span{margin-left:auto;font-family:var(--ui);color:var(--ink3);font-size:11.5px}
-.diffB{padding:8px 0;font:12px/1.75 var(--mono)}
-.diffB div{padding:0 16px;white-space:pre;overflow:hidden;text-overflow:ellipsis}
-.diffB .m{background:#FFEBE9;color:#82071E}
-.diffB .p{background:#DAFBE1;color:#116329}
-.diffB .c{color:#8A8A8A}
-.diffB.sw{animation:sw var(--mod) var(--ease)}
-@keyframes sw{from{opacity:0;transform:translateY(4px)}}
+/* 8. code */
+.v8{display:grid;grid-template-columns:240px 1fr;border-top:1px solid rgba(255,255,255,.06)}
+.chL{padding:10px;background:#2A2A2A;border-right:1px solid #353538;display:flex;flex-direction:column;gap:2px}
+.chL div{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border-radius:8px;transition:background .2s,box-shadow .2s}
+.chL div.on{background:rgba(255,255,255,.05);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff22,0 0 3px -1px #000000aa}
+.chL b{font-size:12.5px;font-weight:500}
+.chL small{font-size:11px;color:rgba(255,255,255,.45)}
+.df{background:#0D1117;overflow:hidden}
+.dfH{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #21262D;font:12px var(--mono);color:#C9D1D9}
+.dfH span{margin-left:auto;font-family:var(--ui);color:#8B949E;font-size:11.5px}
+.dfB{padding:8px 0;font:12px/1.75 var(--mono);color:#8B949E}
+.dfB div{padding:0 16px;white-space:pre;overflow:hidden;text-overflow:ellipsis}
+.dfB .m{background:rgba(248,81,73,.15);color:#FFA198}
+.dfB .p{background:rgba(63,185,80,.15);color:#7EE787}
+.dfB.swap{animation:in .24s var(--ease)}
 
 /* 9. history */
-.hist{position:absolute;inset:0 24px 22px;display:flex;flex-direction:column;gap:12px}
-.cmp{position:relative;flex:1;border-radius:12px;overflow:hidden;background:#0B0C10;cursor:ew-resize;touch-action:none;user-select:none}
-.ver{position:absolute;inset:0;padding:20px;color:#EDEFF4;font-family:Inter,sans-serif;background:#0B0C10 url(img/bg/pink-aurora.jpg) center/cover}
+.v9{padding:6px 24px 0;display:flex;flex-direction:column;gap:14px}
+.cmp{position:relative;height:220px;border-radius:12px;overflow:hidden;--x:50%}
+.ver{position:absolute;inset:0;padding:18px;color:#EDEFF4;font-family:Inter,sans-serif;background:#0B0C10 url(img/bg/pink-aurora.jpg) center/cover}
 .ver::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,12,16,0),rgba(11,12,16,.8))}
 .ver *{position:relative;z-index:1}
-.ver .t{font:400 22px/1 "Newsreader",serif;max-width:170px;margin-top:40px}
-.ver .b{display:inline-block;margin-top:10px;padding:4px 9px;border-radius:4px;background:#888;color:#fff;font-size:9px}
-.ver.after .t{font-size:30px;max-width:200px}
-.ver.after .b{border-radius:99px;background:#FCBDDD;color:#1A0F14;font-weight:600}
-.ver.after{clip-path:inset(0 0 0 var(--x,50%))}
-.cmpLab{position:absolute;top:10px;z-index:2;padding:2px 8px;border-radius:99px;background:rgba(0,0,0,.45);color:#fff;font-size:10.5px}
-@property --x{syntax:"<percentage>";inherits:true;initial-value:50%}
-.cmp{transition:--x 420ms var(--ease)}
-.cmp.drag{transition:none}
-.knob{position:absolute;top:0;bottom:0;left:var(--x,50%);z-index:3;width:2px;margin-left:-1px;background:#fff;pointer-events:none}
-.knob::after{content:"‹ ›";position:absolute;top:50%;left:50%;translate:-50% -50%;width:30px;height:30px;border-radius:50%;background:#fff;color:#1C1C1C;display:grid;place-items:center;font-size:12px;letter-spacing:2px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
-.tl{display:flex;align-items:center;gap:0;padding:4px 2px}
-.tl button{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;border:0;background:none;cursor:pointer;font-size:11px;color:var(--ink3)}
-.tl button::before{content:"";width:10px;height:10px;border-radius:50%;background:#D6D6D6;box-shadow:0 0 0 3px var(--card);z-index:1;transition:background var(--mod) var(--ease)}
-.tl button::after{content:"";position:absolute;top:4px;left:50%;width:100%;height:2px;background:#E4E4E4}
-.tl button:last-child::after{display:none}
-.tl button.on{color:var(--ink)}
-.tl button.on::before{background:var(--brand)}
+.ver .t{font:400 26px/1 "Newsreader",serif;max-width:190px;margin-top:58px;color:rgba(237,239,244,.6);transition:color .4s var(--ease)}
+.ver .b{display:inline-block;margin-top:10px;padding:4px 9px;border-radius:4px;background:#888;color:#fff;font-size:9px;transition:all .4s var(--ease)}
+.ver.after .t{color:#fff}
+.ver.after .b{border-radius:99px;background:var(--pink);color:#1A0F14;font-weight:600}
+.ver.after{clip-path:inset(0 0 0 var(--x))}
+.cLab{position:absolute;top:10px;z-index:2;padding:2px 8px;border-radius:99px;background:rgba(0,0,0,.5);color:#fff;font-size:10.5px}
+.knob{position:absolute;top:0;bottom:0;left:var(--x);z-index:3;width:2px;margin-left:-1px;background:#fff}
+.knob::after{content:"";position:absolute;top:50%;left:50%;translate:-50% -50%;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.tl{display:flex;align-items:center;padding:0 4px}
+.tl span{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,.4);transition:color .2s}
+.tl span::before{content:"";width:9px;height:9px;border-radius:50%;background:#4A4A4D;box-shadow:0 0 0 3px var(--card);z-index:1;transition:background .2s}
+.tl span::after{content:"";position:absolute;top:4px;left:50%;width:100%;height:1.5px;background:#353538}
+.tl span:last-child::after{display:none}
+.tl span.on{color:#fff}
+.tl span.on::before{background:var(--pink)}
 
-/* values band */
-.vals{margin-top:120px;padding:56px;border-radius:24px;background:#fff;box-shadow:0 0 0 1px var(--line);display:grid;grid-template-columns:1.2fr 1fr;gap:48px;position:relative;overflow:hidden}
-.vals::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#FCBDDD,#E9A3C6,#D6CEFF,#BFE3FF)}
-.vals h2{font-size:clamp(32px,3.6vw,46px)}
-.vals ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:18px}
-.vals li b{display:block;font-weight:600;margin-bottom:2px}
+/* values */
+.vals{margin-top:110px;padding:56px;border-radius:24px;background:var(--bg2);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 0 1px var(--line);display:grid;grid-template-columns:1.1fr 1fr;gap:48px;position:relative;overflow:hidden}
+.vals::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,#FCBDDD,#B49CFF,#7EE7C4,transparent)}
+.vals h2{font-size:clamp(34px,3.8vw,50px)}
+.vals ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:20px}
+.vals li b{display:block;font-weight:500;margin-bottom:2px}
 .vals li span{color:var(--ink2);font-size:15px}
+
 
 /* faq */
 .faq{display:grid;grid-template-columns:1fr 1.3fr;gap:56px}
-.faq h2{font-size:clamp(34px,4vw,52px)}
-.faq aside p{margin:14px 0 0;color:var(--ink2)}
+.faq aside p{margin:16px 0 0;color:var(--ink2)}
 details{border-bottom:1px solid var(--line)}
 details:first-child{border-top:1px solid var(--line)}
 summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0;cursor:pointer;font-weight:500;font-size:17px}
 summary::-webkit-details-marker{display:none}
-summary::after{content:"+";font-weight:300;font-size:22px;color:var(--ink3);transition:transform var(--mod) var(--ease)}
+summary::after{content:"+";font-weight:300;font-size:22px;color:var(--ink3);transition:transform .16s var(--ease)}
 details[open] summary::after{transform:rotate(45deg)}
 details p{margin:0 0 20px;color:var(--ink2);max-width:600px}
 
 /* last call */
-.end{margin-top:140px;padding:96px 0 104px;text-align:center;position:relative;overflow:hidden}
-.end::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(40% 70% at 50% 100%,rgba(252,189,221,.55),transparent 70%),radial-gradient(30% 50% at 75% 90%,rgba(214,206,255,.5),transparent 70%)}
-.end h2{margin:0 auto;font-size:clamp(40px,5.4vw,72px)}
-.end p{margin:16px auto 30px;color:var(--ink2);font-size:18px;max-width:520px}
+.end{position:relative;margin-top:150px;padding:120px 0 130px;text-align:center;overflow:hidden;isolation:isolate}
+.end h2{margin:0 auto;font-size:clamp(46px,6vw,84px)}
+.end p{margin:18px auto 32px;color:var(--ink2);font-size:18px;max-width:520px}
 form{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-form input{width:min(320px,100%);height:48px;padding:0 18px;border:0;border-radius:999px;background:#fff;box-shadow:0 0 0 1px var(--line2),0 1px 2px rgba(0,0,0,.04);font:inherit;font-size:15px;outline:none}
-form input:focus{box-shadow:0 0 0 1px rgba(43,102,217,.75),0 0 0 4px rgba(43,102,217,.14)}
-.thanks{margin-top:14px;min-height:22px;font-size:14px;color:var(--ok)}
-
+form input{width:min(320px,100%);height:48px;padding:0 18px;border:0;border-radius:999px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--line2);color:var(--ink);font:inherit;font-size:15px;outline:none}
+form input::placeholder{color:var(--ink3)}
+form input:focus{box-shadow:inset 0 0 0 1px rgba(43,102,217,.9),0 0 0 4px rgba(43,102,217,.2)}
+.thanks{margin-top:14px;min-height:22px;font-size:14px;color:#7EE7A6}
 footer{border-top:1px solid var(--line);padding:32px 0 48px;font-size:13px;color:var(--ink3)}
 footer .wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
 footer a{text-decoration:none}
 footer a:hover{color:var(--ink)}
 footer .sp{flex:1}
-
 :focus-visible{outline:2px solid var(--sel);outline-offset:2px}
 
-@media (max-width:980px){
-  .heroTop{grid-template-columns:1fr;gap:24px}
+/* Narrow tiles get their own composition, not a squeeze. */
+.card{container-type:inline-size}
+@container (max-width:560px){
+  .v1 .cv{right:160px}
+  .v1 .panelC{width:160px}
+  .v1 .panelC .r2{grid-template-columns:1fr}
+  .v1 .pc{width:132px}
+  .v1 .pc div{font-size:18px}
+  .v1 .pc small{display:none}
+  .v1 .code{left:12px;right:172px;font-size:10px}
+  .v1 .panelC .pS:nth-child(3),.v1 .panelC .pS:nth-child(4){display:none}
+  .v7{grid-template-columns:1fr;grid-template-rows:auto 1fr;gap:12px;padding:18px 0 0 20px}
+  .v7>div:first-child{display:flex;align-items:center;gap:14px}
+  .v7 .chg{margin:0;font-size:11px;line-height:1.5}
+  .v7 .prC{height:220px;padding:16px}
+  .prI .im{height:60px;font-size:11px}.prI .im.a{font-size:14px}
+  .v8{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .chL{flex-direction:row;overflow:hidden;border-right:0;border-bottom:1px solid #353538;padding:8px}
+  .chL div{flex:0 0 auto}
+  .chL small{display:none}
+  .dfB{font-size:10.5px}
+}
+@media (max-width:1000px){
+  .heroTop{grid-template-columns:1fr;gap:28px}
   .bento{grid-template-columns:1fr 1fr}
-  .card.w2{grid-column:span 2}
   .vals,.faq{grid-template-columns:1fr;gap:32px}
   .secHead{grid-template-columns:1fr}
+  .hand{display:none}
 }
-@media (max-width:700px){
-  .wrap,.shot{padding:0 16px}
-  .nav nav,.signin{display:none}
-  .hero{padding-top:48px}
+@media (max-width:720px){
+  .wrap,.stageWrap{padding:0 16px}
+  .nav nav{display:none}
+  .ruler{display:none}.nav{top:0}
+  .hero{padding-top:56px}
   .bento{grid-template-columns:1fr}
   .card.w2{grid-column:auto}
-  .card{min-height:460px}
-  .edit{grid-template-columns:1fr;grid-template-rows:1fr auto auto}
-  .edit .panel{border-left:0}
-  .edit .panel .pS:nth-child(n+3){display:none}
-  .pr{grid-template-columns:1fr;padding:0 0 0 20px;gap:12px}
-  .hoff{padding-top:4px}
-  .ctrack{grid-template-columns:1fr;grid-template-rows:auto 1fr}
-  .chList{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid #E2E2E2}
-  .chList button{flex:0 0 auto}
-  .ds{grid-template-columns:130px 1fr}
   .vals{padding:32px 24px}
-  .sec{padding-top:88px}
+  .sec{padding-top:100px}
 }
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;transition-duration:1ms!important}html{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}html{scroll-behavior:auto}}
 </style>
 </head>
 <body>
+<div class="ruler" id="ruler" aria-hidden="true"></div>
 <header class="nav" id="nav">
   <div class="wrap">
     <a class="brand" href="#top" aria-label="Tovi home"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="#E9A3C6"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="#FCBDDD"/></svg>Tovi</a>
@@ -389,185 +482,154 @@ footer .sp{flex:1}
 
 <main id="top">
   <section class="hero">
+    <div class="aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+    <div class="grid" aria-hidden="true"></div>
     <div class="wrap heroTop">
-      <h1>Designers, fix the real thing.</h1>
+      <div><span class="badge"><b>Beta</b>Now open to React and Tailwind teams</span><h1>Designers, fix the <em>real</em> thing.</h1></div>
       <div>
-        <p class="lede">Tovi opens the app your team already built. Fix it by hand, the way you would in Figma, or ask Tovi to. Every edit lands in your code and goes to developers as one pull request.</p>
-        <div class="heroActs"><a class="cta lg" href="#invite">Request an invite</a><a class="ghost" href="#design">See the features</a></div>
-        <p class="fine">Private beta · React and Tailwind apps · Runs on your Mac</p>
+        <p class="lede">Tovi opens the app your team already built. <b>Fix it by hand like in Figma, or let Tovi's AI make the edits.</b> Every change lands in your code and goes to developers as one pull request.</p>
+        <div class="heroActs"><a class="cta lg" href="#invite">Request an invite</a><a class="ghost" href="#design">See it work</a></div>
+        <p class="fine">Runs on your Mac · Bring your own AI key</p>
       </div>
     </div>
-    <div class="shot">
-      <div class="win"><div class="winBar"><i></i><i></i><i></i></div><img src="img/v2/editor.jpg" width="2880" height="1800" alt="The Tovi editor: the Aster travel site is open, its headline is selected, and the properties panel shows its font, size and colour."></div>
+    <div class="stageWrap">
+      <div class="hand" style="left:-6px;top:-46px">ask, and watch it change<svg width="60" height="50" style="left:150px;top:24px"><path d="M2 4 C 30 6, 50 18, 46 44 M 38 36 L 46 45 L 54 36"/></svg></div>
+      <div class="hand" style="right:6px;top:-52px">real code, every edit<svg width="60" height="50" style="right:40px;top:26px"><path d="M58 4 C 30 8, 12 20, 16 44 M 8 36 L 16 45 L 24 37"/></svg></div>
+      <div class="fit" data-w="1200" data-h="740" aria-hidden="true">
+        <div class="base">
+          <div class="ed" id="ed">
+            <div class="col colL">
+              <div class="phd"><span class="dots"><i></i><i></i><i></i></span><span class="logoM"><i></i><i></i></span><span class="crumb">aster / <b>Home</b></span></div>
+              <div class="tabs"><span class="on">Chat</span><span>Layers</span></div>
+              <div class="chat" id="hChat"><div class="cEmpty" id="hEmpty"><div class="blob"></div><b>What should change?</b>Select something, or ask about the whole screen.</div></div>
+              <div class="compose" id="hComp"><span class="chip" id="hChip">Whole screen</span><div class="inp ph" id="hInp">Describe a change…</div><div class="crow"><span>On system</span><span class="send" id="hSend"><svg width="12" height="12" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="#1A0F14" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+            </div>
+            <div class="canvasE" id="hCanvas">
+              <div class="fLab"><b>Desktop</b>1024</div>
+              <div class="frame" id="hFrame"><div class="aster">
+                <div class="a-nav"><span class="a-logo">Aster</span><span class="a-links"><span>Places</span><span>Stays</span><span>Journal</span></span><span class="a-book">Book a night</span></div>
+                <div class="a-hero"><img src="img/aster/hero.jpg" alt=""><div class="a-hc"><div class="a-eye" id="aEye">Winter 2026 · Arctic Norway</div><div class="a-h1" id="aH1">Nights under the northern sky</div><p class="a-p">Glass cabins, fjords and hot springs, far from the city lights. Small stays, picked for the darkest skies.</p><div class="a-btns"><span class="a-btn" id="aBtn">Find your stay</span><span class="a-btn2" id="aBtn2">Watch the film</span></div></div></div>
+                <div class="a-places"><div class="a-eye" style="color:#B49CFF">Places</div><div class="a-h2">Where the sky does the work</div><div class="a-grid"><div class="a-card"><img src="img/aster/lofoten.jpg" alt=""><div>Lofoten</div></div><div class="a-card"><img src="img/aster/fjord.jpg" alt=""><div>Geiranger</div></div><div class="a-card"><img src="img/aster/lagoon.jpg" alt=""><div>Reykjanes</div></div><div class="a-card"><img src="img/aster/dunes.jpg" alt=""><div>Wadi Rum</div></div></div></div>
+              </div></div>
+              <div class="tbar"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg></span><span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3a2 2 0 0 0-2 2M19 3a2 2 0 0 1 2 2M5 21a2 2 0 0 1-2-2M9 3h1M9 21h2M14 3h1M3 9v1M21 9v2M3 14v1"/><path d="M12.03 12.03 17 22l1.5-4.5L23 16z"/></svg></span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></svg></span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></span></div>
+            </div>
+            <div class="col colR">
+              <div class="phd"><span class="av">T</span><span style="flex:1"></span><span style="color:rgba(255,255,255,.55)">79%</span><span class="hoff" id="hHoff">Hand off<span class="n" id="hN">0</span></span></div>
+              <div class="pnl">
+                <div class="ps" id="hP0"><div class="selHint"><b>Select something to edit it</b>Click any element in your app, or pick it in Layers.</div></div>
+                <div class="ps" id="hP1" style="opacity:0">
+                  <div class="pS"><div class="pH">Typography</div><div class="f">Newsreader</div><div class="r2"><div><div class="lab">Weight</div><div class="f">Regular</div></div><div><div class="lab">Size</div><div class="f" id="hSz"><span class="k">T</span><span id="hSzV">72</span></div></div></div><div class="r2"><div><div class="lab">Line height</div><div class="f"><span class="k">A</span>0.95</div></div><div><div class="lab">Letter spacing</div><div class="f" id="hLs"><span class="k">|A|</span><span id="hLsV">0</span>%</div></div></div></div>
+                  <div class="pS"><div class="pH">Text color</div><div class="f"><span class="sw" style="background:#F0F2F7"></span>F0F2F7</div></div>
+                  <div class="pS"><div class="pH">Size</div><div class="r2"><div class="f"><span class="k">W</span>768</div><div class="f"><span class="k">H</span>68</div></div></div>
+                  <div class="pS"><div class="pH">Appearance</div><div class="r2"><div><div class="lab">Opacity</div><div class="f">100 %</div></div><div><div class="lab">Corner radius</div><div class="f" id="hRad"><span class="k">⌜</span><span id="hRadV">0</span></div></div></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="sel" id="hSel"><span class="tg" id="hSelT">Title</span><i></i><i></i><i></i><i></i></div>
+            <div class="toast" id="hToast"><i>✓</i><div><b>Pull request opened</b><small>“Design updates from Tovi” · 3 files</small></div></div>
+            <div class="cur" id="hTovi" style="opacity:0"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#FCBDDD" stroke="#3A1730" stroke-width="1.1" stroke-linejoin="round"/></svg><span class="nm">Tovi</span></div>
+            <div class="cur" id="hCur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
   <section class="works wrap" aria-label="Works with">
     <p>Works with the tools your team already uses</p>
-    <div class="logos"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>GitHub</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z"/></svg>React</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z"/></svg>Tailwind CSS</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.286 10.578.512-8.657a.306.306 0 0 1 .247-.282L17.377.006a.306.306 0 0 1 .353.385l-1.558 5.403a.306.306 0 0 0 .352.385l2.388-.46a.306.306 0 0 1 .332.438l-6.79 13.55-.123.19a.294.294 0 0 1-.252.14c-.177 0-.35-.152-.305-.369l1.095-5.301a.306.306 0 0 0-.388-.355l-1.433.435a.306.306 0 0 1-.389-.354l.69-3.375a.306.306 0 0 0-.37-.36l-2.32.536a.306.306 0 0 1-.374-.316zm14.976-7.926L17.284 3.74l-.544 1.887 2.077-.4a.8.8 0 0 1 .84.369.8.8 0 0 1 .034.783L12.9 19.93l-.013.025-.015.023-.122.19a.801.801 0 0 1-.672.37.826.826 0 0 1-.634-.302.8.8 0 0 1-.16-.67l1.029-4.981-1.12.34a.81.81 0 0 1-.86-.262.802.802 0 0 1-.165-.67l.63-3.08-2.027.468a.808.808 0 0 1-.768-.233.81.81 0 0 1-.217-.6l.389-6.57-7.44-1.33a.612.612 0 0 0-.64.906L11.58 23.691a.612.612 0 0 0 1.066-.004l11.26-20.135a.612.612 0 0 0-.644-.9z"/></svg>Vite</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></svg>Next.js</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>Claude</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>OpenAI</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg>Gemini</span></div>
+    <div class="marq"><div class="mtrack"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>GitHub</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z"/></svg>React</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z"/></svg>Tailwind CSS</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.286 10.578.512-8.657a.306.306 0 0 1 .247-.282L17.377.006a.306.306 0 0 1 .353.385l-1.558 5.403a.306.306 0 0 0 .352.385l2.388-.46a.306.306 0 0 1 .332.438l-6.79 13.55-.123.19a.294.294 0 0 1-.252.14c-.177 0-.35-.152-.305-.369l1.095-5.301a.306.306 0 0 0-.388-.355l-1.433.435a.306.306 0 0 1-.389-.354l.69-3.375a.306.306 0 0 0-.37-.36l-2.32.536a.306.306 0 0 1-.374-.316zm14.976-7.926L17.284 3.74l-.544 1.887 2.077-.4a.8.8 0 0 1 .84.369.8.8 0 0 1 .034.783L12.9 19.93l-.013.025-.015.023-.122.19a.801.801 0 0 1-.672.37.826.826 0 0 1-.634-.302.8.8 0 0 1-.16-.67l1.029-4.981-1.12.34a.81.81 0 0 1-.86-.262.802.802 0 0 1-.165-.67l.63-3.08-2.027.468a.808.808 0 0 1-.768-.233.81.81 0 0 1-.217-.6l.389-6.57-7.44-1.33a.612.612 0 0 0-.64.906L11.58 23.691a.612.612 0 0 0 1.066-.004l11.26-20.135a.612.612 0 0 0-.644-.9z"/></svg>Vite</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></svg>Next.js</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>Claude</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>OpenAI</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg>Gemini</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>GitHub</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z"/></svg>React</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z"/></svg>Tailwind CSS</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.286 10.578.512-8.657a.306.306 0 0 1 .247-.282L17.377.006a.306.306 0 0 1 .353.385l-1.558 5.403a.306.306 0 0 0 .352.385l2.388-.46a.306.306 0 0 1 .332.438l-6.79 13.55-.123.19a.294.294 0 0 1-.252.14c-.177 0-.35-.152-.305-.369l1.095-5.301a.306.306 0 0 0-.388-.355l-1.433.435a.306.306 0 0 1-.389-.354l.69-3.375a.306.306 0 0 0-.37-.36l-2.32.536a.306.306 0 0 1-.374-.316zm14.976-7.926L17.284 3.74l-.544 1.887 2.077-.4a.8.8 0 0 1 .84.369.8.8 0 0 1 .034.783L12.9 19.93l-.013.025-.015.023-.122.19a.801.801 0 0 1-.672.37.826.826 0 0 1-.634-.302.8.8 0 0 1-.16-.67l1.029-4.981-1.12.34a.81.81 0 0 1-.86-.262.802.802 0 0 1-.165-.67l.63-3.08-2.027.468a.808.808 0 0 1-.768-.233.81.81 0 0 1-.217-.6l.389-6.57-7.44-1.33a.612.612 0 0 0-.64.906L11.58 23.691a.612.612 0 0 0 1.066-.004l11.26-20.135a.612.612 0 0 0-.644-.9z"/></svg>Vite</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></svg>Next.js</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>Claude</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>OpenAI</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg>Gemini</span></div></div>
   </section>
 
-  <!-- Bento 1: design -->
-  <section class="sec wrap" id="design">
-    <div class="secHead">
-      <div><span class="pill">Design</span><h2>Fix it by hand, or ask Tovi.</h2><p>Select anything in your running app and change it like a Figma frame. When it's quicker to say it, describe it, mark it, or let Tovi review the whole product.</p></div>
-    </div>
-    <div class="bento">
-      <!-- 1. Manual editing -->
-      <article class="card w2" id="cEdit">
-        <div class="ct"><h3>Edit by hand, like Figma</h3><p>Corner radius, padding, fill: the controls you know, on real components. Drag a field's icon to scrub it, and watch the code change with it.</p><span class="hint"><i></i>Drag a field’s icon, or use − and +</span></div>
-        
-        <div class="stage" style="min-height:360px">
-          <div class="edit ui">
-            <div class="canvas">
-              <div class="place" id="ePlace"><img src="img/aster/lofoten.jpg" alt="" id="eImg"><div id="eTxt"><h4>Lofoten</h4><span>Fishing villages under the aurora</span></div></div>
-              <div class="selBox" id="eSel" data-k="Card"></div>
-            </div>
-            <div class="panel">
-              <div class="pS"><div class="pH">Appearance</div><div class="r2"><div><div class="lab">Corner radius</div><div class="f" data-p="radius"><span class="ic" title="Drag to change"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 9V6.5A3.5 3.5 0 0 1 6.5 3H9M13 7v2.5A3.5 3.5 0 0 1 9.5 13H7"/></svg></span><b>14</b><span class="st"><button aria-label="Less">−</button><button aria-label="More">+</button></span></div></div><div><div class="lab">Padding</div><div class="f" data-p="pad"><span class="ic" title="Drag to change"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><rect x="5.5" y="5.5" width="5" height="5" rx="1"/></svg></span><b>0</b><span class="st"><button aria-label="Less">−</button><button aria-label="More">+</button></span></div></div></div></div>
-              <div class="pS"><div class="pH">Fill</div><div class="f"><span class="sw" id="eSw" style="background:#14161C"></span><b id="eFill">surface</b></div><div class="sws" id="eSws"><button class="on" data-t="surface" data-c="#14161C" style="background:#14161C" aria-label="surface"></button><button data-t="surface-2" data-c="#2A2F3A" style="background:#2A2F3A" aria-label="surface-2"></button><button data-t="primary" data-c="#1E5C43" style="background:#1E5C43" aria-label="primary"></button><button data-t="accent" data-c="#5B3A7A" style="background:#5B3A7A" aria-label="accent"></button></div></div>
-              <div class="pS"><div class="lab">Snaps to your scale</div><div style="color:rgba(0,0,0,.55)">Values land on your Tailwind steps, so a quick fix never adds a new size.</div></div>
-            </div>
-            <div class="code" id="eCode"></div>
-          </div>
-        </div>
-      </article>
+  <section class="sec" id="design">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="secHead"><div><span class="pill">Design</span><h2>Fix it by hand, <em>or</em> ask Tovi.</h2><p>Select anything in your running app and change it like a Figma frame. When it's quicker to say it, describe it, mark it, or let Tovi review the whole product.</p></div></div>
+      <div class="bento">
+        <article class="card w2 tall lit"><div class="vis ui v1" id="f1">
+            <div class="cv"><div class="pc" id="f1c"><img src="img/aster/lofoten.jpg" alt="" id="f1i"><div>Lofoten<small>Fishing villages under the aurora</small></div></div></div>
+            <div class="sel" id="f1s" style="opacity:1"><span class="tg">Card</span><i></i><i></i><i></i><i></i></div>
+            <div class="panelC"><div class="pS"><div class="pH">Appearance</div><div class="r2"><div><div class="lab">Corner radius</div><div class="f" id="f1r"><span class="k">⌜</span><span id="f1rv">0</span></div></div><div><div class="lab">Padding</div><div class="f" id="f1p"><span class="k">▢</span><span id="f1pv">0</span></div></div></div></div>
+              <div class="pS"><div class="pH">Fill</div><div class="f" id="f1f"><span class="sw" id="f1fs" style="background:#14161C"></span><span id="f1fv">surface</span></div><div style="display:flex;gap:6px;margin-top:8px" id="f1sw"><span class="sw" style="width:18px;height:18px;border-radius:50%;background:#14161C"></span><span class="sw" style="width:18px;height:18px;border-radius:50%;background:#2A2F3A"></span><span class="sw" style="width:18px;height:18px;border-radius:50%;background:#1E5C43"></span><span class="sw" style="width:18px;height:18px;border-radius:50%;background:#5B3A7A"></span></div></div>
+              <div class="pS"><div class="pH">Layout</div><div class="r2"><div><div class="lab">Direction</div><div class="f" style="justify-content:space-around;padding:0 4px"><span style="opacity:.45">→</span><span style="padding:0 8px;border-radius:5px;background:rgba(255,255,255,.08)">↓</span></div></div><div><div class="lab">Gap</div><div class="f"><span class="k">⇔</span>8</div></div></div></div><div class="pS" style="border:0"><div class="lab" style="margin-top:0">Snaps to your scale</div><div style="color:rgba(255,255,255,.5)">Every value lands on a Tailwind step.</div></div></div>
+            <div class="code" id="f1code"></div>
+            <div class="cur" id="f1cur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div><div class="ct"><p><b>Edit by hand, like Figma.</b> Corner radius, padding, fill and every control you know, on real components. Values snap to your design scale, and the code changes with them.</p></div></article>
 
-      <!-- 2. UX audit -->
-      <article class="card dark" id="cAudit">
-        <div class="ct"><h3>AI UX audit</h3><p>Tovi reviews a page, or every page, and pins a note wherever hierarchy, spacing, contrast or consistency slips.</p><span class="hint"><i></i>Run it again any time</span></div>
-        <div class="stage">
-          <div class="audit">
-            <div class="mini"><div class="eye">WINTER 2026 · ARCTIC NORWAY</div><div class="t">Nights under the northern sky</div><div class="d">Glass cabins, fjords and hot springs, far from the city lights.</div><span class="b">Find your stay</span></div>
-            <div class="sweep" id="aSweep"></div>
-            <div class="tagM" style="left:232px;top:42px" data-i="1"><i></i><b>1</b></div>
-            <div class="tagM" style="left:212px;top:100px" data-i="2"><i></i><b>2</b></div>
-            <div class="tagM" style="left:104px;top:128px" data-i="3"><i></i><b>3</b></div>
-            <div class="issues ui" id="aList">
-              <div data-i="1"><em>1</em>Heading wraps unevenly<small>Hierarchy</small></div>
-              <div data-i="2"><em>2</em>Caption is too faint to read<small>Contrast</small></div>
-              <div data-i="3"><em>3</em>Button is small on phones<small>Usability</small></div>
+        <article class="card tall lit2"><div class="vis ui v2" id="f2">
+            <div class="shot"><div class="mini"><div class="e">WINTER 2026 · ARCTIC NORWAY</div><div class="t">Nights under the northern sky</div><div class="d">Glass cabins, fjords and hot springs, far from the city lights.</div><span class="b">Find your stay</span></div>
+              <div class="sweep" id="f2sw"></div>
+              <div class="tagM" style="left:206px;top:58px" data-i="1"><i></i><b>1</b></div>
+              <div class="tagM" style="left:196px;top:116px" data-i="2"><i></i><b>2</b></div>
+              <div class="tagM" style="left:86px;top:148px" data-i="3"><i></i><b>3</b></div>
+              <div class="issues" id="f2l"><div data-i="1"><em>1</em>Heading wraps unevenly<small>Hierarchy</small></div><div data-i="2"><em>2</em>Caption too faint to read<small>Contrast</small></div><div data-i="3"><em>3</em>Button small on phones<small>Usability</small></div></div>
             </div>
-            <button class="ghost runBtn" id="aRun">Run audit</button>
-          </div>
-        </div>
-      </article>
+          </div><div class="ct"><p><b>AI UX audit.</b> Tovi reviews a page, or every page, and pins a note wherever hierarchy, spacing, contrast or usability slips.</p></div></article>
 
-      <!-- 3. AI design improvements -->
-      <article class="card wash" id="cAI">
-        <div class="ct"><h3>AI design improvements</h3><p>Ask for a change. Tovi uses your design system, or explores something new when you want it to.</p><span class="hint"><i></i>Switch modes, then send</span></div>
-        <div class="stage">
-          <div class="ai">
-            <div class="modes ui" role="tablist" aria-label="Mode"><button class="on" data-m="sys" role="tab" aria-selected="true">Your design system</button><button data-m="ex" role="tab" aria-selected="false">Explore</button></div>
-            <div class="prev">
-              <div class="plan" id="iPlan"><div class="n">Starter</div><div class="p">$12</div><ul><li>3 projects</li><li>Unlimited edits</li><li>Email support</li></ul><button class="go" tabindex="-1">Choose plan</button></div>
-              <div class="steps ui" id="iSteps"><div>Reading the card</div><div>Applying your tokens</div><div>Checking the result</div></div>
-            </div>
-            <div class="comp ui"><span>Make this card feel more premium</span><button id="iGo" aria-label="Send"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div>
-          </div>
-        </div>
-      </article>
+        <article class="card tall"><div class="vis ui v3" id="f3">
+            <div class="prev"><div class="plan" id="f3p"><div class="n">Starter</div><div class="p">$12</div><ul><li>3 projects</li><li>Unlimited edits</li><li>Email support</li></ul><div class="go" id="f3g">Choose plan</div></div></div>
+            <span class="mode" id="f3m">Your design system</span>
+            <div class="stepL" id="f3s"><div>Reading the card</div><div>Using your tokens</div><div>Checking the result</div></div>
+            <div class="comp" id="f3c"><span class="txt" id="f3t"></span><span class="send on"><svg width="12" height="12" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="#1A0F14" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+          </div><div class="ct"><p><b>AI design improvements.</b> Ask for a change. Tovi keeps to your design system, or explores a new direction when you want it to.</p></div></article>
 
-      <!-- 4. Notes -->
-      <article class="card" id="cNotes">
-        <div class="ct"><h3>Notes that become fixes</h3><p>Mark what's off right on the screen. Every note becomes a task, and Apply works through them all.</p><span class="hint"><i></i>Click the page to add a note</span></div>
-        
-        <div class="stage">
-          <div class="notes" id="nArea">
-            <div class="np" id="nPage"><div class="t">Simple, honest pieces for home</div><div class="d">Made slowly by small workshops, from natural materials.</div><div class="row"><i style="background-image:url(img/aster/dunes.jpg)"></i><i style="background-image:url(img/aster/fjord.jpg)"></i></div><span class="b">Shop the collection</span></div>
-            <div id="nTags"></div>
-            <div class="tasks ui" id="nTasks"></div>
-          </div>
-        </div>
-      </article>
+        <article class="card tall"><div class="vis ui v4" id="f4">
+            <div class="pg" id="f4pg"><div class="t">Simple, honest pieces for home</div><div class="d">Made slowly by small workshops, from natural materials.</div><div class="row"><i style="background-image:url(img/aster/dunes.jpg)"></i><i style="background-image:url(img/aster/fjord.jpg)"></i></div><span class="b">Shop the collection</span></div>
+            <div id="f4tags"></div><div class="typing" id="f4ty"></div>
+            <div class="tasksM" id="f4tk"></div>
+            <div class="cur" id="f4cur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div><div class="ct"><p><b>Notes that become fixes.</b> Mark what's off right on the screen. Each note becomes a task, and Apply works through them all.</p></div></article>
 
-      <!-- 5. Design system (the ninth feature) -->
-      <article class="card" id="cDS">
-        <div class="ct"><h3>Speaks your design system</h3><p>Colours keep their token names. Change one, and every screen that uses it follows.</p><span class="hint"><i></i>Pick a new primary</span></div>
-        
-        <div class="stage">
-          <div class="ds ui">
-            <div class="panel"><div class="pH">Colours</div><div class="lab" style="margin-top:4px">Brand</div><div class="tok act"><span class="sp" id="dSw" style="background:#2563EB"></span>primary</div><div class="tok"><span class="sp" style="background:#F59E0B"></span>accent</div><div class="lab" style="margin-top:8px">Pick primary</div><div class="sws" id="dSws"><button class="on" data-c="#2563EB" style="background:#2563EB" aria-label="Blue"></button><button data-c="#C2508A" style="background:#C2508A" aria-label="Rose"></button><button data-c="#1E8A4F" style="background:#1E8A4F" aria-label="Green"></button><button data-c="#111111" style="background:#111111" aria-label="Black"></button></div></div>
-            <div class="dsPrev"><div class="dsCard"><div style="display:flex;justify-content:space-between;align-items:center"><span class="badge" id="dBadge">On the way</span><span style="font-size:10px;color:#8E8E8E">#2041</span></div><div class="ln" id="dLn" style="font-weight:600;margin-top:10px">Linen throw, oat</div><div style="font-size:10.5px;color:#8E8E8E;margin:2px 0 10px">Arrives Thursday</div><div class="bar"><i id="dBar"></i></div><div style="display:flex;gap:6px;margin-top:12px"><span class="btn" id="dBtn">Track parcel</span><span class="btn2" id="dBtn2">Details</span></div></div><div class="dsLink" id="dLink">View all orders →</div></div>
-          </div>
-        </div>
-      </article>
+        <article class="card tall lit"><div class="vis ui v5" id="f5">
+            <div class="tokP"><div class="pH">Colours</div><div class="lab">Brand</div><div class="tokR act"><span class="sp" id="f5sp"></span>primary</div><div class="tokR"><span class="sp" style="background:#F59E0B"></span>accent</div><div class="lab" style="margin-top:10px">Text</div><div class="tokR"><span class="sp" style="background:#1C1C1C"></span>content</div><div class="tokR"><span class="sp" style="background:#8E8E8E"></span>muted</div></div>
+            <div class="scr"><div class="oc"><div style="display:flex;justify-content:space-between;align-items:center"><span class="bd" id="f5bd">On the way</span><span style="font-size:9.5px;color:#999">#2041</span></div><div style="font-weight:600;font-size:12px;margin-top:10px">Linen throw, oat</div><div style="font-size:10px;color:#999">Arrives Thursday</div><div class="bar"><i id="f5bar"></i></div><span class="btn" id="f5btn">Track parcel</span></div><span class="lk" id="f5lk">View all orders →</span></div>
+          </div><div class="ct"><p><b>Speaks your design system.</b> Colours keep their token names. Change one, and every screen that uses it follows.</p></div></article>
+      </div>
     </div>
   </section>
 
-  <!-- Bento 2: ship -->
-  <section class="sec wrap" id="ship">
-    <div class="secHead">
-      <div><span class="pill">Hand off</span><h2>From your fix to a pull request.</h2><p>Tovi works on your repository, keeps every version, and shows the exact code behind each change. Developers review it like any other pull request.</p></div>
-    </div>
-    <div class="bento">
-      <!-- 6. GitHub -->
-      <article class="card wash" id="cGH">
-        <div class="ct"><h3>Connect GitHub</h3><p>Pick a repository. Tovi installs the app, starts it and opens it with its real pages and data.</p><span class="hint"><i></i>Try it</span></div>
-        <div class="stage"><div class="gh ui" id="gBox"></div></div>
-      </article>
+  <section class="sec" id="ship">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="secHead"><div><span class="pill">Hand off</span><h2>From your fix to a <em>pull request</em>.</h2><p>Tovi works on your repository, keeps every version and shows the exact code behind each change. Developers review it like any other pull request.</p></div></div>
+      <div class="bento">
+        <article class="card lit2"><div class="vis ui v6" id="f6"></div><div class="ct"><p><b>Connect GitHub.</b> Pick a repository. Tovi installs the app, starts it and opens it with its real pages and data.</p></div></article>
 
-      <!-- 7. Push to PR -->
-      <article class="card w2 photo" id="cPR" style="background-image:linear-gradient(90deg,rgba(14,16,20,.94),rgba(14,16,20,.6)),url(img/bg/green-aurora.jpg)">
-        <div class="ct"><h3>Push to a pull request</h3><p>One click commits every change to a new branch and opens a pull request, with before and after images. Tovi makes sure the app still builds first.</p><span class="hint"><i></i>Click Hand off</span></div>
-        <div class="stage" style="min-height:300px">
-          <div class="pr ui">
-            <div class="hoff"><button class="hoffBtn" id="pGo">Hand off<span>3</span></button><div class="chg"><b>3 changes</b><br>Hero title · Card corners · Button colour</div></div>
-            <div class="prCard" id="pCard">
-              <div class="prTop"><span class="prState" id="pState">Draft</span>tovi/design-updates → main</div>
-              <h5>Design updates from Tovi</h5>
-              <div class="br">3 files changed · +6 −6</div>
-              <div class="prImgs"><figure><div class="im" style="background-image:linear-gradient(transparent,rgba(0,0,0,.6)),url(img/aster/hero.jpg)">Nights under the sky</div>Before</figure><figure><div class="im a" style="background-image:linear-gradient(transparent,rgba(0,0,0,.6)),url(img/aster/hero.jpg)">Nights under the sky</div>After</figure></div>
-              <div class="checks" id="pChecks"><div>App builds</div><div>Screenshots attached</div><div>Ready for review</div></div>
-            </div>
-          </div>
-        </div>
-      </article>
+        <article class="card w2 photo" style="background-image:linear-gradient(90deg,rgba(14,16,20,.92),rgba(14,16,20,.55)),url(img/bg/green-aurora.jpg)"><div class="vis ui v7" id="f7">
+            <div><span class="hoff" id="f7b" style="height:32px;font-size:13px;padding:0 6px 0 12px">Hand off<span class="n">3</span></span><div class="chg"><b>3 changes</b><br>Hero title · Card corners · Button</div></div>
+            <div class="prC" id="f7c"><div class="prT"><span class="prS" id="f7s">Draft</span>tovi/design-updates → main</div><h5>Design updates from Tovi</h5><div class="br">3 files changed · +6 −6</div><div class="prI"><figure><div class="im" style="background-image:linear-gradient(transparent,rgba(0,0,0,.6)),url(img/aster/hero.jpg)">Nights under the sky</div>Before</figure><figure><div class="im a" style="background-image:linear-gradient(transparent,rgba(0,0,0,.6)),url(img/aster/hero.jpg)">Nights under the sky</div>After</figure></div><div class="ck" id="f7k"><div>App builds</div><div>Screenshots attached</div><div>Ready for review</div></div></div>
+            <div class="cur" id="f7cur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div><div class="ct"><p><b>Push to a pull request.</b> One click commits every change to a new branch and opens a pull request with before and after images. Tovi checks the app still builds first.</p></div></article>
 
-      <!-- 8. Code tracking -->
-      <article class="card w2" id="cCode">
-        <div class="ct"><h3>See every line it changed</h3><p>Each visual change maps to its exact place in your source. Tovi edits it the way a careful developer would: one class, your own tokens, nothing generated.</p><span class="hint"><i></i>Hover a change to see its code</span></div>
-        <div class="stage" style="min-height:280px">
-          <div class="ctrack ui">
-            <div class="chList" id="cList"></div>
-            <div class="diff"><div class="diffH" id="cFile"></div><div class="diffB" id="cDiff"></div></div>
-          </div>
-        </div>
-      </article>
+        <article class="card w2"><div class="vis ui v8" id="f8"><div class="chL" id="f8l"></div><div class="df"><div class="dfH" id="f8h"></div><div class="dfB" id="f8d"></div></div></div><div class="ct"><p><b>See every line it changed.</b> Each visual change maps to its exact place in your source. Tovi edits it the way a careful developer would: one class, your own tokens, nothing generated.</p></div></article>
 
-      <!-- 9. Version history -->
-      <article class="card" id="cHist">
-        <div class="ct"><h3>Version history</h3><p>Every stop is saved as a version. Drag to compare, restore one, or undo a single edit.</p><span class="hint"><i></i>Drag to compare, or pick a version</span></div>
-        
-        <div class="stage">
-          <div class="hist ui">
-            <div class="cmp" id="hCmp"><div class="ver" id="hA"><div class="t">Nights under the northern sky</div><span class="b">Find your stay</span></div><div class="ver after" id="hB"><div class="t">Nights under the northern sky</div><span class="b">Find your stay</span></div><span class="cmpLab" style="left:10px" id="hLA">v1 · Start</span><span class="cmpLab" style="right:10px" id="hLB">v4 · Now</span><span class="knob"></span></div>
-            <div class="tl" id="hTl"><button data-v="1">v1</button><button data-v="2">v2</button><button data-v="3">v3</button><button data-v="4" class="on">Now</button></div>
-          </div>
-        </div>
-      </article>
-    </div>
+        <article class="card lit"><div class="vis ui v9" id="f9">
+            <div class="cmp" id="f9c"><div class="ver" id="f9a"><div class="t">Nights under the northern sky</div><span class="b">Find your stay</span></div><div class="ver after"><div class="t">Nights under the northern sky</div><span class="b">Find your stay</span></div><span class="cLab" style="left:10px" id="f9la">v1</span><span class="cLab" style="right:10px">Now</span><span class="knob"></span></div>
+            <div class="tl" id="f9t"><span class="on">v1</span><span>v2</span><span>v3</span><span class="on">Now</span></div>
+          </div><div class="ct"><p><b>Version history.</b> Every stop is saved as a version. Compare before and after, restore one, or undo a single edit.</p></div></article>
+      </div>
 
-    <div class="vals">
-      <div><h2>Made for the product, not a copy of it.</h2></div>
-      <ul>
-        <li><b>Runs on your Mac</b><span>Your code stays on your machine. Tovi works on a branch and never touches main.</span></li>
-        <li><b>Bring your own AI</b><span>Use Claude, OpenAI or Gemini with your own key. No credits to buy, nothing added on top.</span></li>
-        <li><b>Nothing merges without your team</b><span>Every change arrives as a pull request your developers review and approve.</span></li>
-      </ul>
+      <div class="vals">
+        <div style="position:relative"><h2>Made for the product, not a copy of it.</h2><div class="hand" style="position:relative;display:inline-block;margin-top:34px;transform:rotate(-3deg)">no mockups to keep in sync</div></div>
+        <ul>
+          <li><b>Runs on your Mac</b><span>Your code stays on your machine. Tovi works on a branch and never touches main.</span></li>
+          <li><b>Bring your own AI</b><span>Use Claude, OpenAI or Gemini with your own key. No credits to buy, nothing added on top.</span></li>
+          <li><b>Nothing merges without your team</b><span>Every change arrives as a pull request your developers review and approve.</span></li>
+        </ul>
+      </div>
     </div>
   </section>
 
   <section class="sec wrap" id="faq">
     <div class="faq">
-      <aside><h2>Questions</h2><p>Something else on your mind? Write to <a href="mailto:hello@usetovi.com">hello@usetovi.com</a>.</p></aside>
+      <aside><span class="pill">Questions</span><h2>Good to know.</h2><p>Something else on your mind? Write to <a href="mailto:hello@usetovi.com">hello@usetovi.com</a>.</p></aside>
       <div><details><summary>What is Tovi?</summary><p>A design editor for your real product. You open the app your team built, edit it by hand like in Figma or with AI, and Tovi turns your edits into code and a pull request.</p></details><details><summary>Do I need to know how to code?</summary><p>No. You edit visually. Tovi writes the code, and developers review it before anything is merged.</p></details><details><summary>Which apps does it work with?</summary><p>React apps styled with Tailwind, built with Vite or Next.js. Other setups aren&#x27;t supported yet.</p></details><details><summary>Where does my code go?</summary><p>Tovi runs on your Mac and your code stays there. When you use the AI, the screen and the relevant code go to the AI provider you chose, with your own key.</p></details><details><summary>Do I pay for AI credits?</summary><p>No. You bring your own key from Claude, OpenAI or Gemini and pay the provider directly.</p></details><details><summary>Will it touch our main branch?</summary><p>No. Changes go to a new branch and a pull request. Nothing merges without your team.</p></details><details><summary>Does it replace Figma?</summary><p>No. Figma is still the place to explore new ideas. Tovi is for the product once it&#x27;s built.</p></details></div>
     </div>
   </section>
 
   <section class="end" id="invite">
+    <div class="aurora" aria-hidden="true"><i class="a1" style="top:30%"></i><i class="a2" style="top:40%"></i><i class="a3"></i></div>
     <div class="wrap">
-      <h2>Fix the real thing.</h2>
+      <h2>Fix the <em>real</em> thing.</h2>
       <p>Tovi is in private beta with React and Tailwind teams. Leave your email and we'll send an invite.</p>
       <form id="form"><label for="email" class="vh">Email</label><input id="email" type="email" required placeholder="you@company.com" autocomplete="email"><button class="cta lg" type="submit">Request an invite</button></form>
       <p class="thanks" id="thanks" role="status"></p>
