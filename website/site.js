@@ -117,138 +117,125 @@
     }, (A) => { edited(); P0.style.opacity = 0; P1.style.opacity = 1; empty.style.display = 'none'; kMsg('<div class="applied"><i>✓</i>Applied 3 changes<u>Undo</u></div>'); toast.classList.add('on'); cur.style.opacity = 0; });
   }
 
-  /* ---------- 1. Edit by hand: drag a field's icon, the card follows, the code updates ---------- */
+  /* ---------- 1. Edit by hand: scrub a field's icon, the card follows on the canvas ---------- */
   {
-    const root = $('f1'), cur = $('f1cur'), card = $('f1c'), img = $('f1i'), sel = $('f1s'), code = $('f1code');
+    const root = $('f1'), cur = $('f1cur'), card = $('f1c'), img = $('f1i'), sel = $('f1s');
     const rv = $('f1rv'), pv = $('f1pv'), fs = $('f1fs'), fv = $('f1fv'), sws = [...$('f1sw').children];
-    const R = { 0: 'rounded-none', 4: 'rounded', 8: 'rounded-lg', 12: 'rounded-xl', 16: 'rounded-2xl', 24: 'rounded-3xl' };
     const FILLS = [['surface', '#14161C'], ['surface-2', '#2A2F3A'], ['primary', '#1E5C43'], ['accent', '#5B3A7A']];
-    const st = { r: 0, p: 0, f: 0, hl: '' };
-    const place = () => { const b = (el) => { const r = el.getBoundingClientRect(), o = root.getBoundingClientRect(); return { x: r.left - o.left, y: r.top - o.top, w: r.width, h: r.height }; }; const c = b(card); Object.assign(sel.style, { left: c.x - 2 + 'px', top: c.y - 2 + 'px', width: c.w + 4 + 'px', height: c.h + 4 + 'px' }); };
+    const st = { r: 4, p: 0, f: 0 };
+    const place = () => { const r = card.getBoundingClientRect(), o = root.getBoundingClientRect(); Object.assign(sel.style, { left: r.left - o.left - 3 + 'px', top: r.top - o.top - 3 + 'px', width: r.width + 6 + 'px', height: r.height + 6 + 'px' }); };
     function draw() {
       card.style.borderRadius = st.r + 'px'; card.style.padding = st.p + 'px'; card.style.background = FILLS[st.f][1];
-      img.style.borderRadius = st.p ? Math.max(0, st.r - st.p) + 'px' : '0';
+      img.style.borderRadius = st.p ? Math.max(4, st.r - st.p) + 'px' : '0';
       rv.textContent = st.r; pv.textContent = st.p; fs.style.background = FILLS[st.f][1]; fv.textContent = FILLS[st.f][0];
-      const h = (k, s) => (st.hl === k ? `<span class="hl">${s}</span>` : s);
-      code.innerHTML = `&lt;<span class="k">article</span> className=<span class="s">"${h('r', R[st.r])} ${h('p', st.p ? 'p-' + st.p / 4 : 'p-0')} ${h('f', 'bg-' + FILLS[st.f][0])}"</span>&gt;`;
-      requestAnimationFrame(place); setTimeout(place, 520);
+      sws.forEach((x, i) => x.classList.toggle('on', i === st.f));
+      requestAnimationFrame(place); setTimeout(place, 480);
     }
     draw(); addEventListener('resize', place);
     const drag = async (A, field, key, to) => {
-      const k = field.querySelector('.k'); await A.move(cur, k, 0.5, 0.5, 700);
-      const steps = key === 'r' ? [0, 4, 8, 12, 16, 24] : [0, 4, 8, 12];
-      let i = steps.indexOf(st[key]); const dir = Math.sign(steps.indexOf(to) - i); let x = A.box(k).x + 8, y = A.box(k).y + 8;
-      cur.style.transition = 'transform .22s linear';
-      while (steps[i] !== to) { i += dir; x += 16 * dir; A.to(cur, [x, y], 0, 0); st[key] = steps[i]; st.hl = key; draw(); await A.wait(240); }
-      cur.style.transition = ''; await A.wait(500);
+      const k = field.querySelector('.k'); await A.move(cur, k, 0.5, 0.6, 750);
+      field.classList.add('flash');
+      const steps = key === 'r' ? [4, 8, 12, 16, 24] : [0, 4, 8, 12];
+      let i = steps.indexOf(st[key]); const dir = Math.sign(steps.indexOf(to) - i); const b = A.box(k); let x = b.x + b.w / 2;
+      cur.style.transition = 'transform .24s linear';
+      while (steps[i] !== to) { i += dir; x += 18 * dir; A.to(cur, [x, b.y + b.h * 0.6], 0, 0); st[key] = steps[i]; draw(); await A.wait(260); }
+      cur.style.transition = ''; field.classList.remove('flash'); await A.wait(450);
     };
     let round = 0;
     scene(root, async (A) => {
       const big = round++ % 2 === 0;
+      A.to(cur, [120, 300]); await A.wait(300);
       await drag(A, $('f1r'), 'r', big ? 24 : 4);
       await drag(A, $('f1p'), 'p', big ? 12 : 0);
-      const f = big ? 2 : (round % 4 === 0 ? 3 : 0);
-      await A.move(cur, sws[f], 0.5, 0.5, 700); await A.click(cur); st.f = f; st.hl = 'f'; draw();
-      await A.wait(2200);
-    }, () => { st.r = 24; st.p = 12; st.f = 2; st.hl = 'f'; draw(); cur.style.opacity = 0; });
+      const f = big ? 2 : 0;
+      await A.move(cur, sws[f], 0.5, 0.5, 700); await A.click(cur); st.f = f; draw();
+      await A.wait(2400);
+    }, () => { st.r = 24; st.p = 12; st.f = 2; draw(); cur.style.opacity = 0; });
   }
 
-  /* ---------- 2. UX audit: a sweep, notes pinned to what's off, the list ---------- */
+  /* ---------- 2. UX audit: a sweep, notes pinned to what's off, one note at a time ---------- */
   {
-    const root = $('f2'), sw = $('f2sw'), list = $('f2l'), tags = [...root.querySelectorAll('.tagM')], rows = [...list.children];
-    const show = (i) => { tags.forEach((t) => t.classList.toggle('hl', +t.dataset.i === i)); rows.forEach((r) => r.classList.toggle('hl', +r.dataset.i === i)); };
+    const root = $('f2'), sw = $('f2sw'), tags = [...root.querySelectorAll('.tagM')], note = $('f2n');
+    const N = [['Heading wraps unevenly', 'Hierarchy'], ['Caption is too faint to read', 'Contrast'], ['Button is small on phones', 'Usability']];
+    const show = (i) => { tags.forEach((t) => t.classList.toggle('hl', +t.dataset.i === i)); $('f2e').textContent = i; $('f2t').textContent = N[i - 1][0]; $('f2c').textContent = N[i - 1][1]; const d = note.children[1]; d.classList.remove('sw2'); void d.offsetWidth; d.classList.add('sw2'); };
     scene(root, async (A) => {
-      tags.forEach((t) => t.classList.remove('on')); list.classList.remove('on'); show(0);
+      tags.forEach((t) => t.classList.remove('on', 'hl')); note.classList.remove('on');
       await A.wait(500);
       sw.classList.remove('go'); void sw.offsetWidth; sw.classList.add('go');
       await A.wait(1100);
-      for (const t of tags) { t.classList.add('on'); await A.wait(260); }
-      await A.wait(300); list.classList.add('on'); await A.wait(700);
-      for (const i of [1, 2, 3]) { show(i); await A.wait(1100); }
-      show(0); await A.wait(1200);
-    }, () => { tags.forEach((t) => t.classList.add('on')); list.classList.add('on'); });
+      for (const t of tags) { t.classList.add('on'); await A.wait(240); }
+      await A.wait(300); show(1); note.classList.add('on');
+      for (const i of [1, 2, 3]) { show(i); await A.wait(1500); }
+      await A.wait(500);
+    }, () => { tags.forEach((t) => t.classList.add('on')); show(2); note.classList.add('on'); });
   }
 
-  /* ---------- 3. AI improvements: same card, your system, then an exploration ---------- */
+  /* ---------- 3. AI improvements: the same buttons, your system, then an exploration ---------- */
   {
-    const root = $('f3'), plan = $('f3p'), go = $('f3g'), mode = $('f3m'), steps = $('f3s'), comp = $('f3c'), txt = $('f3t');
-    const ask = async (A, q, m, cls, b, s) => {
-      txt.textContent = ''; await A.type(txt, q, 38); await A.wait(300);
-      txt.textContent = ''; comp.classList.add('busy'); mode.textContent = m;
-      const rows = [...steps.children]; rows.forEach((r, i) => { r.textContent = s[i]; r.className = ''; }); steps.classList.add('on');
-      for (const r of rows) { r.className = 'run'; await A.wait(520); r.className = 'ok'; }
-      plan.className = 'plan ' + cls; go.textContent = b; comp.classList.remove('busy');
-      await A.wait(500); steps.classList.remove('on');
+    const root = $('f3'), cv = root.querySelector('.n3cv'), st = $('f3s'), sl = $('f3sl'), comp = $('f3c'), txt = $('f3t');
+    const ask = async (A, q, label, cls) => {
+      txt.textContent = ''; await A.type(txt, q, 40); await A.wait(350);
+      txt.textContent = ''; comp.classList.add('busy'); sl.textContent = label; st.classList.remove('done'); st.classList.add('on');
+      await A.wait(1300);
+      cv.className = 'n3cv ' + cls; st.classList.add('done'); comp.classList.remove('busy');
+      await A.wait(900); st.classList.remove('on');
     };
     scene(root, async (A) => {
-      plan.className = 'plan'; go.textContent = 'Choose plan'; mode.textContent = 'Your design system'; await A.wait(700);
-      await ask(A, 'Make this card feel more premium', 'Your design system', 'sys', 'Choose plan', ['Reading the card', 'Using your tokens', 'Checking the result']);
+      cv.className = 'n3cv'; await A.wait(600);
+      await ask(A, 'Make these feel softer', 'Using your design system', 'sys');
+      await A.wait(2200);
+      await ask(A, 'Try a bolder direction', 'Exploring a new direction', 'ex');
       await A.wait(2400);
-      await ask(A, 'Explore something bolder', 'Explore', 'ex', 'Start free', ['Reading the card', 'Trying a new direction', 'Checking contrast']);
-      await A.wait(2400);
-      await fade(A, plan, () => {});
-    }, () => { plan.className = 'plan sys'; });
+      await fade(A, cv, () => (cv.className = 'n3cv'));
+    }, () => { cv.className = 'n3cv sys'; });
   }
 
   /* ---------- 4. Notes: two marks, two tasks, Apply ---------- */
   {
-    const root = $('f4'), cur = $('f4cur'), pg = $('f4pg'), tagsEl = $('f4tags'), tk = $('f4tk'), ty = $('f4ty');
-    const SPOTS = [{ x: 222, y: 22, t: 'Heading feels timid' }, { x: 170, y: 106, t: 'Round the photos' }];
+    const root = $('f4'), cur = $('f4cur'), cv = $('f4pg'), tagsEl = $('f4tags'), tk = $('f4tk'), ty = $('f4ty');
     let notes = [];
+    const spots = () => { const c = [...cv.children]; const b = (el, fx, fy) => { const r = el.getBoundingClientRect(), o = root.getBoundingClientRect(); return { x: r.left - o.left + r.width * fx, y: r.top - o.top + r.height * fy }; }; return [{ ...b(c[0], 0.8, 0.12), t: 'Round these corners' }, { ...b(c[1], 0.62, 0.42), t: 'Titles feel small' }]; };
     const draw = (done) => {
-      tagsEl.innerHTML = notes.map((n, i) => `<div class="nT${done ? ' done' : ''}" style="left:${n.x}px;top:${n.y}px"><i></i><b>${done ? '✓' : i + 1}</b></div>`).join('');
+      tagsEl.innerHTML = notes.map((n, i) => `<div class="nT${done ? ' done' : ''}" style="left:${n.x - 3}px;top:${n.y - 16}px"><i></i><b>${done ? '✓' : i + 1}</b></div>`).join('');
       tk.innerHTML = notes.map((n, i) => `<div class="tk${done ? ' done' : ''}"><em>${i + 1}</em>${n.t}</div>`).join('') + `<div class="ft"><span>${done ? 'All fixed' : notes.length + ' task' + (notes.length === 1 ? '' : 's')}</span>${done ? '' : '<span class="pinkB" id="f4ap">Apply</span>'}</div>`;
+      tk.style.display = notes.length ? '' : 'none';
     };
     scene(root, async (A) => {
-      notes = []; pg.classList.remove('fixed'); draw(false);
-      A.to(cur, [120, 230]); await A.wait(500);
-      for (const s of SPOTS) {
-        await A.move(cur, [s.x + 26, s.y + 16], 0, 0, 800); await A.click(cur);
+      notes = []; cv.classList.remove('fixed'); draw(false);
+      A.to(cur, [60, 240]); await A.wait(500);
+      for (const s of spots()) {
+        await A.move(cur, [s.x, s.y], 0, 0, 800); await A.click(cur);
         notes.push({ ...s, t: '' }); draw(false);
-        Object.assign(ty.style, { left: s.x + 38 + 'px', top: s.y + 30 + 'px' }); ty.textContent = ''; ty.classList.add('on');
-        await A.type(ty, s.t, 40); await A.wait(300); ty.classList.remove('on');
+        Object.assign(ty.style, { left: Math.min(s.x + 14, root.offsetWidth - 190) + 'px', top: s.y + 14 + 'px' }); ty.textContent = ''; ty.classList.add('on');
+        await A.type(ty, s.t, 42); await A.wait(300); ty.classList.remove('on');
         notes[notes.length - 1].t = s.t; draw(false); await A.wait(400);
       }
       await A.move(cur, $('f4ap'), 0.5, 0.5, 800); await A.click(cur);
-      draw(true); pg.classList.add('fixed');
+      draw(true); cv.classList.add('fixed');
       await A.wait(2600);
-      await A.move(cur, [120, 230], 0, 0, 500);
-      await fade(A, pg, () => { notes = []; pg.classList.remove('fixed'); draw(false); });
-    }, () => { notes = SPOTS.map((s) => ({ ...s })); draw(true); pg.classList.add('fixed'); cur.style.opacity = 0; });
+      await A.move(cur, [60, 240], 0, 0, 500);
+      await fade(A, cv, () => { notes = []; cv.classList.remove('fixed'); draw(false); });
+    }, () => { notes = spots(); cv.classList.add('fixed'); draw(true); cur.style.opacity = 0; });
   }
 
   /* ---------- 5. Design system: one token changes, every place that uses it follows ---------- */
   {
-    const root = $('f5'), sp = $('f5sp'), C = ['#2563EB', '#C2508A', '#1E8A4F', '#111111'];
-    const tint = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
-    const apply = (c) => { sp.style.background = c; [['f5bd', (e) => { e.style.background = tint(c, 0.12); e.style.color = c; }], ['f5bar', (e) => (e.style.background = c)], ['f5btn', (e) => (e.style.background = c)], ['f5lk', (e) => (e.style.color = c)]].forEach(([id, f], i) => setTimeout(() => f($(id)), 160 + i * 140)); };
+    const root = $('f5'), sp = [...$('f5sp').children];
+    const C = [['#1E8F5E', '#84F0BA'], ['#C2508A', '#FCBDDD'], ['#2B66D9', '#9DBBF5'], ['#B4651E', '#F5B26B']];
+    const apply = (c) => { sp[0].style.background = c[0]; sp[1].style.background = c[1]; [['f5e', (e) => (e.style.color = c[1])], ['f5b', (e) => (e.style.background = c[1])], ['f5l', (e) => (e.style.color = c[1])]].forEach(([id, f], i) => setTimeout(() => f($(id)), 200 + i * 160)); };
     apply(C[0]); let i = 0;
-    scene(root, async (A) => { await A.wait(1800); i = (i + 1) % C.length; apply(C[i]); await A.wait(800); }, () => apply(C[1]));
+    scene(root, async (A) => { await A.wait(2000); i = (i + 1) % C.length; apply(C[i]); await A.wait(700); }, () => apply(C[1]));
   }
 
-  /* ---------- 6. GitHub: connect, pick a repository, it opens ---------- */
+  /* ---------- 6. GitHub: the repository connects ---------- */
   {
-    const root = $('f6');
-    const GH = '<svg viewBox="0 0 24 24" fill="#111" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>';
-    const BOOK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>';
-    const CUR = '<div class="cur" id="f6cur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>';
-    const repos = [['acme/storefront', 'Next.js'], ['acme/dashboard', 'Vite'], ['acme/marketing', 'Next.js']];
-    const view = (inner) => { root.innerHTML = inner + CUR; };
-    const done = (n) => `<div class="ghC"><div class="rp">${BOOK}<b style="font-weight:600">${n}</b><small>main</small></div><div class="ghD"><div>React and Tailwind found</div><div>App installed and started</div><div>Opened with its real pages</div></div></div>`;
+    const root = $('f6'), ok = $('f6k'), t = $('f6t');
     scene(root, async (A) => {
-      view(`<span class="ghB" id="f6b">${GH}Connect GitHub</span><span class="note">Sign-in happens on GitHub</span>`);
-      let cur = $('f6cur'); A.to(cur, [40, 250]); await A.wait(600);
-      await A.move(cur, $('f6b'), 0.6, 0.6, 800); await A.click(cur);
-      const pos = cur.style.transform;
-      view(`<div class="ghC">${repos.map(([n, f], i) => `<div class="rp" id="f6r${i}">${BOOK}${n}<small>${f}</small></div>`).join('')}</div><span class="note">Pick a repository</span>`);
-      cur = $('f6cur'); cur.style.transition = 'none'; cur.style.transform = pos; void cur.offsetWidth; cur.style.transition = '';
-      await A.wait(500); await A.move(cur, $('f6r1'), 0.4, 0.5, 700); $('f6r1').classList.add('hl'); await A.wait(300);
-      await A.move(cur, $('f6r0'), 0.4, 0.5, 500); $('f6r1').classList.remove('hl'); $('f6r0').classList.add('hl'); await A.click(cur);
-      view(done('acme/storefront')); cur = $('f6cur'); cur.style.opacity = 0;
-      for (const d of root.querySelectorAll('.ghD div')) { await A.wait(450); d.classList.add('on'); }
-      await A.wait(2600);
-      await fade(A, root, () => {});
-    }, () => { view(done('acme/storefront')); root.querySelectorAll('.ghD div').forEach((d) => d.classList.add('on')); $('f6cur').style.opacity = 0; });
+      ok.classList.remove('on'); t.textContent = 'Connecting…'; await A.wait(1600);
+      t.textContent = 'acme/aster · main'; ok.classList.add('on'); await A.wait(1400);
+      t.textContent = 'React and Tailwind found'; await A.wait(1500);
+      t.textContent = 'Ready to edit'; await A.wait(2200);
+    }, () => { ok.classList.add('on'); t.textContent = 'acme/aster · main'; });
   }
 
   /* ---------- 7. Hand off: the pull request builds itself ---------- */
@@ -282,19 +269,13 @@
     scene($('f8'), async (A) => { await A.wait(2600); i = (i + 1) % CH.length; show(i); }, () => show(0));
   }
 
-  /* ---------- 9. History: drag to compare, step through versions ---------- */
+  /* ---------- 9. History: the selection walks back through versions, Restore shows on the chosen one ---------- */
   {
-    const c = $('f9c'), a = $('f9a'), la = $('f9la'), tl = [...$('f9t').children];
-    const V = [['rgba(237,239,244,.6)', '4px', '#888', '#fff', 'v1'], ['rgba(237,239,244,.85)', '4px', '#888', '#fff', 'v2'], ['rgba(237,239,244,.85)', '99px', 'rgba(255,255,255,.2)', '#fff', 'v3']];
-    const ver = (i) => { const [fs, br, bg, col, l] = V[i]; a.querySelector('.t').style.color = fs; const b = a.querySelector('.b'); b.style.borderRadius = br; b.style.background = bg; b.style.color = col; la.textContent = l; tl.forEach((t, j) => t.classList.toggle('on', j === i || j === 3)); };
-    const knob = async (A, from, to, ms) => { const t0 = performance.now(); for (;;) { const k = Math.min(1, (performance.now() - t0) / ms), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; c.style.setProperty('--x', from + (to - from) * e + '%'); if (k >= 1) return; await A.wait(16); } };
-    ver(0); let v = 0, x = 50;
-    scene(c, async (A) => {
-      await knob(A, x, 78, 1100); x = 78; await A.wait(600);
-      await knob(A, x, 22, 1500); x = 22; await A.wait(600);
-      await knob(A, x, 50, 900); x = 50; await A.wait(500);
-      v = (v + 1) % 3; ver(v); await A.wait(900);
-    }, () => ver(0));
+    const rows = [...$('f9l').children];
+    rows.forEach((r) => r.insertAdjacentHTML('beforeend', '<span class="rs">Restore</span>'));
+    const pick = (i) => rows.forEach((r, j) => r.classList.toggle('on', i === j));
+    pick(0); let i = 0, d = 1;
+    scene($('f9'), async (A) => { await A.wait(1500); i += d; if (i === rows.length - 1 || i === 0) d = -d; pick(i); }, () => pick(1));
   }
 
   /* invite form: no sign-up service is connected yet, so it only confirms on the page */
