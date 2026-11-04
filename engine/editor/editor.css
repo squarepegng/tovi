@@ -1686,3 +1686,4 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .diagPages button{height:28px;padding:0 8px;margin:0 -8px}
 .diagPages button.on{background:rgba(var(--hi),.06)}
 .diagPages b{color:var(--ink3);font-weight:400;font-size:12px}
+.noteTag .nLead{fill:none;stroke:#FCBDDD;stroke-width:1;opacity:.8}

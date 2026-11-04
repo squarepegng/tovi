@@ -3470,7 +3470,7 @@
   });
 
   /* annotations */
-  function shapeSVG(n, i, draft, hl) {
+  function shapeSVG(n, i, draft, hl, dy = 0) {
     // Notes for Tovi are pink (Tovi's colour), never blue: blue means "what you're touching".
     const tovi = n.by === 'tovi', z = S.z || 1;
     const st = `stroke="var(--noteLine)" stroke-width="${1.5 / z}" stroke-dasharray="${5 / z} ${4 / z}" fill="var(--noteArea)"`;
@@ -3487,13 +3487,32 @@
     // Tovi's own notes are pink; the note you're hovering opens its tag to show what it says.
     const tag = (num, text) => {
       const label = text ? `${num} · ${text}` : String(num), w = Math.round(12 + label.length * 6.4);
-      return `<g class="noteTag${tovi ? ' tovi' : ''}${hl ? ' hl' : ''}" transform="translate(${bx} ${by}) scale(${1 / z})"><circle class="nDot" r="3.5"/><g transform="translate(7 -25)"><rect width="${w}" height="18" rx="6"/><text x="${w / 2}" y="12.5" text-anchor="middle">${esc(label)}</text></g></g>`;
+      // dy lifts a tag that would sit on another one; a hairline leads from the dot up to it.
+      const lead = dy ? `<path class="nLead" d="M0 -3.5V${-25 + dy + 18}H7"/>` : '';
+      return `<g class="noteTag${tovi ? ' tovi' : ''}${hl ? ' hl' : ''}" transform="translate(${bx} ${by}) scale(${1 / z})">${lead}<circle class="nDot" r="3.5"/><g transform="translate(7 ${-25 + dy})"><rect width="${w}" height="18" rx="6"/><text x="${w / 2}" y="12.5" text-anchor="middle">${esc(label)}</text></g></g>`;
     };
     if (i != null) { const t = String(o.title || o.text || '').trim().replace(/\s+/g, ' '); s += tag(i + 1, hl && t ? (t.length > 34 ? t.slice(0, 33) + '…' : t) : ''); }
     else if (n.shape === 'pin') s += `<g class="noteTag draft" transform="translate(${n.x} ${n.y}) scale(${1 / z})"><circle class="nDot" r="3.5"/></g>`;
     return s;
   }
-  const drawMarks = () => { $('marksG').innerHTML = S.notes.map((n, i) => shapeSVG(n, i, false, S.hlNote === i + 1)).join('') + (S.noteDraft ? shapeSVG(S.noteDraft, null, true) : ''); };
+  // Tags of notes that sit close together are stacked upwards instead of overlapping (screen pixels, any zoom).
+  // The hovered note is drawn last so its open tag sits on top.
+  const tagLabel = (n, i, hl) => { const t = String(n.title || n.text || '').trim().replace(/\s+/g, ' '); return hl && t ? `${i + 1} · ${t.length > 34 ? t.slice(0, 33) + '…' : t}` : String(i + 1); };
+  const drawMarks = () => {
+    const z = S.z || 1, placed = [], out = [];
+    const order = S.notes.map((n, i) => i).sort((a, b) => (S.hlNote === a + 1) - (S.hlNote === b + 1));
+    const dys = {};
+    S.notes.map((n, i) => i).forEach((i) => {
+      const n = S.notes[i], [bx, by] = n.shape === 'pin' || n.shape === 'arrow' ? [n.x, n.y] : [n.x + n.w, n.y];
+      const w = Math.round(12 + tagLabel(n, i, false).length * 6.4), x = bx * z + 7, y0 = by * z - 25;
+      let dy = 0;
+      while (dy > -400 && placed.some((r) => x < r.x + r.w + 2 && x + w + 2 > r.x && y0 + dy < r.y + 20 && y0 + dy + 20 > r.y)) dy -= 22;
+      placed.push({ x, y: y0 + dy, w });
+      dys[i] = dy;
+    });
+    order.forEach((i) => out.push(shapeSVG(S.notes[i], i, false, S.hlNote === i + 1, dys[i])));
+    $('marksG').innerHTML = out.join('') + (S.noteDraft ? shapeSVG(S.noteDraft, null, true) : '');
+  };
   // Hovering a note's answer lights up its mark and the elements it changes.
   document.addEventListener('mouseover', (e) => {
     const row = e.target.closest?.('.ntRow');
