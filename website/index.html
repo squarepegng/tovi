@@ -194,26 +194,213 @@ h1 em{font-style:normal;color:var(--pink)}
 .hcur{position:absolute;left:0;top:0;z-index:5;width:1.6%;min-width:14px;transition:left .8s cubic-bezier(.3,.1,.2,1),top .8s cubic-bezier(.3,.1,.2,1);pointer-events:none}
 .hcur svg{width:100%;height:auto;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
 .hcur.click svg{animation:clk .22s var(--ease)}
-/* Feature cards: real Tovi screens, cropped to the part each feature is about, cycling through their real states. */
+/* ---------- feature cards: real Tovi components, rebuilt to its exact look, zoomed in, playing by themselves ---------- */
 .card.w3{grid-column:1/-1}
-.rv{position:relative;height:340px;overflow:hidden}
-.card.w3 .rv{height:480px}
-.rv.bleed{padding:28px 0 0 28px}
-.rv.bleed .shot2{width:calc(100% + 40px);min-width:560px}
-.card.w3 .rv.bleed{padding:32px 32px 0}
-.card.w3 .rv.bleed .shot2{width:86%;min-width:0;margin:0 auto}
-.rv.center{display:grid;place-items:center;padding:24px}
-.rv.center .shot2{height:100%;max-width:100%}
-.shot2{position:relative;border-radius:12px;overflow:hidden;background:#1C1C1C;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 24px 60px -20px rgba(0,0,0,.9)}
-.rv.bleed .shot2{border-radius:12px 0 0 0}
-.card.w3 .rv.bleed .shot2{border-radius:12px 12px 0 0}
-.shot2 .fr{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:left top;opacity:0;transition:opacity .6s cubic-bezier(.2,0,0,1)}
-.shot2 .fr.on{opacity:1}
-.rv::after{content:"";position:absolute;left:0;right:0;bottom:0;height:80px;z-index:3;pointer-events:none;background:linear-gradient(180deg,transparent,var(--card))}
-.ct{display:flex;gap:14px;align-items:baseline}
-.step{flex:0 0 auto;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:rgba(252,189,221,.12);box-shadow:inset 0 0 0 1px rgba(252,189,221,.25);color:var(--pink);font-size:12px;font-weight:600;transform:translateY(-2px)}
-@media (max-width:1000px){.card.w3{grid-column:span 2}.card.w3 .rv{height:380px}}
-@media (max-width:720px){.card.w3{grid-column:auto}.rv{height:280px}.card.w3 .rv{height:300px}.card.w3 .rv.bleed .shot2{width:140%}}
+.xv{position:relative;height:350px;overflow:hidden;pointer-events:none;font:400 13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;color:#EEE}
+.card.w3 .xv{height:380px}
+#xPr{height:500px;align-items:start;padding-top:36px}
+.xPrDone{top:120px}
+.xv::after{content:"";position:absolute;left:0;right:0;bottom:0;height:70px;z-index:30;pointer-events:none;background:linear-gradient(180deg,transparent,var(--card))}
+.card.photo .xv::after{display:none}
+.xv .cur{z-index:40}
+.xPink{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:8px;color:#1A0F14;font-weight:500;background:linear-gradient(180deg,#FFD3E9,#F7B2D6);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -1px 0 rgba(120,20,70,.12),0 0 0 .5px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.3)}
+.xGhost{color:rgba(255,255,255,.6)}
+.xBtn{display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:9px;background:#F2F1EE;color:#121212;font-weight:500;box-shadow:inset 0 1px 0 #fff,0 0 0 .5px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.4)}
+.xBtn2{display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:9px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);color:#EEE}
+.xF{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 6px;border-radius:7px;background:rgba(255,255,255,.055);box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff11,0 1px .5px #00000018,0 0 3px -1px #000000aa;font-variant-numeric:tabular-nums;transition:box-shadow .2s}
+.xF.flash{box-shadow:0 0 0 1.5px #2B66D9}
+.xF .k{width:18px;height:18px;display:grid;place-items:center;color:rgba(255,255,255,.4)}
+.xF .k svg{width:15px;height:15px}
+.xF .u{color:rgba(255,255,255,.4)}
+.xL{font-size:12px;color:rgba(255,255,255,.42);margin:10px 0 6px}
+.xH{font-size:13px;font-weight:600;margin-bottom:2px}
+
+/* Connect GitHub: the New project dialog */
+#xGh{display:grid;place-items:center}
+.xDlg{position:relative;width:330px;padding:16px;border-radius:14px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 24px 60px -18px rgba(0,0,0,.9);margin-top:-6px}
+.xDlgH b{display:block;font-size:15px;font-weight:600;margin-bottom:4px}
+.xDlgH span{display:block;color:rgba(255,255,255,.55);font-size:12px}
+.xSeg{display:inline-flex;gap:2px;margin:12px 0 10px;padding:2px;border-radius:9px;background:rgba(255,255,255,.05)}
+.xSeg span{display:flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:7px;font-size:12px;color:rgba(255,255,255,.6)}
+.xSeg span.on{background:rgba(255,255,255,.07);color:#EEE;box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff22,0 0 3px -1px #000000aa}
+.xSeg svg{width:13px;height:13px}
+.xIn{display:flex;align-items:center;gap:8px;height:38px;padding:0 12px;border-radius:10px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);transition:box-shadow .2s}
+.xIn.focus{box-shadow:inset 0 0 0 1px rgba(43,102,217,.8),0 0 0 3px rgba(43,102,217,.18)}
+.xIn svg{width:15px;height:15px;color:rgba(255,255,255,.5)}
+.xIn .ph{color:rgba(255,255,255,.35)}
+.xSteps{display:none;flex-direction:column;gap:8px;padding:6px 2px 0}
+.xSteps.on{display:flex}
+.xSteps div{display:flex;align-items:center;gap:9px;color:rgba(255,255,255,.4);font-size:12.5px}
+.xSteps div::before{content:"";width:12px;height:12px;border-radius:50%;border:1.5px solid rgba(255,255,255,.22);box-sizing:border-box}
+.xSteps div.run{color:#EEE}.xSteps div.run::before{border-color:#FCBDDD;border-right-color:transparent;animation:spin .7s linear infinite}
+.xSteps div.ok{color:rgba(255,255,255,.75)}.xSteps div.ok::before{border:0;background:#3FB950;box-shadow:inset 0 0 0 3px #2A2A2A}
+.xDlgF{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}
+
+/* Edit by hand: a card on the canvas and the properties panel */
+.xCanvas{position:absolute;left:0;top:0;bottom:0;right:300px;display:grid;place-items:center;background:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px) 0 0/18px 18px}
+.xPlace{width:220px;background:#14161C;overflow:hidden;border-radius:6px;transition:border-radius .45s var(--ease),padding .45s var(--ease),background .45s var(--ease);box-shadow:0 24px 50px -20px rgba(0,0,0,.9);margin-top:-10px}
+.xPlace img{width:100%;aspect-ratio:4/3;object-fit:cover;transition:border-radius .45s var(--ease)}
+.xPlace div{padding:12px 14px 14px}
+.xPlace b{display:block;font:500 15px/1.2 Inter,-apple-system,sans-serif;color:#F0F2F7}
+.xPlace small{display:block;margin-top:4px;font:400 12px/1.3 Inter,sans-serif;color:rgba(240,242,247,.55)}
+.xPanel{position:absolute;right:0;top:26px;bottom:0;width:290px;border-radius:16px 0 0 0;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.07),-20px 0 60px -20px rgba(0,0,0,.6)}
+.xSec{padding:14px 16px;border-bottom:1px solid #353538}
+.xR2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.xSec .xR2:not(:first-child){margin-top:10px}
+.xSw{width:15px;height:15px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);transition:background .3s}
+
+/* AI improvements: Tovi's chat thread beside the element it changes */
+.xChat{position:absolute;left:0;top:0;bottom:0;width:330px;display:flex;flex-direction:column;background:#2A2A2A;border-right:1px solid #353538}
+.xThread{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding:14px 16px 8px;overflow:hidden}
+.xCtx{align-self:flex-end;font-size:11px;color:rgba(255,255,255,.4);margin-bottom:-6px;animation:in .24s var(--ease)}
+.xU{align-self:flex-end;max-width:240px;padding:8px 13px;border-radius:14px;background:#3A3A3D;animation:in .24s var(--ease)}
+.xMeta{display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.42);animation:in .24s var(--ease)}
+.xMeta img{width:16px;height:16px;object-fit:contain}
+.xReply{color:rgba(255,255,255,.85);animation:in .24s var(--ease)}
+.xAppl{padding:8px 10px;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);animation:in .24s var(--ease)}
+.xAppl .h{font-size:12px;color:rgba(255,255,255,.55);padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:6px}
+.xAppl .r{display:flex;gap:8px;font-size:12px;padding:3px 0}
+.xAppl .r i{flex:0 0 auto;width:14px;height:14px;border-radius:50%;background:rgba(63,185,80,.18);color:#3FB950;display:grid;place-items:center;font-style:normal;font-size:9px;font-weight:700;margin-top:2px}
+.xAppl .r small{display:block;color:rgba(255,255,255,.45);font-size:11.5px}
+.xDone{display:flex;justify-content:space-between;font-size:12px;color:#3FB950;animation:in .24s var(--ease)}
+.xDone u{text-decoration:none;color:rgba(255,255,255,.7)}
+.xComp{margin:8px 10px 10px;padding:9px 10px;border-radius:14px;background:#323235;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);transition:box-shadow .24s}
+.xComp.busy{box-shadow:inset 0 0 0 1px rgba(252,189,221,.55),0 0 22px -4px rgba(252,189,221,.4)}
+.xChip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:7px;background:rgba(255,255,255,.06);font-size:11.5px;color:rgba(255,255,255,.75)}
+.xChip i{width:10px;height:10px;border-radius:2px;box-shadow:inset 0 0 0 1.2px rgba(255,255,255,.6)}
+.xCompIn{min-height:34px;padding:8px 2px 4px;color:rgba(255,255,255,.35)}
+.xCompIn.typing{color:#EEE}
+.xCompIn .caret{display:inline-block;width:1.5px;height:14px;margin-left:1px;vertical-align:-2px;background:#FCBDDD;animation:blink 1s steps(1) infinite}
+.xCompRow{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:rgba(255,255,255,.45)}
+.xSend{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#4A4A4D;color:rgba(255,255,255,.6);transition:background .2s}
+.xSend.on{background:#FCBDDD;color:#1A0F14}
+.xSend svg{width:12px;height:12px}
+.xStage{position:absolute;left:330px;right:0;top:0;bottom:0;display:grid;place-items:center;background:#090A0E radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px) 0 0/18px 18px}
+.xBtns{display:flex;gap:12px;padding:26px;border-radius:4px;outline:1.5px solid transparent;outline-offset:8px;transition:outline-color .3s}
+.xBtns.picked{outline-color:#2B66D9}
+.xB1,.xB2{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;font:600 15px/1 Inter,sans-serif;transition:all .6s var(--ease)}
+.xB1{border-radius:8px;background:#84F0BA;color:#090A0E}
+.xB1 svg{width:15px;height:15px}
+.xB2{border-radius:8px;color:#F0F2F7;box-shadow:inset 0 0 0 1px rgba(240,242,247,.4);font-weight:500}
+.xBtns.soft .xB1{border-radius:99px;background:rgba(132,240,186,.88);font-weight:500;padding:14px 26px}
+.xBtns.soft .xB2{border-radius:99px;box-shadow:inset 0 0 0 1px rgba(240,242,247,.2);padding:14px 26px}
+.xTovi{position:absolute;left:0;top:0;display:flex;align-items:flex-start;opacity:0;transition:left .8s cubic-bezier(.3,.1,.2,1),top .8s cubic-bezier(.3,.1,.2,1),opacity .2s}
+.xTovi svg{width:20px;height:20px}
+.xTovi b{margin:14px 0 0 -4px;padding:1px 7px;border-radius:6px;background:#FCBDDD;color:#1A0F14;font-size:11px}
+
+/* Notes: two Aster cards, notes pinned on them, the task card */
+.xPage{position:absolute;inset:0;display:flex;gap:14px;padding:24px 22px 0;background:#090A0E;transition:gap .45s var(--ease)}
+.xCard2{flex:1;overflow:hidden;border-radius:4px;background:#14161C;transition:border-radius .45s var(--ease);align-self:flex-start}
+.xCard2 img{width:100%;aspect-ratio:1/1;object-fit:cover}
+.xCard2 b{display:block;padding:10px 12px;font:500 14px/1 Inter,sans-serif;color:#F0F2F7;transition:font-size .45s var(--ease)}
+.xPage.fixed .xCard2{border-radius:16px}.xPage.fixed .xCard2 b{font-size:17px}
+.xNotePop{position:absolute;z-index:20;width:200px;padding:9px 10px;border-radius:12px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 14px 30px -10px rgba(0,0,0,.8);opacity:0;transform:translateY(4px);transition:opacity .16s,transform .16s}
+.xNotePop.on{opacity:1;transform:none}
+.xNotePop div{min-height:18px;color:#EEE}
+.xNotePop span{display:block;margin-top:6px;font-size:11px;color:rgba(255,255,255,.4)}
+.xTasks{position:absolute;z-index:25;left:14px;right:14px;bottom:18px;padding:6px;border-radius:14px;background:rgba(42,42,42,.96);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 16px 40px -14px rgba(0,0,0,.8);font-size:12.5px}
+.xTasks .tk{display:flex;gap:8px;padding:5px 8px;animation:in .24s var(--ease)}
+.xTasks .tk em{font-style:normal;color:rgba(255,255,255,.4)}
+.xTasks .tk.done{color:rgba(255,255,255,.4);text-decoration:line-through}
+.xTasks .ft{display:flex;align-items:center;gap:12px;margin-top:4px;padding:8px 6px 2px;border-top:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.45)}
+.xTasks .ft span:first-child{flex:1}
+
+/* AI UX audit: a page section with notes pinned, and Tovi's list of notes */
+.xAuPage{position:absolute;left:28px;top:28px;bottom:0;right:380px;border-radius:12px 12px 0 0;overflow:hidden;background:#090A0E;display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:28px 28px 0;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+.xCabin{border-radius:6px;background:#14161C url(img/aster/cabin.jpg) center/cover;min-height:260px}
+.xAuTxt{padding-top:20px;font-family:Inter,sans-serif}
+.xAuTxt .e{font-size:10px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:#84F0BA}
+.xAuTxt b{display:block;margin:10px 0;font:400 30px/1.02 "Newsreader",serif;color:#F0F2F7}
+.xAuTxt p{margin:0 0 16px;font-size:12px;color:rgba(240,242,247,.35)}
+.xAuTxt .btn{display:inline-block;padding:9px 16px;border-radius:99px;background:#F0F2F7;color:#090A0E;font-size:11.5px;font-weight:600}
+.xAuPage .sweep{top:-90px}
+.xAuPage .sweep.go{animation:sweep2 1.6s var(--ease) forwards}
+@keyframes sweep2{0%{opacity:1;transform:translateY(0)}90%{opacity:1}100%{opacity:0;transform:translateY(470px)}}
+.xTag{position:absolute;z-index:4;display:flex;align-items:flex-start;opacity:0;transform:translateY(5px);transition:opacity .24s var(--ease),transform .24s var(--ease)}
+.xTag.on{opacity:1;transform:none}
+.xTag i{width:7px;height:7px;margin-top:13px;border-radius:50%;background:#FCBDDD;box-shadow:0 0 0 1.5px #fff}
+.xTag b{margin-left:3px;padding:1px 7px;border-radius:6px;background:#FCBDDD;color:#1A0F14;font:600 10.5px/16px -apple-system,system-ui,sans-serif;transition:box-shadow .16s}
+.xTag.hl b{box-shadow:0 0 0 2px #fff}
+.xAuList{position:absolute;right:28px;top:28px;width:330px;padding:8px;border-radius:14px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 24px 60px -18px rgba(0,0,0,.9)}
+.xAuHead{display:flex;gap:8px;align-items:center;padding:6px 8px 10px;color:rgba(255,255,255,.75);font-size:12.5px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px}
+.xAuHead img,.xAuRow img{width:18px;height:18px;object-fit:contain}
+.xAuRow{display:flex;align-items:center;gap:9px;padding:8px;border-radius:9px;opacity:0;transform:translateY(4px);transition:opacity .24s,transform .24s,background .2s}
+.xAuRow.on{opacity:1;transform:none}
+.xAuRow.hl{background:rgba(255,255,255,.06)}
+.xAuRow b{font-weight:500;font-size:13px;flex:1}
+.xAuRow small{color:rgba(255,255,255,.42);font-size:11.5px}
+.xAuFoot{display:flex;align-items:center;gap:14px;margin-top:4px;padding:10px 8px 4px;border-top:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.5);font-size:12.5px}
+.xAuFoot span:first-child{flex:1}
+
+/* Version history panel */
+.xHist{position:absolute;left:26px;right:26px;top:24px;bottom:0;padding:14px 16px;border-radius:16px 16px 0 0;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.07),0 24px 60px -18px rgba(0,0,0,.9)}
+.xHistH{display:flex;justify-content:space-between;align-items:center}
+.xHistH span{padding:3px 9px;border-radius:7px;background:rgba(255,255,255,.07);font-size:12.5px;font-weight:500}
+.xHistH i{font-style:normal;color:rgba(255,255,255,.45)}
+.xHist p{margin:10px 0 12px;font-size:11.5px;color:rgba(255,255,255,.42)}
+.xTl{position:relative;padding-left:20px}
+.xTl::before{content:"";position:absolute;left:5px;top:6px;bottom:0;width:1px;background:rgba(255,255,255,.12)}
+.xVer{position:relative;padding:0 0 14px}
+.xVer::before{content:"";position:absolute;left:-19px;top:4px;width:9px;height:9px;border-radius:50%;background:#2A2A2A;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5)}
+.xVer.cur::before{box-shadow:inset 0 0 0 1.5px #EEE}
+.xVer.new{animation:in .3s var(--ease)}
+.xVer.new::before{background:#FCBDDD;box-shadow:none}
+.xVer b{display:block;font-size:13px;font-weight:600}
+.xVer small{display:block;color:rgba(255,255,255,.45);font-size:11.5px}
+.xVer .ch{font-size:12px;padding:3px 0;animation:in .24s var(--ease)}
+.xVer .ch span{color:rgba(255,255,255,.5)}
+.xName{margin:8px 0;height:30px;display:flex;align-items:center;padding:0 10px;border-radius:7px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);font-size:12.5px;color:rgba(255,255,255,.35)}
+.xName.typing{color:#EEE;box-shadow:inset 0 0 0 1px rgba(43,102,217,.8)}
+
+/* Changes this session */
+#xCo{display:grid;place-items:center;background:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px) 0 0/18px 18px}
+.xChg{width:min(520px,92%);padding:6px;border-radius:14px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 24px 60px -18px rgba(0,0,0,.9);margin-top:10px;align-self:start}
+.xChgH{display:flex;align-items:center;gap:12px;padding:8px 10px 10px;font-weight:600}
+.xChgH span:first-child{flex:1}
+.xChgH .lk{font-weight:400;color:#9DBBF5;font-size:12.5px}
+.xChgH i{font-style:normal;color:rgba(255,255,255,.45)}
+.xRow{padding:9px 10px;border-top:1px solid rgba(255,255,255,.06);animation:in .3s var(--ease)}
+.xRow b{display:block;font-weight:500;font-size:13px}
+.xRow code{display:block;margin-top:3px;font:11.5px/1.5 ui-monospace,"SF Mono",Menlo,monospace;color:rgba(255,255,255,.5)}
+.xRow code del{text-decoration:none;color:#FFA198;background:rgba(248,81,73,.12);border-radius:3px;padding:0 3px}
+.xRow code ins{text-decoration:none;color:#7EE787;background:rgba(63,185,80,.14);border-radius:3px;padding:0 3px}
+
+/* Hand off dialog, then the opened pull request */
+#xPr{display:grid;place-items:center}
+.xHand{position:relative;width:540px;max-width:92%;padding:16px 18px 0;border-radius:14px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 30px 80px -20px rgba(0,0,0,.9);transition:opacity .3s,transform .3s}
+.xHand.gone{opacity:0;transform:scale(.97)}
+.xHandH{display:flex;justify-content:space-between;gap:14px}
+.xHandH b{display:block;font-size:16px;font-weight:600;margin-bottom:3px}
+.xHandH span{display:block;font-size:12px;color:rgba(255,255,255,.5)}
+.xHandH i{font-style:normal;color:rgba(255,255,255,.45)}
+.xHand .xL small{color:rgba(255,255,255,.3)}
+.xFld{min-height:32px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,.05);font-size:12.5px}
+.xFld.tall{min-height:44px}
+.xFld .ph{color:rgba(255,255,255,.3)}
+.xWhat{margin-top:12px;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);font-size:12px}
+.xWhatH{display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.55)}
+.xWhat>div:not(.xWhatH){display:flex;align-items:center;gap:7px;padding:6px 10px;color:rgba(255,255,255,.6)}
+.xWhat i{width:5px;height:5px;border-radius:50%;background:#FCBDDD}
+.xWhat b{color:#EEE;font-weight:500}
+.xHandF{display:flex;justify-content:flex-end;gap:8px;margin:14px -18px 0;padding:12px 18px;border-top:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);border-radius:0 0 14px 14px}
+.xPinkBig{display:inline-flex;align-items:center;height:32px;padding:0 14px;border-radius:9px;color:#1A0F14;font-weight:500;background:linear-gradient(180deg,#FFD3E9,#F7B2D6);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 0 0 .5px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.3)}
+.xPrDone{position:absolute;width:440px;max-width:90%;padding:18px 20px;border-radius:14px;background:#0D1117;box-shadow:0 0 0 1px rgba(255,255,255,.12),0 30px 80px -20px rgba(0,0,0,.9);color:#E6EDF3;opacity:0;transform:translateY(14px);transition:opacity .35s,transform .35s}
+.xPrDone.on{opacity:1;transform:none}
+.xOpen{display:inline-block;padding:3px 10px;border-radius:99px;background:#238636;color:#fff;font-size:11.5px;font-weight:500}
+.xPrDone b{display:block;margin:10px 0 3px;font-size:17px}
+.xPrDone small{display:block;color:#8B949E;font-size:12px}
+.xCk{margin-top:12px}
+.xCk div{display:flex;align-items:center;gap:8px;padding:2px 0;font-size:12.5px;color:#8B949E;transition:color .2s}
+.xCk div::before{content:"";width:12px;height:12px;border-radius:50%;border:1.5px solid #484F58;transition:all .2s}
+.xCk div.ok{color:#E6EDF3}.xCk div.ok::before{border-color:#238636;background:#238636;box-shadow:inset 0 0 0 2px #0D1117}
+
+@container (max-width:560px){
+  .xCanvas{right:180px}.xPanel{width:178px}.xR2{grid-template-columns:1fr}.xPlace{width:150px}
+  .xChat{width:100%;border:0}.xStage{display:none}
+  .xAuPage{display:none}.xAuList{left:14px;right:14px;width:auto}
+}
+@media (max-width:1000px){.card.w3{grid-column:span 2}}
+@media (max-width:720px){.card.w3{grid-column:auto}.xv{height:330px}}
 /* works with: a slow marquee */
 .works{padding:64px 0 0;text-align:center}
 .works p{margin:0 0 24px;font-size:13px;color:var(--ink3)}
@@ -600,7 +787,7 @@ footer .sp{flex:1}
 <header class="nav" id="nav">
   <div class="wrap">
     <a class="brand" href="#top" aria-label="Tovi home"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="#E9A3C6"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="#FCBDDD"/></svg>Tovi</a>
-    <nav aria-label="Main"><a href="#features">How it works</a><a href="#faq">Questions</a></nav>
+    <nav aria-label="Main"><a href="#design">Features</a><a href="#ship">Hand off</a><a href="#faq">Questions</a></nav>
     <span class="sp"></span>
     <a class="cta" href="#invite">Request an invite</a>
   </div>
@@ -614,7 +801,7 @@ footer .sp{flex:1}
       <div><h1>Designers, fix the <em>real</em> thing.</h1></div>
       <div>
         <p class="lede">Tovi opens the app your team already built. <b>Fix it by hand like in Figma, or let Tovi's AI make the edits.</b> Every change lands in your code and goes to developers as one pull request.</p>
-        <div class="heroActs"><a class="cta lg" href="#invite">Request an invite</a><a class="ghost" href="#features">See how it works</a></div>
+        <div class="heroActs"><a class="cta lg" href="#invite">Request an invite</a><a class="ghost" href="#design">See the features</a></div>
         <p class="fine">Runs on your Mac · Bring your own AI key</p>
       </div>
     </div>
@@ -642,19 +829,107 @@ footer .sp{flex:1}
     <div class="marq"><div class="mtrack"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>GitHub</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z"/></svg>React</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z"/></svg>Tailwind CSS</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.286 10.578.512-8.657a.306.306 0 0 1 .247-.282L17.377.006a.306.306 0 0 1 .353.385l-1.558 5.403a.306.306 0 0 0 .352.385l2.388-.46a.306.306 0 0 1 .332.438l-6.79 13.55-.123.19a.294.294 0 0 1-.252.14c-.177 0-.35-.152-.305-.369l1.095-5.301a.306.306 0 0 0-.388-.355l-1.433.435a.306.306 0 0 1-.389-.354l.69-3.375a.306.306 0 0 0-.37-.36l-2.32.536a.306.306 0 0 1-.374-.316zm14.976-7.926L17.284 3.74l-.544 1.887 2.077-.4a.8.8 0 0 1 .84.369.8.8 0 0 1 .034.783L12.9 19.93l-.013.025-.015.023-.122.19a.801.801 0 0 1-.672.37.826.826 0 0 1-.634-.302.8.8 0 0 1-.16-.67l1.029-4.981-1.12.34a.81.81 0 0 1-.86-.262.802.802 0 0 1-.165-.67l.63-3.08-2.027.468a.808.808 0 0 1-.768-.233.81.81 0 0 1-.217-.6l.389-6.57-7.44-1.33a.612.612 0 0 0-.64.906L11.58 23.691a.612.612 0 0 0 1.066-.004l11.26-20.135a.612.612 0 0 0-.644-.9z"/></svg>Vite</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></svg>Next.js</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>Claude</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>OpenAI</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg>Gemini</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>GitHub</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.23 12.004a2.236 2.236 0 0 1-2.235 2.236 2.236 2.236 0 0 1-2.236-2.236 2.236 2.236 0 0 1 2.235-2.236 2.236 2.236 0 0 1 2.236 2.236zm2.648-10.69c-1.346 0-3.107.96-4.888 2.622-1.78-1.653-3.542-2.602-4.887-2.602-.41 0-.783.093-1.106.278-1.375.793-1.683 3.264-.973 6.365C1.98 8.917 0 10.42 0 12.004c0 1.59 1.99 3.097 5.043 4.03-.704 3.113-.39 5.588.988 6.38.32.187.69.275 1.102.275 1.345 0 3.107-.96 4.888-2.624 1.78 1.654 3.542 2.603 4.887 2.603.41 0 .783-.09 1.106-.275 1.374-.792 1.683-3.263.973-6.365C22.02 15.096 24 13.59 24 12.004c0-1.59-1.99-3.097-5.043-4.032.704-3.11.39-5.587-.988-6.38-.318-.184-.688-.277-1.092-.278zm-.005 1.09v.006c.225 0 .406.044.558.127.666.382.955 1.835.73 3.704-.054.46-.142.945-.25 1.44-.96-.236-2.006-.417-3.107-.534-.66-.905-1.345-1.727-2.035-2.447 1.592-1.48 3.087-2.292 4.105-2.295zm-9.77.02c1.012 0 2.514.808 4.11 2.28-.686.72-1.37 1.537-2.02 2.442-1.107.117-2.154.298-3.113.538-.112-.49-.195-.964-.254-1.42-.23-1.868.054-3.32.714-3.707.19-.09.4-.127.563-.132zm4.882 3.05c.455.468.91.992 1.36 1.564-.44-.02-.89-.034-1.345-.034-.46 0-.915.01-1.36.034.44-.572.895-1.096 1.345-1.565zM12 8.1c.74 0 1.477.034 2.202.093.406.582.802 1.203 1.183 1.86.372.64.71 1.29 1.018 1.946-.308.655-.646 1.31-1.013 1.95-.38.66-.773 1.288-1.18 1.87-.728.063-1.466.098-2.21.098-.74 0-1.477-.035-2.202-.093-.406-.582-.802-1.204-1.183-1.86-.372-.64-.71-1.29-1.018-1.946.303-.657.646-1.313 1.013-1.954.38-.66.773-1.286 1.18-1.868.728-.064 1.466-.098 2.21-.098zm-3.635.254c-.24.377-.48.763-.704 1.16-.225.39-.435.782-.635 1.174-.265-.656-.49-1.31-.676-1.947.64-.15 1.315-.283 2.015-.386zm7.26 0c.695.103 1.365.23 2.006.387-.18.632-.405 1.282-.66 1.933-.2-.39-.41-.783-.64-1.174-.225-.392-.465-.774-.705-1.146zm3.063.675c.484.15.944.317 1.375.498 1.732.74 2.852 1.708 2.852 2.476-.005.768-1.125 1.74-2.857 2.475-.42.18-.88.342-1.355.493-.28-.958-.646-1.956-1.1-2.98.45-1.017.81-2.01 1.085-2.964zm-13.395.004c.278.96.645 1.957 1.1 2.98-.45 1.017-.812 2.01-1.086 2.964-.484-.15-.944-.318-1.37-.5-1.732-.737-2.852-1.706-2.852-2.474 0-.768 1.12-1.742 2.852-2.476.42-.18.88-.342 1.356-.494zm11.678 4.28c.265.657.49 1.312.676 1.948-.64.157-1.316.29-2.016.39.24-.375.48-.762.705-1.158.225-.39.435-.788.636-1.18zm-9.945.02c.2.392.41.783.64 1.175.23.39.465.772.705 1.143-.695-.102-1.365-.23-2.006-.386.18-.63.406-1.282.66-1.933zM17.92 16.32c.112.493.2.968.254 1.423.23 1.868-.054 3.32-.714 3.708-.147.09-.338.128-.563.128-1.012 0-2.514-.807-4.11-2.28.686-.72 1.37-1.536 2.02-2.44 1.107-.118 2.154-.3 3.113-.54zm-11.83.01c.96.234 2.006.415 3.107.532.66.905 1.345 1.727 2.035 2.446-1.595 1.483-3.092 2.295-4.11 2.295-.22-.005-.406-.05-.553-.132-.666-.38-.955-1.834-.73-3.703.054-.46.142-.944.25-1.438zm4.56.64c.44.02.89.034 1.345.034.46 0 .915-.01 1.36-.034-.44.572-.895 1.095-1.345 1.565-.455-.47-.91-.993-1.36-1.565z"/></svg>React</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z"/></svg>Tailwind CSS</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8.286 10.578.512-8.657a.306.306 0 0 1 .247-.282L17.377.006a.306.306 0 0 1 .353.385l-1.558 5.403a.306.306 0 0 0 .352.385l2.388-.46a.306.306 0 0 1 .332.438l-6.79 13.55-.123.19a.294.294 0 0 1-.252.14c-.177 0-.35-.152-.305-.369l1.095-5.301a.306.306 0 0 0-.388-.355l-1.433.435a.306.306 0 0 1-.389-.354l.69-3.375a.306.306 0 0 0-.37-.36l-2.32.536a.306.306 0 0 1-.374-.316zm14.976-7.926L17.284 3.74l-.544 1.887 2.077-.4a.8.8 0 0 1 .84.369.8.8 0 0 1 .034.783L12.9 19.93l-.013.025-.015.023-.122.19a.801.801 0 0 1-.672.37.826.826 0 0 1-.634-.302.8.8 0 0 1-.16-.67l1.029-4.981-1.12.34a.81.81 0 0 1-.86-.262.802.802 0 0 1-.165-.67l.63-3.08-2.027.468a.808.808 0 0 1-.768-.233.81.81 0 0 1-.217-.6l.389-6.57-7.44-1.33a.612.612 0 0 0-.64.906L11.58 23.691a.612.612 0 0 0 1.066-.004l11.26-20.135a.612.612 0 0 0-.644-.9z"/></svg>Vite</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.665 21.978C16.758 23.255 14.465 24 12 24 5.377 24 0 18.623 0 12S5.377 0 12 0s12 5.377 12 12c0 3.583-1.574 6.801-4.067 9.001L9.219 7.2H7.2v9.596h1.615V9.251l9.85 12.727Zm-3.332-8.533 1.6 2.061V7.2h-1.6v6.245Z"/></svg>Next.js</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg>Claude</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg>OpenAI</span><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg>Gemini</span></div></div>
   </section>
 
-  <section class="sec" id="features">
+  <section class="sec" id="design">
     <div class="glow" aria-hidden="true"></div>
     <div class="wrap">
-      <div class="secHead"><div><span class="pill">How it works</span><h2>From your repository to a <em>pull request</em>.</h2><p>Connect your repo, fix the product by hand or with Tovi’s AI, and hand it to developers as one pull request. Every screen below is the real Tovi.</p></div></div>
+      <div class="secHead"><div><span class="pill">Design</span><h2>Fix it by hand, <em>or</em> ask Tovi.</h2><p>Connect your repository and work on the real product: change it like a Figma frame, describe what you want, mark what’s off, or let Tovi review the whole thing.</p></div></div>
       <div class="bento">
-        <article class="card "><div class="rv center" id="r-github"><div class="shot2" style="aspect-ratio:1120/720"><img class="fr on" src="img/real/github-0.jpg" alt="" width="1120" height="720"><img class="fr" src="img/real/github-1.jpg" alt="" width="1120" height="720" loading="lazy"></div></div><div class="ct"><span class="step">1</span><p><b>Connect GitHub.</b> Point Tovi at your repository. It installs the app, starts it and opens it with its real pages and data.</p></div></article>
-        <article class="card w2"><div class="rv bleed" id="r-edit"><div class="shot2" style="aspect-ratio:2220/880"><img class="fr on" src="img/real/edit-0.jpg" alt="" width="2220" height="880"><img class="fr" src="img/real/edit-1.jpg" alt="" width="2220" height="880" loading="lazy"><img class="fr" src="img/real/edit-2.jpg" alt="" width="2220" height="880" loading="lazy"></div></div><div class="ct"><span class="step">2</span><p><b>Edit by hand, like Figma.</b> Spacing, type, colour, corners and layout, on your real components. Values snap to your design scale.</p></div></article>
-        <article class="card w2"><div class="rv bleed" id="r-chat"><div class="shot2" style="aspect-ratio:1280/960"><img class="fr on" src="img/real/chat-0.jpg" alt="" width="1280" height="960"><img class="fr" src="img/real/chat-1.jpg" alt="" width="1280" height="960" loading="lazy"><img class="fr" src="img/real/chat-2.jpg" alt="" width="1280" height="960" loading="lazy"></div></div><div class="ct"><span class="step">3</span><p><b>AI design improvements.</b> Ask for a change in plain words. Tovi keeps to your design system, explains what it did, and every edit can be undone.</p></div></article>
-        <article class="card "><div class="rv bleed" id="r-notes"><div class="shot2" style="aspect-ratio:1240/780"><img class="fr on" src="img/real/notes-0.jpg" alt="" width="1240" height="780"><img class="fr" src="img/real/notes-1.jpg" alt="" width="1240" height="780" loading="lazy"><img class="fr" src="img/real/notes-2.jpg" alt="" width="1240" height="780" loading="lazy"></div></div><div class="ct"><span class="step">4</span><p><b>Notes that become fixes.</b> Mark what’s off right on the screen. Each note becomes a task, and Apply works through them all.</p></div></article>
-        <article class="card "><div class="rv bleed" id="r-audit"><div class="shot2" style="aspect-ratio:1520/1040"><img class="fr on" src="img/real/audit-0.jpg" alt="" width="1520" height="1040"><img class="fr" src="img/real/audit-1.jpg" alt="" width="1520" height="1040" loading="lazy"></div></div><div class="ct"><span class="step">5</span><p><b>AI UX audit.</b> Tovi reviews a page, or the whole product, and pins a note wherever hierarchy, spacing, contrast or usability slips.</p></div></article>
-        <article class="card "><div class="rv center" id="r-history"><div class="shot2" style="aspect-ratio:560/660"><img class="fr on" src="img/real/history-0.jpg" alt="" width="560" height="660"></div></div><div class="ct"><span class="step">6</span><p><b>Version history.</b> Every stop is saved as a version. See what changed, restore a version, or undo a single edit.</p></div></article>
-        <article class="card "><div class="rv center" id="r-code"><div class="shot2" style="aspect-ratio:904/880"><img class="fr on" src="img/real/code-0.jpg" alt="" width="904" height="880"></div></div><div class="ct"><span class="step">7</span><p><b>Every code change, visible.</b> Each edit is listed with its exact file and the classes before and after. No hidden rewrites.</p></div></article>
-        <article class="card w3"><div class="rv center" id="r-pr"><div class="shot2" style="aspect-ratio:1160/940"><img class="fr on" src="img/real/pr-0.jpg" alt="" width="1160" height="940"><img class="fr" src="img/real/pr-1.jpg" alt="" width="1160" height="940" loading="lazy"></div></div><div class="ct"><span class="step">8</span><p><b>Push to a pull request.</b> One click sends every change to GitHub as a pull request, with before and after images, for your developers to review.</p></div></article>
+        <article class="card lit2"><div class="xv" id="xGh">
+            <div class="xDlg" id="xGhD">
+              <div class="xDlgH"><b>New project</b><span>Open a React app you already have. Tovi runs it on this Mac and puts the editor on top.</span></div>
+              <div class="xSeg"><span class="on"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>GitHub</span><span>Folder on this Mac</span></div>
+              <div class="xIn" id="xGhIn"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .5.4.9 1.1.9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg><span id="xGhT" class="ph">github.com/team/app</span></div>
+              <div class="xSteps" id="xGhS"><div>Copying acme/aster</div><div>Installing packages</div><div>Starting the app</div><div>Opening it in Tovi</div></div>
+              <div class="xDlgF"><span class="xBtn2">Cancel</span><span class="xBtn" id="xGhGo">Open project</span></div>
+            </div>
+            <div class="cur" id="xGhC"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div><div class="ct"><p><b>Connect GitHub.</b> Point Tovi at your repository. It installs the app, starts it and opens it with its real pages and data.</p></div></article>
+
+        <article class="card w2 lit"><div class="xv" id="xEd">
+            <div class="xCanvas"><div class="xPlace" id="xEdC"><img src="img/aster/fjord.jpg" alt="" id="xEdI"><div><b>Geiranger</b><small>Quiet fjords and steep green walls</small></div></div></div>
+            <div class="sel on" id="xEdS"><span class="tg">Card</span><i></i><i></i><i></i><i></i></div>
+            <div class="xPanel">
+              <div class="xSec"><div class="xH">Appearance</div><div class="xR2"><div><div class="xL">Opacity</div><div class="xF"><span class="k"><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor"/><path d="M13.5 5v6a2.5 2.5 0 0 1-2.5 2.5H5z" fill="currentColor"/></svg></span>100<span class="u">%</span></div></div><div><div class="xL">Corner radius</div><div class="xF" id="xEdR"><span class="k"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 9V6.5A3.5 3.5 0 0 1 6.5 3H9M13 7v2.5A3.5 3.5 0 0 1 9.5 13H7"/></svg></span><span id="xEdRv">6</span></div></div></div></div>
+              <div class="xSec"><div class="xH">Padding</div><div class="xR2"><div class="xF" id="xEdP"><span class="k"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M5 8h6"/></svg></span><span id="xEdPv">0</span></div><div class="xF"><span class="k"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M8 5v6"/></svg></span>0</div></div></div>
+              <div class="xSec"><div class="xH">Fill</div><div class="xF"><span class="xSw" id="xEdFs"></span><span id="xEdFv">surface</span><span class="u" style="margin-left:auto">100 %</span></div></div>
+            </div>
+            <div class="cur" id="xEdCur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div><div class="ct"><p><b>Edit by hand, like Figma.</b> Spacing, type, colour, corners and layout, on your real components. Values snap to your design scale.</p></div></article>
+
+        <article class="card w2"><div class="xv" id="xAi">
+            <div class="xChat">
+              <div class="xThread" id="xAiTh"></div>
+              <div class="xComp" id="xAiComp"><span class="xChip"><i></i>Button “Find your stay”</span><div class="xCompIn" id="xAiIn">Describe a change, or follow up…</div><div class="xCompRow"><span>On system</span><span class="xSend" id="xAiSend"><svg viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+            </div>
+            <div class="xStage"><div class="xBtns" id="xAiB"><span class="xB1">Find your stay <svg viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="xB2">Watch the film</span></div></div><div class="xTovi" id="xAiTv"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#FCBDDD" stroke="#3A1730" stroke-width="1.1" stroke-linejoin="round"/></svg><b>Tovi</b></div>
+          </div><div class="ct"><p><b>AI design improvements.</b> Ask for a change in plain words. Tovi keeps to your design system, tells you what it did, and every edit can be undone.</p></div></article>
+
+        <article class="card"><div class="xv" id="xNo">
+            <div class="xPage" id="xNoP"><div class="xCard2"><img src="img/aster/lagoon.jpg" alt=""><b>Reykjanes</b></div><div class="xCard2"><img src="img/aster/dunes.jpg" alt=""><b>Wadi Rum</b></div></div>
+            <div id="xNoTags"></div>
+            <div class="xNotePop" id="xNoPop"><div id="xNoPopT"></div><span>Enter to add · Esc to cancel</span></div>
+            <div class="xTasks" id="xNoTk"></div>
+            <div class="cur" id="xNoCur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div><div class="ct"><p><b>Notes that become fixes.</b> Mark what’s off right on the screen. Each note becomes a task, and Apply works through them all.</p></div></article>
+
+        <article class="card w3 lit2"><div class="xv" id="xAu">
+            <div class="xAuPage"><div class="xCabin"></div><div class="xAuTxt"><span class="e">The stay</span><b>A cabin that turns the lights off for you</b><p>Every Aster cabin is placed for the clearest view north.</p><span class="btn">See the cabins</span></div>
+              <div class="sweep" id="xAuSw"></div>
+              <div class="xTag" style="left:56%;top:22%" data-i="1"><i></i><b>1</b></div>
+              <div class="xTag" style="left:78%;top:50%" data-i="2"><i></i><b>2</b></div>
+              <div class="xTag" style="left:62%;top:72%" data-i="3"><i></i><b>3</b></div>
+            </div>
+            <div class="xAuList" id="xAuL">
+              <div class="xAuHead"><img src="img/tovi-avatar.png" alt=""><span>Tovi reviewed this section and left 3 notes.</span></div>
+              <div class="xAuRow" data-i="1"><img src="img/tovi-avatar.png" alt=""><b>1 · Heading crowds the photo</b><small>Hierarchy</small></div>
+              <div class="xAuRow" data-i="2"><img src="img/tovi-avatar.png" alt=""><b>2 · Body text too faint</b><small>Contrast</small></div>
+              <div class="xAuRow" data-i="3"><img src="img/tovi-avatar.png" alt=""><b>3 · Button sits too close</b><small>Spacing</small></div>
+              <div class="xAuFoot"><span>3 tasks</span><span class="xGhost">Discard</span><span class="xPink">Apply</span></div>
+            </div>
+          </div><div class="ct"><p><b>AI UX audit.</b> Tovi reviews a page, or the whole product, and pins a note wherever hierarchy, spacing, contrast or usability slips. Keep the notes you agree with, then Apply.</p></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="ship">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="wrap">
+      <div class="secHead"><div><span class="pill">Hand off</span><h2>From your fix to a <em>pull request</em>.</h2><p>Every change is saved as a version, shown as the exact code it touched, and handed to developers as one pull request.</p></div></div>
+      <div class="bento">
+        <article class="card lit"><div class="xv" id="xHi">
+            <div class="xHist">
+              <div class="xHistH"><span>Version history</span><i>×</i></div>
+              <p>Tovi saves a version every few minutes, when you change page and when you present.</p>
+              <div class="xTl">
+                <div class="xVer cur"><b>Current version</b><small id="xHiN">0 changes not in a version yet</small><div id="xHiCh"></div><div class="xName" id="xHiName">Name it (optional)</div><span class="xPink" id="xHiSave">Save version</span></div>
+                <div id="xHiNew"></div>
+                <div class="xVer"><b>Today, 09:12</b><small>Tobi</small></div>
+              </div>
+            </div>
+            <div class="cur" id="xHiCur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div><div class="ct"><p><b>Version history.</b> Every stop is saved as a version. Name the ones that matter, restore one, or undo a single edit.</p></div></article>
+
+        <article class="card w2"><div class="xv" id="xCo">
+            <div class="xChg">
+              <div class="xChgH"><span>Changes this session</span><span class="lk">Version history</span><i>×</i></div>
+              <div id="xCoL"></div>
+            </div>
+          </div><div class="ct"><p><b>Every code change, visible.</b> Each edit is listed with its exact file and the classes before and after. No hidden rewrites, nothing generated.</p></div></article>
+
+        <article class="card w3 photo" style="background-image:linear-gradient(180deg,rgba(14,16,20,.86),rgba(14,16,20,.94)),url(img/bg/fjord.jpg)"><div class="xv" id="xPr">
+            <div class="xHand" id="xPrD">
+              <div class="xHandH"><div><b>Hand off to developers</b><span>Tovi sends your changes as one pull request on GitHub. Developers review it before anything goes live.</span></div><i>×</i></div>
+              <div class="xL">Title</div><div class="xFld">Design updates: 3 changes on Home</div>
+              <div class="xL">Note for your developers <small>(optional)</small></div><div class="xFld tall" id="xPrNote"><span class="ph">Anything they should know</span></div>
+              <div class="xWhat"><div class="xWhatH"><span>What changed · 3</span><span>3 code files</span></div>
+                <div><i></i><b>Title “Nights under the…”</b> · Size 72 → 96 · Letter spacing −2%</div>
+                <div><i></i><b>Button “Find your stay”</b> · Corners 8 → full</div>
+                <div><i></i><b>Image “Geirangerfjord”</b> · Corner radius 6 → 24</div></div>
+              <div class="xHandF"><span class="xBtn2">Cancel</span><span class="xPinkBig" id="xPrGo">Create pull request</span></div>
+            </div>
+            <div class="xPrDone" id="xPrOk"><span class="xOpen">Open</span><b>Design updates: 3 changes on Home</b><small>tovi/design-updates → main · 3 files · before and after images attached</small><div class="xCk"><div>App builds</div><div>Screenshots attached</div><div>Ready for review</div></div></div>
+            <div class="cur" id="xPrCur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div><div class="ct"><p><b>Push to a pull request.</b> One click commits every change to a new branch and opens a pull request with before and after images. Tovi checks the app still builds first.</p></div></article>
       </div>
       <div class="vals">
         <div style="position:relative"><h2>Made for the product, not a copy of it.</h2></div>
@@ -690,7 +965,7 @@ footer .sp{flex:1}
     <a class="brand" href="#top" style="font-size:15px"><svg viewBox="0 0 16 16" aria-hidden="true" style="width:16px;height:16px"><rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="#E9A3C6"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="#FCBDDD"/></svg>Tovi</a>
     <span>© 2026 Tovi</span>
     <span class="sp"></span>
-    <a href="#features">How it works</a><a href="#faq">Questions</a><a href="https://github.com/squarepegng/tovi">GitHub</a><a href="mailto:hello@usetovi.com">hello@usetovi.com</a>
+    <a href="#design">Features</a><a href="#faq">Questions</a><a href="https://github.com/squarepegng/tovi">GitHub</a><a href="mailto:hello@usetovi.com">hello@usetovi.com</a>
   </div>
 </footer>
 <script src="site.js"></script>

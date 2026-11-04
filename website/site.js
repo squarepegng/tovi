@@ -80,18 +80,154 @@
     }, () => { show(2); cur.style.display = 'none'; });
   }
 
-  /* ---------- Feature cards: each plays its real Tovi screens in order while it's on screen ---------- */
-  document.querySelectorAll('.rv').forEach((rv, n) => {
-    const fr = [...rv.querySelectorAll('.fr')];
-    if (fr.length < 2) return;
-    let i = 0;
-    scene(rv, async (A) => {
-      await A.wait(2600 + (n % 3) * 200);
-      i = (i + 1) % fr.length;
-      fr.forEach((f, j) => f.classList.toggle('on', j === i));
-      if (i === fr.length - 1) await A.wait(1600);
-    }, () => fr.forEach((f, j) => f.classList.toggle('on', j === fr.length - 1)));
-  });
+  /* ---------- Feature cards: real Tovi components playing by themselves ---------- */
+  const typeInto = async (A, el, text, speed = 40) => { for (let i = 1; i <= text.length; i++) { el.innerHTML = text.slice(0, i) + '<span class="caret"></span>'; await A.wait(speed + (text[i - 1] === ' ' ? 25 : 0)); } };
+  const press = async (A, cur) => { cur.classList.remove('click'); void cur.offsetWidth; cur.classList.add('click'); await A.wait(240); };
+
+  /* Connect GitHub: type the repository, Open project, the steps tick */
+  {
+    const root = $('xGh'), cur = $('xGhC'), inp = $('xGhIn'), t = $('xGhT'), st = $('xGhS'), go = $('xGhGo');
+    const rows = [...st.children];
+    const reset = () => { t.className = 'ph'; t.textContent = 'github.com/team/app'; inp.classList.remove('focus'); inp.style.display = ''; st.classList.remove('on'); rows.forEach((r) => (r.className = '')); go.textContent = 'Open project'; };
+    scene(root, async (A) => {
+      reset(); A.to(cur, [40, 300]); await A.wait(600);
+      await A.move(cur, inp, 0.5, 0.6, 800); await press(A, cur); inp.classList.add('focus'); t.className = '';
+      await typeInto(A, t, 'github.com/acme/aster', 45); await A.wait(400); t.textContent = 'github.com/acme/aster';
+      await A.move(cur, go, 0.5, 0.6, 700); await press(A, cur);
+      inp.style.display = 'none'; st.classList.add('on'); go.textContent = 'Opening…';
+      for (const r of rows) { r.className = 'run'; await A.wait(700); r.className = 'ok'; }
+      await A.wait(2200);
+    }, () => { inp.style.display = 'none'; st.classList.add('on'); rows.forEach((r) => (r.className = 'ok')); cur.style.opacity = 0; });
+  }
+
+  /* Edit by hand: scrub corner radius and padding, pick a fill; the card follows */
+  {
+    const root = $('xEd'), cur = $('xEdCur'), card = $('xEdC'), img = $('xEdI'), sel = $('xEdS');
+    const FILLS = [['surface', '#14161C'], ['primary', '#1E5C43']];
+    const st = { r: 6, p: 0, f: 0 };
+    const place = () => { const r = card.getBoundingClientRect(), o = root.getBoundingClientRect(); Object.assign(sel.style, { left: r.left - o.left - 3 + 'px', top: r.top - o.top - 3 + 'px', width: r.width + 6 + 'px', height: r.height + 6 + 'px' }); };
+    const draw = () => { card.style.borderRadius = st.r + 'px'; card.style.padding = st.p + 'px'; card.style.background = FILLS[st.f][1]; img.style.borderRadius = st.p ? Math.max(4, st.r - st.p) + 'px' : '0'; $('xEdRv').textContent = st.r; $('xEdPv').textContent = st.p; $('xEdFs').style.background = FILLS[st.f][1]; $('xEdFv').textContent = FILLS[st.f][0]; requestAnimationFrame(place); setTimeout(place, 480); };
+    draw(); addEventListener('resize', place);
+    const scrub = async (A, field, key, steps) => {
+      const k = field.querySelector('.k'); await A.move(cur, k, 0.5, 0.6, 750); field.classList.add('flash');
+      const b = A.box(k); let x = b.x + b.w / 2; cur.style.transition = 'transform .24s linear';
+      for (const v of steps) { x += 18; A.to(cur, [x, b.y + b.h * 0.6], 0, 0); st[key] = v; draw(); await A.wait(260); }
+      cur.style.transition = ''; field.classList.remove('flash'); await A.wait(400);
+    };
+    scene(root, async (A) => {
+      st.r = 6; st.p = 0; st.f = 0; draw(); A.to(cur, [120, 300]); await A.wait(700);
+      await scrub(A, $('xEdR'), 'r', [8, 12, 16, 24]);
+      await scrub(A, $('xEdP'), 'p', [4, 8, 12]);
+      const f = $('xEdFs').parentNode; await A.move(cur, f, 0.3, 0.5, 700); await press(A, cur); st.f = 1; draw();
+      await A.wait(2600);
+    }, () => { st.r = 24; st.p = 12; st.f = 1; draw(); cur.style.opacity = 0; });
+  }
+
+  /* AI improvements: ask, Tovi thinks, answers, its cursor changes the buttons, Applied */
+  {
+    const root = $('xAi'), th = $('xAiTh'), inp = $('xAiIn'), send = $('xAiSend'), comp = $('xAiComp'), btns = $('xAiB'), tov = $('xAiTv');
+    const add = (cls, html) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; th.appendChild(d); return d; };
+    const reset = () => { th.innerHTML = ''; inp.className = 'xCompIn'; inp.textContent = 'Describe a change, or follow up…'; send.classList.remove('on'); comp.classList.remove('busy'); btns.classList.remove('soft', 'picked'); tov.style.opacity = 0; };
+    const ask = 'Make the buttons feel softer';
+    const reply = 'I softened both hero buttons: fully rounded corners, a slightly lighter mint and a quieter outline, so they sit more gently on the photo.';
+    scene(root, async (A) => {
+      reset(); btns.classList.add('picked'); await A.wait(700);
+      inp.className = 'xCompIn typing'; await typeInto(A, inp, ask, 42); send.classList.add('on'); await A.wait(500);
+      inp.className = 'xCompIn'; inp.textContent = 'Describe a change, or follow up…'; send.classList.remove('on');
+      add('xCtx', 'Button “Find your stay”'); add('xU', ask); comp.classList.add('busy');
+      const meta = add('xMeta', '<img src="img/tovi-avatar.png" alt="">Looking at 5 elements…'); await A.wait(1400);
+      meta.innerHTML = '<img src="img/tovi-avatar.png" alt="">Looked at 5 elements · Thought for 6s';
+      const r = add('xReply', ''); for (let i = 0; i <= reply.length; i += 3) { r.textContent = reply.slice(0, i); await A.wait(28); }
+      const bb = A.box(btns); tov.style.left = bb.x + bb.w * 0.2 + 'px'; tov.style.top = bb.y + bb.h * 0.6 + 'px'; tov.style.opacity = 1; await A.wait(800);
+      btns.classList.add('soft'); await A.wait(700);
+      add('xAppl', '<div class="h">Applied 2 of 2</div><div class="r"><i>✓</i><div>Button “Find your stay”<small>Corners 8 → full · Opacity 90%</small></div></div><div class="r"><i>✓</i><div>Button “Watch the film”<small>Corners 8 → full · Fainter outline</small></div></div>');
+      add('xDone', '<span>✓ Applied</span><u>Undo</u>'); comp.classList.remove('busy'); tov.style.opacity = 0;
+      await A.wait(3200);
+    }, () => { btns.classList.add('soft'); add('xU', ask); add('xReply', reply); add('xDone', '<span>✓ Applied</span><u>Undo</u>'); });
+  }
+
+  /* Notes: click on the page, type a note, again; Apply; Tovi fixes them */
+  {
+    const root = $('xNo'), cur = $('xNoCur'), page = $('xNoP'), tagsEl = $('xNoTags'), pop = $('xNoPop'), popT = $('xNoPopT'), tk = $('xNoTk');
+    let notes = [];
+    const spots = () => { const c = [...page.children], o = root.getBoundingClientRect(); const at = (el, fx, fy) => { const r = el.getBoundingClientRect(); return { x: r.left - o.left + r.width * fx, y: r.top - o.top + r.height * fy }; }; return [{ ...at(c[0], 0.7, 0.18), t: 'Round these cards more' }, { ...at(c[1], 0.4, 0.62), t: 'Titles feel too small' }]; };
+    const draw = (done) => {
+      tagsEl.innerHTML = notes.map((n, i) => `<div class="xTag on" style="left:${n.x - 3}px;top:${n.y - 16}px"><i></i><b style="${done ? 'background:#238636;color:#fff' : 'background:rgba(28,28,28,.92);color:#F2F2F2'}">${done ? '✓' : i + 1}</b></div>`).join('');
+      tk.style.display = notes.length ? '' : 'none';
+      tk.innerHTML = notes.map((n, i) => `<div class="tk${done ? ' done' : ''}"><em>${i + 1}</em>${n.t}</div>`).join('') + `<div class="ft"><span>${done ? 'All fixed' : notes.length + ' task' + (notes.length === 1 ? '' : 's')}</span>${done ? '' : '<span class="xGhost">Discard</span><span class="xPink" id="xNoAp">Apply</span>'}</div>`;
+    };
+    scene(root, async (A) => {
+      notes = []; page.classList.remove('fixed'); draw(false); A.to(cur, [60, 290]); await A.wait(600);
+      for (const s of spots()) {
+        await A.move(cur, [s.x, s.y], 0, 0, 800); await press(A, cur);
+        notes.push({ ...s, t: '' }); draw(false);
+        Object.assign(pop.style, { left: Math.min(s.x + 12, root.offsetWidth - 214) + 'px', top: s.y + 14 + 'px' }); popT.textContent = ''; pop.classList.add('on');
+        await typeInto(A, popT, s.t, 40); await A.wait(350); pop.classList.remove('on');
+        notes[notes.length - 1].t = s.t; draw(false); await A.wait(450);
+      }
+      await A.move(cur, $('xNoAp'), 0.5, 0.5, 800); await press(A, cur);
+      await A.wait(900); draw(true); page.classList.add('fixed');
+      await A.wait(2800);
+    }, () => { notes = spots(); page.classList.add('fixed'); draw(true); cur.style.opacity = 0; });
+  }
+
+  /* AI UX audit: a sweep, notes pinned, Tovi's list fills in, then walks through them */
+  {
+    const root = $('xAu'), sw = $('xAuSw'), tags = [...root.querySelectorAll('.xTag')], rows = [...root.querySelectorAll('.xAuRow')];
+    const hl = (i) => { tags.forEach((t) => t.classList.toggle('hl', +t.dataset.i === i)); rows.forEach((r) => r.classList.toggle('hl', +r.dataset.i === i)); };
+    scene(root, async (A) => {
+      tags.forEach((t) => t.classList.remove('on')); rows.forEach((r) => r.classList.remove('on')); hl(0); await A.wait(600);
+      sw.classList.remove('go'); void sw.offsetWidth; sw.classList.add('go'); await A.wait(1200);
+      for (let i = 0; i < 3; i++) { tags[i].classList.add('on'); rows[i].classList.add('on'); await A.wait(320); }
+      await A.wait(500);
+      for (const i of [1, 2, 3]) { hl(i); await A.wait(1300); }
+      hl(0); await A.wait(1200);
+    }, () => { tags.forEach((t) => t.classList.add('on')); rows.forEach((r) => r.classList.add('on')); });
+  }
+
+  /* Version history: changes arrive, name the version, save it, it joins the timeline */
+  {
+    const root = $('xHi'), cur = $('xHiCur'), n = $('xHiN'), ch = $('xHiCh'), name = $('xHiName'), save = $('xHiSave'), nw = $('xHiNew');
+    const CH = [['Title “Nights under the…”', 'Size 72 → 96'], ['Button “Find your stay”', 'Corners 8 → full'], ['Image “Geirangerfjord”', 'Corner radius 6 → 24']];
+    const reset = () => { ch.innerHTML = ''; n.textContent = '0 changes not in a version yet'; name.className = 'xName'; name.textContent = 'Name it (optional)'; nw.innerHTML = ''; };
+    scene(root, async (A) => {
+      reset(); A.to(cur, [40, 320]); await A.wait(600);
+      for (let i = 0; i < CH.length; i++) { const d = document.createElement('div'); d.className = 'ch'; d.innerHTML = `${CH[i][0]} <span>· ${CH[i][1]}</span>`; ch.appendChild(d); n.textContent = `${i + 1} change${i ? 's' : ''} not in a version yet`; await A.wait(800); }
+      await A.move(cur, name, 0.3, 0.5, 800); await press(A, cur); name.className = 'xName typing';
+      await typeInto(A, name, 'Editorial hero', 45); await A.wait(300);
+      await A.move(cur, save, 0.5, 0.5, 600); await press(A, cur);
+      nw.innerHTML = '<div class="xVer new"><b>Editorial hero</b><small>3 changes · Tobi · just now</small></div>';
+      ch.innerHTML = ''; n.textContent = '0 changes not in a version yet'; name.className = 'xName'; name.textContent = 'Name it (optional)';
+      await A.wait(2800);
+    }, () => { nw.innerHTML = '<div class="xVer new"><b>Editorial hero</b><small>3 changes · Tobi · just now</small></div>'; cur.style.opacity = 0; });
+  }
+
+  /* Changes this session: each edit lands as its file and its exact classes */
+  {
+    const list = $('xCoL');
+    const R = [['Size 72 → 96', 'src/sections/Hero.jsx', 'text-7xl', 'text-8xl'], ['Corner radius 6 → 24', 'src/sections/Destinations.jsx', 'rounded-md', 'rounded-3xl'], ['Corners 8 → full', 'src/components/Button.jsx', 'rounded-lg', 'rounded-full'], ['Letter spacing 0 → −2%', 'src/sections/Hero.jsx', '—', 'tracking-[-0.02em]']];
+    const row = (r) => `<div class="xRow"><b>${r[0]}</b><code>${r[1]} · <del>${r[2]}</del> → <ins>${r[3]}</ins></code></div>`;
+    scene($('xCo'), async (A) => {
+      list.innerHTML = ''; await A.wait(700);
+      for (const r of R) { list.insertAdjacentHTML('afterbegin', row(r)); await A.wait(1100); }
+      await A.wait(2400);
+    }, () => { list.innerHTML = R.slice().reverse().map(row).join(''); });
+  }
+
+  /* Hand off: add a note, Create pull request, the pull request opens and its checks pass */
+  {
+    const root = $('xPr'), cur = $('xPrCur'), d = $('xPrD'), note = $('xPrNote'), go = $('xPrGo'), ok = $('xPrOk'), ck = [...ok.querySelectorAll('.xCk div')];
+    const reset = () => { d.classList.remove('gone'); note.innerHTML = '<span class="ph">Anything they should know</span>'; go.textContent = 'Create pull request'; ok.classList.remove('on'); ck.forEach((c) => c.classList.remove('ok')); };
+    scene(root, async (A) => {
+      reset(); A.to(cur, [80, 340]); await A.wait(700);
+      await A.move(cur, note, 0.3, 0.5, 800); await press(A, cur);
+      await typeInto(A, note, 'The hero now reads more like a magazine cover.', 34); await A.wait(400); note.textContent = 'The hero now reads more like a magazine cover.';
+      await A.move(cur, go, 0.5, 0.5, 800); await press(A, cur); go.textContent = 'Opening…'; await A.wait(1100);
+      d.classList.add('gone'); ok.classList.add('on'); A.to(cur, [80, 340]);
+      for (const c of ck) { await A.wait(550); c.classList.add('ok'); }
+      await A.wait(2800);
+    }, () => { d.classList.add('gone'); ok.classList.add('on'); ck.forEach((c) => c.classList.add('ok')); cur.style.opacity = 0; });
+  }
 
   /* invite form: no sign-up service is connected yet, so it only confirms on the page */
   $('form').addEventListener('submit', (e) => { e.preventDefault(); $('thanks').textContent = "Thanks. You're on the list."; e.target.reset(); });
