@@ -564,6 +564,23 @@ h1 em{font-style:normal;color:var(--pink)}
 @property --a{syntax:"<angle>";inherits:false;initial-value:0deg}
 @keyframes rimSpin{to{--a:360deg}}
 @media (max-width:720px){.hrim{display:none}}
+/* No decorative gradients: cards are one flat surface with their texture; the values band ends on a plain hairline. */
+.card.lit,.card.lit2{background:#141416}
+.card.lit::after,.card.lit2::after{display:none}
+.vals::after{background:rgba(255,255,255,.08);height:1px}
+/* Ruled grid (a layout frame, like Tovi's canvas): no floating cards, just cells divided by hairlines,
+   "+" marks where lines meet (like a selected frame's corners) and a quiet number on each cell. */
+.sec .bento{--rule:rgba(255,255,255,.09);position:relative;gap:0;border-top:1px solid var(--rule);border-left:1px solid var(--rule)}
+.sec .bento .card{--card:#0A0A0B;background:transparent;border-radius:0;box-shadow:none;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);overflow:hidden}
+.bento .card.photo{background-color:#0E1014}
+.bento .card::after{display:none}
+.bento .card::before{opacity:.55}
+.rmark{position:absolute;z-index:8;width:9px;height:9px;margin:-4px 0 0 -4px;pointer-events:none}
+.rmark::before,.rmark::after{content:"";position:absolute;background:rgba(255,255,255,.32)}
+.rmark::before{left:4px;top:0;width:1px;height:9px}
+.rmark::after{top:4px;left:0;height:1px;width:9px}
+.cn{display:block;margin-bottom:10px;font:500 10.5px/1 var(--mono);letter-spacing:.06em;color:rgba(255,255,255,.38)}
+.ct{display:block}
 /* works with: a slow marquee */
 .works{padding:64px 0 0;text-align:center}
 .works p{margin:0 0 24px;font-size:13px;color:var(--ink3)}
@@ -586,8 +603,6 @@ h2 em{font-style:normal;color:var(--pink)}
 .bento{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .card{position:relative;display:flex;flex-direction:column;border-radius:20px;background:var(--card);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 0 1px var(--line);overflow:hidden;isolation:isolate}
 .card.w2{grid-column:span 2}
-.card.lit{background:radial-gradient(120% 90% at 0% 100%,rgba(252,189,221,.16),transparent 60%),var(--card)}
-.card.lit2{background:radial-gradient(120% 90% at 100% 0%,rgba(150,120,255,.16),transparent 60%),var(--card)}
 .card.light{background:#ECE9EC;color:#1C1C1C;box-shadow:none}
 .card.light .ct p{color:rgba(28,28,28,.6)}
 .card.photo{background:#0E1014 center/cover}
@@ -990,7 +1005,7 @@ footer .sp{flex:1}
   </section>
 
   <section class="sec" id="design">
-    <div class="glow" aria-hidden="true"></div>
+    
     <div class="wrap">
       <div class="secHead"><div><span class="pill rvl">Design</span><h2 class="rvl" style="transition-delay:.08s">Fix it by hand, <em>or</em> ask Tovi.</h2><p class="rvl" style="transition-delay:.16s">Connect your repository and work on the real product: change it like a Figma frame, describe what you want, mark what’s off, or let Tovi review the whole thing.</p></div></div>
       <div class="bento">
@@ -1003,7 +1018,7 @@ footer .sp{flex:1}
               <div class="xDlgF"><span class="xBtn2">Cancel</span><span class="xBtn" id="xGhGo">Open project</span></div>
             </div>
             <div class="cur" id="xGhC"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
-          </div><div class="ct"><p><b>Connect GitHub.</b> Point Tovi at your repository. It installs the app, starts it and opens it with its real pages and data.</p></div></article>
+          </div><div class="ct"><span class="cn">01</span><p><b>Connect GitHub.</b> Point Tovi at your repository. It installs the app, starts it and opens it with its real pages and data.</p></div></article>
 
         <article class="card w2 lit"><div class="xv" id="xEd">
             <div class="xCanvas"><div class="xPlace" id="xEdC"><img src="img/aster/fjord.jpg" alt="" id="xEdI"><div><b>Geiranger</b><small>Quiet fjords and steep green walls</small></div></div></div>
@@ -1014,7 +1029,7 @@ footer .sp{flex:1}
               <div class="xSec"><div class="xH">Fill</div><div class="xF"><span class="xSw" id="xEdFs"></span><span id="xEdFv">surface</span><span class="u" style="margin-left:auto">100 %</span></div></div>
             </div>
             <div class="cur" id="xEdCur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
-          </div><div class="ct"><p><b>Edit by hand, like Figma.</b> Spacing, type, colour, corners and layout, on your real components. Values snap to your design scale.</p></div></article>
+          </div><div class="ct"><span class="cn">02</span><p><b>Edit by hand, like Figma.</b> Spacing, type, colour, corners and layout, on your real components. Values snap to your design scale.</p></div></article>
 
         <article class="card w2"><div class="xv" id="xAi">
             <div class="xAiStage"><div class="xPhone"><div class="xPh" id="xAiD">
@@ -1030,7 +1045,7 @@ footer .sp{flex:1}
               <div class="xComp" id="xAiComp"><span class="xChip"><i></i>Screen “Stay details”</span><div class="xCompIn" id="xAiIn">Describe a change…</div><div class="xCompRow"><span>On system</span><span class="xSend" id="xAiSend"><svg viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
             </div>
             <div class="xTovi" id="xAiTv"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#FCBDDD" stroke="#3A1730" stroke-width="1.1" stroke-linejoin="round"/></svg><b>Tovi</b></div>
-          </div><div class="ct"><p><b>AI design improvements.</b> Ask for a change in plain words. Tovi keeps to your design system, tells you what it did, and every edit can be undone.</p></div></article>
+          </div><div class="ct"><span class="cn">03</span><p><b>AI design improvements.</b> Ask for a change in plain words. Tovi keeps to your design system, tells you what it did, and every edit can be undone.</p></div></article>
 
         <article class="card"><div class="xv" id="xNo">
             <div class="xPage" id="xNoP"><div class="xCard2"><img src="img/aster/lagoon.jpg" alt=""><b>Reykjanes</b></div><div class="xCard2"><img src="img/aster/dunes.jpg" alt=""><b>Wadi Rum</b></div></div>
@@ -1038,7 +1053,7 @@ footer .sp{flex:1}
             <div class="xNotePop" id="xNoPop"><div id="xNoPopT"></div><span>Enter to add · Esc to cancel</span></div>
             <div class="xTasks" id="xNoTk"></div>
             <div class="cur" id="xNoCur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
-          </div><div class="ct"><p><b>Notes that become fixes.</b> Mark what’s off right on the screen. Each note becomes a task, and Apply works through them all.</p></div></article>
+          </div><div class="ct"><span class="cn">04</span><p><b>Notes that become fixes.</b> Mark what’s off right on the screen. Each note becomes a task, and Apply works through them all.</p></div></article>
 
         <article class="card w3 lit2"><div class="xv" id="xAu">
             <div class="xAuPage"><div class="xCabin"></div><div class="xAuTxt"><span class="e">The stay</span><b>A cabin that turns the lights off for you</b><p>Every Aster cabin is placed for the clearest view north.</p><span class="btn">See the cabins</span></div>
@@ -1054,13 +1069,13 @@ footer .sp{flex:1}
               <div class="xAuRow" data-i="3"><img src="img/tovi-avatar.png" alt=""><b>3 · Button sits too close</b><small>Spacing</small></div>
               <div class="xAuFoot"><span>3 tasks</span><span class="xGhost">Discard</span><span class="xPink">Apply</span></div>
             </div>
-          </div><div class="ct"><p><b>AI UX audit.</b> Tovi reviews a page, or the whole product, and pins a note wherever hierarchy, spacing, contrast or usability slips. Keep the notes you agree with, then Apply.</p></div></article>
+          </div><div class="ct"><span class="cn">05</span><p><b>AI UX audit.</b> Tovi reviews a page, or the whole product, and pins a note wherever hierarchy, spacing, contrast or usability slips. Keep the notes you agree with, then Apply.</p></div></article>
       </div>
     </div>
   </section>
 
   <section class="sec" id="ship">
-    <div class="glow" aria-hidden="true"></div>
+    
     <div class="wrap">
       <div class="secHead"><div><span class="pill rvl">Hand off</span><h2 class="rvl" style="transition-delay:.08s">From your fix to a <em>pull request</em>.</h2><p class="rvl" style="transition-delay:.16s">Every change is saved as a version, shown as the exact code it touched, and handed to developers as one pull request.</p></div></div>
       <div class="bento">
@@ -1076,7 +1091,7 @@ footer .sp{flex:1}
               </div>
               <div class="xCoDiff"><div class="xCoFile"><span id="xCoF">src/sections/Hero.jsx</span><em id="xCoN">+1 −1</em></div><div class="xCoLines" id="xCoL"></div></div>
             </div>
-          </div><div class="ct"><p><b>Every code change, visible.</b> Each edit shows what changed on screen and the exact line it touched in your code: one class, your own tokens, nothing generated.</p></div></article>
+          </div><div class="ct"><span class="cn">06</span><p><b>Every code change, visible.</b> Each edit shows what changed on screen and the exact line it touched in your code: one class, your own tokens, nothing generated.</p></div></article>
 
         <article class="card w3 photo" style="background-image:linear-gradient(180deg,rgba(14,16,20,.86),rgba(14,16,20,.94)),url(img/bg/fjord.jpg)"><div class="xv" id="xPr">
             <div class="xHand" id="xPrD">
@@ -1091,7 +1106,7 @@ footer .sp{flex:1}
             </div>
             <div class="xPrDone" id="xPrOk"><span class="xOpen">Open</span><b>Design updates: 3 changes on Home</b><small>tovi/design-updates → main · 3 files · before and after images attached</small><div class="xCk"><div>App builds</div><div>Screenshots attached</div><div>Ready for review</div></div></div>
             <div class="cur" id="xPrCur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
-          </div><div class="ct"><p><b>Push to a pull request.</b> One click commits every change to a new branch and opens a pull request with before and after images. Tovi checks the app still builds first.</p></div></article>
+          </div><div class="ct"><span class="cn">07</span><p><b>Push to a pull request.</b> One click commits every change to a new branch and opens a pull request with before and after images. Tovi checks the app still builds first.</p></div></article>
       </div>
       <div class="vals">
         <div style="position:relative"><h2>Made for the product, not a copy of it.</h2></div>
@@ -1112,7 +1127,6 @@ footer .sp{flex:1}
   </div></section>
 
   <section class="end" id="invite">
-    <div class="aurora" aria-hidden="true"><i class="a1" style="top:30%"></i><i class="a2" style="top:40%"></i><i class="a3"></i></div>
     <div class="wrap">
       <h2>Fix the <em>real</em> thing.</h2>
       <p>Tovi is in private beta with React and Tailwind teams. Leave your email and we'll send an invite.</p>

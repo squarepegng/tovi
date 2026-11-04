@@ -65,6 +65,22 @@
     }
   }
 
+  /* Ruled grid: a "+" mark wherever the hairlines meet */
+  {
+    const place = () => document.querySelectorAll('.bento').forEach((g) => {
+      g.querySelectorAll('.rmark').forEach((m) => m.remove());
+      const o = g.getBoundingClientRect(), seen = new Set();
+      g.querySelectorAll(':scope > .card').forEach((c) => {
+        const r = c.getBoundingClientRect();
+        for (const [x, y] of [[r.left, r.top], [r.right, r.top], [r.left, r.bottom], [r.right, r.bottom]]) {
+          const k = Math.round(x - o.left) + ',' + Math.round(y - o.top); if (seen.has(k)) continue; seen.add(k);
+          const m = document.createElement('i'); m.className = 'rmark'; m.style.left = x - o.left - 1 + 'px'; m.style.top = y - o.top - 1 + 'px'; g.appendChild(m);
+        }
+      });
+    });
+    place(); addEventListener('resize', place); addEventListener('load', place);
+  }
+
   /* ---------- Hero: real screenshots of Tovi, starting in the AI conversation ---------- */
   // Ask Tovi (its rim shimmers while it works) → the edit lands → Diagnose → notes pinned, a heading selected
   // → a card selected → a note added → a hand edit in the panel → Hand off. Every frame is the real editor.
