@@ -589,6 +589,16 @@ h1 em{font-style:normal;color:var(--pink)}
 .xTovi b{border-radius:6px 6px 6px 2px;background:#F49BC8}
 .hcur::after{content:"You";position:absolute;left:78%;top:86%;padding:.12em .5em;border-radius:6px 6px 6px 2px;background:#FF8A3D;color:#2A1200;font:600 10.5px/14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;white-space:nowrap}
 .cur::before,.hcur::before{box-shadow:0 0 0 2px rgba(255,138,61,.85)!important;background:radial-gradient(circle,rgba(255,138,61,.3),transparent 65%)!important}
+/* Cursor or tap: the hero, Edit by hand and Notes show a pointer (the orange "You" dart); the other features show
+   only a tap, a soft dot with a ripple, like an iOS screen recording. Tovi's pink cursor stays where the AI acts. */
+.cur.tap{width:30px;height:30px;margin:-11px 0 0 -11px;border-radius:50%;background:rgba(255,255,255,.22);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.75),0 2px 10px rgba(0,0,0,.35);opacity:0;transition:transform .75s cubic-bezier(.3,.1,.2,1),opacity .2s}
+.cur.tap svg{display:none}
+.cur.tap::after{content:none!important}
+.cur.tap::before{left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;background:rgba(255,255,255,.18)!important;box-shadow:0 0 0 1.5px rgba(255,255,255,.7)!important}
+.cur.tap.click{opacity:1;animation:tapFade 1s ease forwards}
+.cur.tap.click::before{animation:ripple .7s cubic-bezier(.2,0,0,1)}
+@keyframes tapFade{0%,55%{opacity:1}100%{opacity:0}}
+@keyframes ripple{0%{opacity:1;transform:scale(.6)}100%{opacity:0;transform:scale(2.6)}}
 /* works with: a slow marquee */
 .works{padding:64px 0 0;text-align:center}
 .works p{margin:0 0 24px;font-size:13px;color:var(--ink3)}
@@ -1025,7 +1035,7 @@ footer .sp{flex:1}
               <div class="xSteps" id="xGhS"><div>Copying acme/aster</div><div>Installing packages</div><div>Starting the app</div><div>Opening it in Tovi</div></div>
               <div class="xDlgF"><span class="xBtn2">Cancel</span><span class="xBtn" id="xGhGo">Open project</span></div>
             </div>
-            <div class="cur" id="xGhC"><svg viewBox="0 0 24 24"><path d="M3.2 2.6 9.6 20.4c.3.8 1.4.8 1.7 0l2.4-6.2 6.3-2.6c.8-.3.8-1.4 0-1.7L4.9.9c-.9-.3-1.9.6-1.7 1.7z" fill="#FF8A3D" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+            <div class="cur tap" id="xGhC"><svg viewBox="0 0 24 24"><path d="M3.2 2.6 9.6 20.4c.3.8 1.4.8 1.7 0l2.4-6.2 6.3-2.6c.8-.3.8-1.4 0-1.7L4.9.9c-.9-.3-1.9.6-1.7 1.7z" fill="#FF8A3D" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
           </div><div class="ct"><span class="cn">01</span><p><b>Connect GitHub.</b> Point Tovi at your repository. It installs the app, starts it and opens it with its real pages and data.</p></div></article>
 
         <article class="card w2 lit"><div class="xv" id="xEd">
@@ -1113,7 +1123,7 @@ footer .sp{flex:1}
               <div class="xHandF"><span class="xBtn2">Cancel</span><span class="xPinkBig" id="xPrGo">Create pull request</span></div>
             </div>
             <div class="xPrDone" id="xPrOk"><span class="xOpen">Open</span><b>Design updates: 3 changes on Home</b><small>tovi/design-updates → main · 3 files · before and after images attached</small><div class="xCk"><div>App builds</div><div>Screenshots attached</div><div>Ready for review</div></div></div>
-            <div class="cur" id="xPrCur"><svg viewBox="0 0 24 24"><path d="M3.2 2.6 9.6 20.4c.3.8 1.4.8 1.7 0l2.4-6.2 6.3-2.6c.8-.3.8-1.4 0-1.7L4.9.9c-.9-.3-1.9.6-1.7 1.7z" fill="#FF8A3D" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+            <div class="cur tap" id="xPrCur"><svg viewBox="0 0 24 24"><path d="M3.2 2.6 9.6 20.4c.3.8 1.4.8 1.7 0l2.4-6.2 6.3-2.6c.8-.3.8-1.4 0-1.7L4.9.9c-.9-.3-1.9.6-1.7 1.7z" fill="#FF8A3D" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
           </div><div class="ct"><span class="cn">07</span><p><b>Push to a pull request.</b> One click commits every change to a new branch and opens a pull request with before and after images. Tovi checks the app still builds first.</p></div></article>
       </div>
       <div class="vals">
