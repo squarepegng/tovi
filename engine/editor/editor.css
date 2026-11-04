@@ -1668,15 +1668,15 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .ipop .inp.area{height:auto;min-height:24px;padding:5px 8px}
 .ipop .inp.area textarea{line-height:16px}
 .ipLinkF .inp{height:28px;padding:0 8px}
-/* Note markers (Mark for Tovi): comment bubbles pointing at the spot. Neutral and quiet; pink for Tovi's own notes
-   and for the note you're hovering. Areas are a thin pink dash. */
-:root{--noteLine:rgba(252,189,221,.75);--noteArea:rgba(252,189,221,.06);--bubFill:#2E2E2E;--bubEdge:rgba(255,255,255,.16);--bubInk:#EEEEEE;--bubPink:#FCBDDD;--bubOnPink:#1A0F14;--bubShadow:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
-:root[data-theme="light"]{--noteLine:rgba(194,80,138,.7);--noteArea:rgba(194,80,138,.05);--bubFill:#FFFFFF;--bubEdge:rgba(0,0,0,.12);--bubInk:#1C1C1C;--bubPink:#C2508A;--bubOnPink:#FFFFFF;--bubShadow:drop-shadow(0 1px 2px rgba(0,0,0,.14))}
-@media (prefers-color-scheme: light){:root[data-theme="system"]{--noteLine:rgba(194,80,138,.7);--noteArea:rgba(194,80,138,.05);--bubFill:#FFFFFF;--bubEdge:rgba(0,0,0,.12);--bubInk:#1C1C1C;--bubPink:#C2508A;--bubOnPink:#FFFFFF;--bubShadow:drop-shadow(0 1px 2px rgba(0,0,0,.14))}}
-.noteBub{filter:var(--bubShadow)}
-.noteBub path{fill:var(--bubFill);stroke:var(--bubEdge);stroke-width:1}
-.noteBub text{fill:var(--bubInk);font:500 12px -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif}
-.noteBub.tovi path{fill:var(--bubPink);stroke:none}
-.noteBub.tovi text{fill:var(--bubOnPink)}
-.noteBub.hl path{stroke:var(--bubPink);stroke-width:1.5}
-.noteBub.draft path{fill:var(--bubFill);stroke:var(--bubPink);stroke-width:1.5}
+/* Note markers, take two: dot + number tag, flat. The tag is dark like a tooltip in both themes so it reads on any
+   page; a hairline ring separates it from the page instead of a shadow. Pink for Tovi's notes and the dot. */
+.noteTag .nDot{fill:#FCBDDD;stroke:rgba(255,255,255,.95);stroke-width:1.5}
+.noteTag rect{fill:rgba(28,28,28,.92);stroke:rgba(0,0,0,.18);stroke-width:1}
+.noteTag text{fill:#F2F2F2;font:500 11px -apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif}
+.noteTag.tovi rect{fill:#FCBDDD;stroke:rgba(120,20,70,.18)}
+.noteTag.tovi text{fill:#1A0F14}
+.noteTag.hl rect{stroke:#FCBDDD;stroke-width:1.5}
+.noteTag.draft .nDot{r:4.5}
+:root{--noteLine:rgba(252,189,221,.75);--noteArea:rgba(252,189,221,.06)}
+:root[data-theme="light"]{--noteLine:rgba(194,80,138,.7);--noteArea:rgba(194,80,138,.05)}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--noteLine:rgba(194,80,138,.7);--noteArea:rgba(194,80,138,.05)}}

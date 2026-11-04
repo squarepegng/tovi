@@ -3482,11 +3482,15 @@
     else if (n.shape === 'circle') s = `<ellipse cx="${n.x + n.w / 2}" cy="${n.y + n.h / 2}" rx="${n.w / 2}" ry="${n.h / 2}" ${st}/>`;
     else if (n.shape === 'arrow') { const a = Math.atan2(n.y2 - n.y, n.x2 - n.x), L = 12; s = `<path d="M${n.x} ${n.y}L${n.x2} ${n.y2}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a - 0.5)} ${n.y2 - L * Math.sin(a - 0.5)}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a + 0.5)} ${n.y2 - L * Math.sin(a + 0.5)}" stroke="var(--noteLine)" stroke-width="${1.75 / z}" stroke-linecap="round" fill="none"/>`; }
     const [bx, by] = o.shape === 'pin' || o.shape === 'arrow' ? [o.x, o.y] : [o.x + o.w, o.y];
-    // The marker, like a Figma comment: a bubble whose sharp corner points at the exact spot, the number inside.
-    // Quiet by default; Tovi's own notes are filled pink; a hovered note gets a pink edge and grows a touch.
-    const BUB = 'M0 0V-13A11 11 0 0 1 11-24H13A11 11 0 0 1 24-13V-11A11 11 0 0 1 13 0Z';
-    if (i != null) s += `<g class="noteBub${tovi ? ' tovi' : ''}${hl ? ' hl' : ''}" transform="translate(${bx} ${by}) scale(${(hl ? 1.12 : 1) / z})"><path d="${BUB}"/><text x="12" y="-8" text-anchor="middle">${i + 1}</text></g>`;
-    else if (n.shape === 'pin') s += `<g class="noteBub draft" transform="translate(${n.x} ${n.y}) scale(${1 / z})"><path d="${BUB}"/></g>`;
+    // The marker, like Figma's Dev Mode annotations: a small dot on the exact spot and a number tag just above and
+    // to the right, so it never covers what it points at. No shadow: a thin halo keeps it readable on any page.
+    // Tovi's own notes are pink; the note you're hovering opens its tag to show what it says.
+    const tag = (num, text) => {
+      const label = text ? `${num} · ${text}` : String(num), w = Math.round(12 + label.length * 6.4);
+      return `<g class="noteTag${tovi ? ' tovi' : ''}${hl ? ' hl' : ''}" transform="translate(${bx} ${by}) scale(${1 / z})"><circle class="nDot" r="3.5"/><g transform="translate(7 -25)"><rect width="${w}" height="18" rx="6"/><text x="${w / 2}" y="12.5" text-anchor="middle">${esc(label)}</text></g></g>`;
+    };
+    if (i != null) { const t = String(o.title || o.text || '').trim().replace(/\s+/g, ' '); s += tag(i + 1, hl && t ? (t.length > 34 ? t.slice(0, 33) + '…' : t) : ''); }
+    else if (n.shape === 'pin') s += `<g class="noteTag draft" transform="translate(${n.x} ${n.y}) scale(${1 / z})"><circle class="nDot" r="3.5"/></g>`;
     return s;
   }
   const drawMarks = () => { $('marksG').innerHTML = S.notes.map((n, i) => shapeSVG(n, i, false, S.hlNote === i + 1)).join('') + (S.noteDraft ? shapeSVG(S.noteDraft, null, true) : ''); };
