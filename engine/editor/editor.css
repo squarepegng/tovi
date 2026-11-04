@@ -1622,3 +1622,10 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .primary .count{background:rgba(0,0,0,.1);color:inherit}
 :root[data-theme="light"] .primary .count{background:rgba(255,255,255,.22)}
 @media (prefers-color-scheme: light){:root[data-theme="system"] .primary .count{background:rgba(255,255,255,.22)}}
+
+/* Light theme, subtly raised (like dark mode's lift): fields and chosen toggles are pure white on the #F2F2F2
+   panel, lit from above, with a hairline edge and a tiny shadow under the bottom edge. */
+:root[data-theme="light"]{--lift:0 0 0 .5px rgba(0,0,0,.07),0 1px 1px rgba(0,0,0,.035),0 1px 2px -1px rgba(0,0,0,.06);--liftHover:0 0 0 .5px rgba(0,0,0,.1),0 1px 1px rgba(0,0,0,.04),0 1px 2px -1px rgba(0,0,0,.07);--onFill:#FFFFFF;--onEdge:var(--lift)}
+:root[data-theme="light"] #panel .inp,:root[data-theme="light"] .scW,:root[data-theme="light"] #panel .m9,:root[data-theme="light"] #panel .inp.sized{background:#FFFFFF;box-shadow:var(--lift)}
+:root[data-theme="light"] #panel .inp:hover,:root[data-theme="light"] .scW:hover{box-shadow:var(--liftHover)}
+@media (prefers-color-scheme: light){:root[data-theme="system"]{--lift:0 0 0 .5px rgba(0,0,0,.07),0 1px 1px rgba(0,0,0,.035),0 1px 2px -1px rgba(0,0,0,.06);--liftHover:0 0 0 .5px rgba(0,0,0,.1),0 1px 1px rgba(0,0,0,.04),0 1px 2px -1px rgba(0,0,0,.07);--onFill:#FFFFFF;--onEdge:var(--lift)}:root[data-theme="system"] #panel .inp,:root[data-theme="system"] .scW,:root[data-theme="system"] #panel .m9,:root[data-theme="system"] #panel .inp.sized{background:#FFFFFF;box-shadow:var(--lift)}:root[data-theme="system"] #panel .inp:hover,:root[data-theme="system"] .scW:hover{box-shadow:var(--liftHover)}}
