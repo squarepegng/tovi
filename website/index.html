@@ -69,9 +69,9 @@ button{font:inherit;color:inherit}
 .heroTop{display:grid;grid-template-columns:1.15fr 1fr;gap:56px;align-items:end}
 .badge{display:inline-flex;align-items:center;gap:8px;margin-bottom:22px;padding:4px 12px 4px 6px;border-radius:999px;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--line2);font-size:13px;color:var(--ink2)}
 .badge b{padding:1px 8px;border-radius:999px;background:var(--pink);color:#1A0F14;font-size:11.5px;font-weight:600}
-h1{margin:0;font:400 clamp(50px,7.2vw,92px)/.96 var(--display);letter-spacing:-.03em;text-wrap:balance}
+h1{margin:0;font:400 clamp(44px,5.4vw,72px)/.98 var(--display);letter-spacing:-.03em;text-wrap:balance}
 h1 em{font-style:normal;color:var(--pink)}
-.lede{margin:0 0 24px;font-size:19px;line-height:1.55;color:var(--ink2);text-wrap:pretty;max-width:460px}
+.lede{margin:0 0 24px;font-size:19px;line-height:1.55;color:var(--ink2);text-wrap:pretty;max-width:500px}
 .lede b{color:var(--ink);font-weight:500}
 .heroActs{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .fine{margin:16px 0 0;font-size:13px;color:var(--ink3)}
@@ -499,7 +499,7 @@ h1 em{font-style:normal;color:var(--pink)}
 .xCoLines .hide{opacity:0}
 .xCoLines .p mark{background:rgba(63,185,80,.35);color:#AFF5B4;border-radius:3px}
 .xCoLines .m mark{background:rgba(248,81,73,.35);color:#FFC1BA;border-radius:3px}
-@container (max-width:560px){#xCo{height:420px}.xCoWrap{grid-template-columns:1fr;grid-template-rows:170px 1fr}.xCoTabs span{padding:6px 9px;font-size:11.5px}}
+@container (max-width:560px){#xCo{height:420px}.xE.t b{font-size:22px}.xE.t.after b{font-size:28px}.xE.t{padding:34px 18px 0;place-items:center start}.xCoWrap{grid-template-columns:1fr;grid-template-rows:170px 1fr}.xCoTabs span{padding:6px 9px;font-size:11.5px}}
 /* Feature cards share one neutral ground; each carries its own faint texture so neighbours read apart. */
 .card{--card:#141416;background:#141416}
 .card::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.9}
@@ -564,6 +564,30 @@ h1 em{font-style:normal;color:var(--pink)}
 @property --a{syntax:"<angle>";inherits:false;initial-value:0deg}
 @keyframes rimSpin{to{--a:360deg}}
 @media (max-width:720px){.hrim{display:none}}
+/* ---------- Liquid glass feature cards over drifting light (default 1; ?glass=2 photo, 3 quiet, 0 off) ---------- */
+.glassBg{display:none;position:absolute;left:0;right:0;top:300px;bottom:-40px;z-index:-1;overflow:hidden;pointer-events:none}
+body[data-glass] .glassBg{display:block}
+body[data-glass] #design,body[data-glass] #ship{isolation:isolate}
+body[data-glass] .bento .card{background:rgba(255,255,255,.035)!important;-webkit-backdrop-filter:blur(28px) saturate(170%);backdrop-filter:blur(28px) saturate(170%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 -1px 0 rgba(255,255,255,.06),inset 1px 0 0 rgba(255,255,255,.08),inset -1px 0 0 rgba(255,255,255,.08),0 0 0 1px rgba(255,255,255,.07),0 30px 60px -30px rgba(0,0,0,.7)}
+body[data-glass] .bento .card::before{display:none}
+body[data-glass] .bento .card::after{content:"";position:absolute;inset:0;z-index:5;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.16),transparent 22%,transparent 70%,rgba(255,255,255,.07));mix-blend-mode:overlay}
+body[data-glass] .xv::after{display:none}
+/* 1 · Frosted over slow colour light */
+body[data-glass="1"] .glassBg i{position:absolute;border-radius:50%;filter:blur(60px);opacity:.75;animation:drift1 24s ease-in-out infinite alternate}
+body[data-glass="1"] .glassBg i:nth-child(1){width:46vw;height:46vw;left:-6vw;top:0;background:radial-gradient(closest-side,#E58BB8,transparent)}
+body[data-glass="1"] .glassBg i:nth-child(2){width:40vw;height:40vw;right:-4vw;top:20%;background:radial-gradient(closest-side,#7B5CE0,transparent);animation-name:drift2}
+body[data-glass="1"] .glassBg i:nth-child(3){width:34vw;height:34vw;left:30vw;bottom:-6vw;background:radial-gradient(closest-side,#3FB9A0,transparent);animation-name:drift3;opacity:.45}
+/* 2 · Liquid glass over a photograph */
+body[data-glass="2"] .glassBg{background:url(img/bg/fjord.jpg) center/cover}
+body[data-glass="2"] .glassBg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#0A0A0B,rgba(10,10,11,.25) 18%,rgba(10,10,11,.35) 82%,#0A0A0B)}
+body[data-glass="2"] .glassBg i{display:none}
+body[data-glass="2"] .bento .card{background:rgba(20,20,24,.28)!important;-webkit-backdrop-filter:blur(22px) saturate(180%) url(#lg);backdrop-filter:blur(22px) saturate(180%) url(#lg)}
+/* 3 · Quiet: dark glass, only the lit rim */
+body[data-glass="3"] .glassBg i{display:none}
+body[data-glass="3"] .glassBg{background:radial-gradient(50% 60% at 25% 40%,rgba(252,189,221,.10),transparent 70%),radial-gradient(45% 55% at 80% 70%,rgba(150,120,255,.09),transparent 70%)}
+body[data-glass="3"] .bento .card{background:rgba(22,22,26,.72)!important}
 /* works with: a slow marquee */
 .works{padding:64px 0 0;text-align:center}
 .works p{margin:0 0 24px;font-size:13px;color:var(--ink3)}
@@ -946,6 +970,7 @@ footer .sp{flex:1}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="lg" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="7" result="n"/><feGaussianBlur in="n" stdDeviation="3" result="nb"/><feDisplacementMap in="SourceGraphic" in2="nb" scale="38" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
 <div class="ruler" id="ruler" aria-hidden="true"></div>
 <header class="nav" id="nav">
   <div class="wrap">
@@ -958,12 +983,11 @@ footer .sp{flex:1}
 
 <main id="top">
   <section class="hero">
-    <div class="aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
     <div class="grid" aria-hidden="true"></div>
     <div class="wrap heroTop">
       <div class="rvl"><h1>Designers, fix the <em>real</em> thing.</h1></div>
       <div class="rvl" style="transition-delay:.12s">
-        <p class="lede">Tovi opens the app your team already built. <b>Fix it by hand like in Figma, or let Tovi's AI make the edits.</b> Every change lands in your code and goes to developers as one pull request.</p>
+        <p class="lede">Edit the real product by hand or with AI. <b>Every change ships to developers as one pull request.</b></p>
         <div class="heroActs"><a class="cta lg" href="#invite">Request an invite</a><a class="ghost" href="#design">See the features</a></div>
         
       </div>
@@ -991,7 +1015,7 @@ footer .sp{flex:1}
   </section>
 
   <section class="sec" id="design">
-    <div class="glow" aria-hidden="true"></div>
+    <div class="glow" aria-hidden="true"></div><div class="glassBg" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="wrap">
       <div class="secHead"><div><span class="pill rvl">Design</span><h2 class="rvl" style="transition-delay:.08s">Fix it by hand, <em>or</em> ask Tovi.</h2><p class="rvl" style="transition-delay:.16s">Connect your repository and work on the real product: change it like a Figma frame, describe what you want, mark what’s off, or let Tovi review the whole thing.</p></div></div>
       <div class="bento">
@@ -1061,7 +1085,7 @@ footer .sp{flex:1}
   </section>
 
   <section class="sec" id="ship">
-    <div class="glow" aria-hidden="true"></div>
+    <div class="glow" aria-hidden="true"></div><div class="glassBg" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="wrap">
       <div class="secHead"><div><span class="pill rvl">Hand off</span><h2 class="rvl" style="transition-delay:.08s">From your fix to a <em>pull request</em>.</h2><p class="rvl" style="transition-delay:.16s">Every change is saved as a version, shown as the exact code it touched, and handed to developers as one pull request.</p></div></div>
       <div class="bento">
@@ -1131,6 +1155,7 @@ footer .sp{flex:1}
     <a href="#design">Features</a><a href="#faq">Questions</a><a href="https://github.com/squarepegng/tovi">GitHub</a><a href="mailto:hello@usetovi.com">hello@usetovi.com</a>
   </div>
 </footer>
+<script>{const g=new URLSearchParams(location.search).get("glass")||"1";if(g!=="0")document.body.dataset.glass=g;}</script>
 <script src="site.js"></script>
 </body>
 </html>
