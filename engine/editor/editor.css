@@ -215,7 +215,7 @@ aside[hidden]{display:none!important}
 .dialog label{display:flex;flex-direction:column;gap:6px}
 .dialog .fld{padding:8px 10px;background:var(--raised);border:1px solid transparent;border-radius:6px;outline:none;line-height:18px;resize:none;color:var(--ink)}
 .dialog .fld:focus{border-color:var(--select)}
-.dialog .df{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:#202020}
+.dialog .df{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:rgba(var(--hi),.03)}
 .files{border:1px solid var(--line);border-radius:8px}
 .files .fh{display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:500}
 .files .fr{display:flex;align-items:center;gap:8px;padding:6px 10px}
