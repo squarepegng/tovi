@@ -140,22 +140,22 @@
   {
     const root = $('xAi'), th = $('xAiTh'), inp = $('xAiIn'), send = $('xAiSend'), comp = $('xAiComp'), card = $('xAiD'), sel = $('xAiSel'), tov = $('xAiTv');
     const add = (cls, html) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; th.appendChild(d); return d; };
-    const box = () => { const r = card.getBoundingClientRect(), o = root.getBoundingClientRect(); return { x: r.left - o.left, y: r.top - o.top, w: r.width, h: r.height }; };
-    const frame = (pink) => { const b = box(); Object.assign(sel.style, { left: b.x - 4 + 'px', top: b.y - 4 + 'px', width: b.w + 8 + 'px', height: b.h + 8 + 'px' }); sel.classList.add('on'); sel.classList.toggle('pk', !!pink); sel.firstChild.textContent = pink ? 'Tovi · editing' : 'Card'; };
+    const box = () => { const r = card.getBoundingClientRect(), o = root.getBoundingClientRect(); return { x: r.left - o.left, y: r.top - o.top, w: r.width, h: Math.min(r.height, o.bottom - r.top - 30) }; };
+    const frame = (pink) => { const b = box(); Object.assign(sel.style, { left: b.x - 4 + 'px', top: b.y - 4 + 'px', width: b.w + 8 + 'px', height: b.h + 8 + 'px' }); sel.classList.add('on'); sel.classList.toggle('pk', !!pink); sel.firstChild.textContent = pink ? 'Tovi · editing' : 'Screen'; };
     const reset = () => { th.innerHTML = '<div class="xMeta"><img src="img/tovi-avatar.png" alt="">Earlier · Title larger, tighter tracking</div><div class="xDone"><span>✓ Applied</span><u>Undo</u></div>'; inp.className = 'xCompIn'; inp.textContent = 'Describe a change…'; send.classList.remove('on'); comp.classList.remove('busy'); card.classList.remove('prem'); tov.style.opacity = 0; sel.classList.remove('on'); };
-    const ask = 'Make this card feel more premium';
-    const reply = 'I let the photo lead: taller, with the name set in your display serif on it, softer corners and a quieter pill button.';
+    const ask = 'Make this screen feel more premium';
+    const reply = 'I let the photo lead, full-bleed with the name set on it in your display serif, grouped the dates into one soft panel and made Reserve a full-width pill.';
     scene(root, async (A) => {
       reset(); await A.wait(300); frame(false); await A.wait(800);
       inp.className = 'xCompIn typing'; await typeInto(A, inp, ask, 40); send.classList.add('on'); await A.wait(450);
       inp.className = 'xCompIn'; inp.textContent = 'Describe a change…'; send.classList.remove('on');
-      add('xCtx', 'Card “The Fireside Suite”'); add('xU', ask); comp.classList.add('busy');
-      const meta = add('xMeta', '<img src="img/tovi-avatar.png" alt="">Looking at the card…'); await A.wait(1300);
+      add('xCtx', 'Screen “Stay details”'); add('xU', ask); comp.classList.add('busy');
+      const meta = add('xMeta', '<img src="img/tovi-avatar.png" alt="">Looking at the screen…'); await A.wait(1300);
       meta.innerHTML = '<img src="img/tovi-avatar.png" alt="">Looked at 6 elements · Thought for 5s';
       const r = add('xReply', ''); for (let i = 0; i <= reply.length; i += 3) { r.textContent = reply.slice(0, i); await A.wait(26); }
       const b = box(); tov.style.left = b.x + b.w * 0.55 + 'px'; tov.style.top = b.y + b.h * 0.35 + 'px'; tov.style.opacity = 1; frame(true); await A.wait(800);
       card.classList.add('prem'); for (let t = 0; t < 7; t++) { await A.wait(100); frame(true); }
-      add('xAppl', '<div class="h">Applied 3 of 3</div><div class="r"><i>✓</i><div>Card “The Fireside Suite”<small>Corners 6 → 20 · Image 130 → 200</small></div></div><div class="r"><i>✓</i><div>Title<small>Newsreader 24 · on the photo</small></div></div><div class="r"><i>✓</i><div>Button “Book”<small>Pill · light fill</small></div></div>');
+      add('xAppl', '<div class="h">Applied 3 of 3</div><div class="r"><i>✓</i><div>Image<small>Full-bleed · new photo · title on it</small></div></div><div class="r"><i>✓</i><div>Dates<small>One panel · 14 radius</small></div></div><div class="r"><i>✓</i><div>Button “Reserve”<small>Full width · pill</small></div></div>');
       add('xDone', '<span>✓ Applied</span><u>Undo</u>'); comp.classList.remove('busy'); tov.style.opacity = 0; frame(false);
       await A.wait(3400);
     }, () => { card.classList.add('prem'); add('xU', ask); add('xReply', reply); add('xDone', '<span>✓ Applied</span><u>Undo</u>'); });
