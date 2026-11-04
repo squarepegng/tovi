@@ -90,14 +90,6 @@ const Proposal = z.object({
     mode: z.enum(['improve', 'explore']),
     why: z.string().describe('One short plain sentence, e.g. "Your palette and spacing are what make this feel generic."'),
   }).nullable().describe('Only in On system mode: set when the design system itself is the reason the screen looks weak, so a better result needs a better system. Otherwise null'),
-  ask: z.object({
-    question: z.string().describe('One short plain question, e.g. "Pop how: bolder, more colour, or more space?"'),
-    options: z.array(z.string()).describe('2 or 3 short, clearly different directions the designer can pick, e.g. "Bolder type and contrast"'),
-  }).nullable().describe('Rarely. Only when the request is so open that good designers would go clearly different ways (e.g. "make it pop", "fix this") and nothing earlier in the conversation narrows it. Then return no edits. Otherwise null'),
-  alt: z.object({
-    label: z.string().describe('A short label for your better option, e.g. "More space instead of lines"'),
-    request: z.string().describe('The instruction that would make the better option, as the designer would type it'),
-  }).nullable().describe('Only when you did what was asked but it makes the design worse or has a real trade-off: your better alternative, one click away. Otherwise null'),
   notes: z.array(z.object({
     note: z.number().int(),
     status: z.enum(['done', 'partial', 'not_possible']),
@@ -126,10 +118,15 @@ const Proposal = z.object({
       swapTo: z.string().nullable().describe('For swap: exact name of an icon from the project’s icon library or one of its components'),
       insertPosition: z.enum(['before', 'after', 'inside']).nullable().describe('For insert: relative to this element; inside puts it at the end of its children'),
       insertJsx: z.string().nullable().describe('For insert or replace: the new JSX. Plain tags (div, p, h2, span, img, button, ul/li…) or the project’s components and icons, Tailwind classes using the project’s tokens, fixed text only. No handlers, no expressions.'),
-      groupWith: z.array(z.string()).nullable().describe('For group: ids of the neighboring siblings to wrap together with this element, in the same parent'),
-      groupClass: z.string().nullable().describe('For group: Tailwind classes for the new frame, e.g. "flex items-center gap-3"'),
-      imageSrc: z.string().nullable().describe('For image: one of the uploaded images, "attachment:N" for an image attached to this message, a URL the designer gave, or a new picture as "photo: <what it shows>" or "illustration: <what it shows>"'),
-      imageAlt: z.string().nullable().describe('For image: alt text describing the image'),
+      // group and image each carry two values in one field: providers allow at most 16 nullable fields per schema.
+      group: z.object({
+        with: z.array(z.string()).describe('Ids of the neighboring siblings to wrap together with this element, in the same parent'),
+        className: z.string().describe('Tailwind classes for the new frame, e.g. "flex items-center gap-3"'),
+      }).nullable().describe('For group only; otherwise null'),
+      image: z.object({
+        src: z.string().describe('One of the uploaded images, "attachment:N" for an image attached to this message, a URL the designer gave, or a new picture as "photo: <4 to 12 words>" or "illustration: <…>". Empty to keep the current picture'),
+        alt: z.string().describe('Alt text describing the image. Empty to keep the current alt text'),
+      }).nullable().describe('For image only; otherwise null'),
       why: z.string().describe('A few words, e.g. "warmer, more premium card"'),
     }),
   ),
@@ -150,7 +147,7 @@ Work like a sharp collaborator:
 - Keep sets consistent: when the target is one of a group of similar elements (cards, nav items, list rows, chips), change their shared source or all of them, unless the designer says "only this one".
 - Be decisive: for vague requests ("make it pop", "more premium"), make tasteful, on-system choices and say in one sentence what you chose. Ask one short question (and return no edits) only when two very different readings are equally likely.
 - Keep the message to one or two plain sentences. Don't list every class; the edit list shows the details.
-- Be an honest design partner, not a yes-machine, but never in the way. Always do what the designer asked. Then judge it against the design craft below: if it makes the screen worse or has a real trade-off (more noise, broken hierarchy or consistency, lower contrast, the generic AI look), end the message with one plain sentence on why, and set alt to your better option (a short label and the request that would make it), e.g. message "...Lines between three short rows add clutter; more space separates them more cleanly." with alt { label: "More space instead of lines", request: "Remove the lines between the tasks and give each row a little more vertical space" }. If it is a good request, just do it without comment and leave alt null. Never lecture or refuse.
+- Be an honest design partner, not a yes-machine, but never in the way. Always do what the designer asked. Then judge it against the design craft below: if it makes the screen worse or has a real trade-off (more noise, broken hierarchy or consistency, lower contrast, the generic AI look), end the message with one plain sentence on why, then a last line "Try instead: <short label> => <the request that would make it>", e.g. "...Lines between three short rows add clutter; more space separates them more cleanly.\nTry instead: More space instead of lines => Remove the lines between the tasks and give each row a little more vertical space". If it is a good request, just do it without comment and add no such line. Never lecture or refuse.
 
 Design craft (use your eye, like a senior designer reviewing this screen):
 - Hierarchy: one clear focal point per area; levels differ in size, weight or colour (a heading at least one step up the type scale or a weight step from body), not everything bold.
@@ -209,14 +206,14 @@ How to work:
 - You can also change structure, like a designer in Figma: delete an element, duplicate it, move it up or down among its siblings, swap an icon or component for another (use the exact icon names from the project's library, e.g. "replace the bookmark with a heart" is a swap to Heart), insert new elements before, after or inside an element, and change an image's source or alt text. To replace an element with something different, use replace with the new JSX (never insert plus delete).
 - Fonts: fontFamily takes one of the project's font family keys listed below (e.g. display for headings, sans for body).
 - Gradients are a style: set the gradient property to "<direction> <from> <to>" or "<direction> <from> <via> <to>" with directions t, tr, r, br, b, bl, l, tl and project color tokens (e.g. "r primary positive"); "none" removes it. For gradient text, also set clipText to "on". Don't also set a fill: the gradient is the fill. Never rebuild an element just to restyle it. Elements shown by a condition or repeated by a list can't be deleted or moved; edit their parent or their style instead.
-- To arrange some siblings differently from the rest (e.g. put an input and a button side by side while the label stays above), group them: action group on the first one, groupWith the others, and groupClass for the new frame's layout. Then set Fill width on the child that should take the remaining space. Ungroup removes a plain wrapper and keeps its children.
+- To arrange some siblings differently from the rest (e.g. put an input and a button side by side while the label stays above), group them: action group on the first one, with group.with listing the others and group.className for the new frame's layout. Then set Fill width on the child that should take the remaining space. Ungroup removes a plain wrapper and keeps its children.
 - New elements must fit the design: reuse the project's components where one fits, and use the project's tokens and scales in their classes.
 - Layout works like Figma auto layout: layout row/col/none (direction), alignItems start/center/end/stretch, justify start/center/end/between, wrap wrap/nowrap, gap, padX/padY, margins mX (left and right), mT (top), mB (bottom) (px or auto), and width/height w/h as hug, fill or a px size.
-- To put a new picture in an image (a photo, a drawing, "an illustration of…", "a picture of…"), use action image with imageSrc "photo: <4 to 12 words of what it shows>" for real photographs, or "illustration: <…>" for drawn or flat art. Tovi shows the designer options to pick from. Never say you can't create images.
+- To put a new picture in an image (a photo, a drawing, "an illustration of…", "a picture of…"), use action image with image.src "photo: <4 to 12 words of what it shows>" for real photographs, or "illustration: <…>" for drawn or flat art. Tovi shows the designer options to pick from. Never say you can't create images.
 - action token changes a design-system colour everywhere it's used: token.name from the token list, token.value #RRGGBB, token.theme light, dark or both.
 - action code is the last resort for visual changes no other action can make (classes computed in an unusual way, inline styles): code.file is the file shown for that element or its style sources, code.find an exact snippet of code you were shown that occurs once, code.replace the new text. Keep it minimal and visual only: never change logic, data, handlers or imports. Keep the original formatting exactly: the same line breaks and indentation, one element per line as before; never squash several lines into one. Prefer several small code edits over one large one.
 - Always do what you can. If part of a request needs something not in your toolset yet (free positioning, animation, hover states, new pages), make the edits that get closest, set scope to partial, and say in one short sentence what you could not do yet. Never refuse a visual request outright when some of it is possible.
-- Prefer doing over asking. Ask (set ask, return no edits) only when a request is so open that good designers would go clearly different ways and nothing earlier in the conversation narrows it, . Never ask about a numbered note, a check of your own work, or an answer to a question you already asked.
+- Prefer doing over asking. Ask (make the message your one short question, end it with a last line "Choose: <option> | <option> | <option>" of 2 or 3 clearly different directions, and return no edits) only when a request is so open that good designers would go clearly different ways and nothing earlier in the conversation narrows it, . Never ask about a numbered note, a check of your own work, or an answer to a question you already asked.
 - needs_developer is only for requests that change behavior, data, logic, payments or accounts. Visual changes are never developer work, even when Tovi cannot make them yet; use not_yet for those.
 - This can be a conversation: earlier turns are included. Read follow-ups ("smaller", "undo that", "try again but warmer") against what you proposed before and whether it was applied.
 - Never say whether anything changed ("Nothing changed yet", "I haven't changed anything", "No edits"): Tovi shows that itself, next to your reply. When the designer is only asking a question, just answer it.
@@ -359,7 +356,7 @@ function relax(node) {
   return node;
 }
 const PROPOSAL_SCHEMA = () => { const { $schema, ...rest } = z.toJSONSchema(Proposal, { io: 'input' }); return relax(rest); };
-const EDIT_NULLS = ['note', 'text', 'target', 'token', 'code', 'moveDir', 'swapTo', 'insertPosition', 'insertJsx', 'groupWith', 'groupClass', 'imageSrc', 'imageAlt'];
+const EDIT_NULLS = ['note', 'text', 'target', 'token', 'code', 'moveDir', 'swapTo', 'insertPosition', 'insertJsx', 'group', 'image'];
 async function askOther(provider, model, key, { systemText, history8, lastContent, light, schema = PROPOSAL_SCHEMA(), parse = parseProposal }) {
   const text = (b) => b.type === 'text' ? b.text : null;
   let res, body;
@@ -416,7 +413,7 @@ function parseProposal(raw) {
   let obj;
   try { obj = JSON.parse(String(raw || '').replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch { throw new KerfError('The answer couldn’t be read. Try again.'); }
   if (obj && typeof obj === 'object') {
-    for (const k of ['suggest', 'notes', 'ask', 'alt']) if (obj[k] === undefined) obj[k] = null;
+    for (const k of ['suggest', 'notes']) if (obj[k] === undefined) obj[k] = null;
     for (const e of Array.isArray(obj.edits) ? obj.edits : []) {
       for (const k of EDIT_NULLS) if (e[k] === undefined) e[k] = null;
       if (!Array.isArray(e.ops)) e.ops = [];
@@ -474,7 +471,7 @@ export async function propose({ request, targets, history = [], images = [], tok
       source += `\n--- ${f} ---\n${code}\n--- end of ${f} ---\n`;
     }
   }
-  const lastText = `${MODES[m]}\n${dir ? dir + '\n' : ''}${refs.length ? `The ${refs.length} reference image${refs.length > 1 ? 's' : ''} labelled "Reference" show the look the designer wants.\n` : ''}${where}\n${shot ? 'The first image is a screenshot of exactly what the designer sees. Use it to judge contrast, alignment, spacing and hierarchy. Element boxes below are x,y,w,h in CSS pixels of that same visible area.\n' : ''}\nElements on screen:\n${targets.map(describeTarget).join('\n')}\n${source ? `\nSource of the selection's file(s), exactly as saved:${source}` : ''}\n${imgs.length ? `The designer attached ${imgs.length} image${imgs.length > 1 ? 's' : ''} (above). Treat them as a reference to match, a screenshot pointing at a problem, or an image to put in the design, whichever the request means. To place one, use imageSrc "attachment:N" (or src="attachment:N" in insertJsx).\n\n` : ''}Request:\n${request}`;
+  const lastText = `${MODES[m]}\n${dir ? dir + '\n' : ''}${refs.length ? `The ${refs.length} reference image${refs.length > 1 ? 's' : ''} labelled "Reference" show the look the designer wants.\n` : ''}${where}\n${shot ? 'The first image is a screenshot of exactly what the designer sees. Use it to judge contrast, alignment, spacing and hierarchy. Element boxes below are x,y,w,h in CSS pixels of that same visible area.\n' : ''}\nElements on screen:\n${targets.map(describeTarget).join('\n')}\n${source ? `\nSource of the selection's file(s), exactly as saved:${source}` : ''}\n${imgs.length ? `The designer attached ${imgs.length} image${imgs.length > 1 ? 's' : ''} (above). Treat them as a reference to match, a screenshot pointing at a problem, or an image to put in the design, whichever the request means. To place one, use image.src "attachment:N" (or src="attachment:N" in insertJsx).\n\n` : ''}Request:\n${request}`;
   const lastContent = [
     ...(shot ? [{ type: 'text', text: 'Screenshot of the screen:' }, { type: 'image', source: { type: 'base64', media_type: shot.media_type, data: shot.data } }] : []),
     ...(close ? [{ type: 'text', text: 'Close-up of the selection at twice the size (judge spacing, type and alignment here):' }, { type: 'image', source: { type: 'base64', media_type: close.media_type, data: close.data } }] : []),
@@ -532,6 +529,9 @@ export async function propose({ request, targets, history = [], images = [], tok
     return m[1] === 'table' ? (m[3] === '*' ? `every entry of ${m[2]}` : `${m[2]} “${m[3]}”`) : m[1] === 'css' ? `.${m[2]} class` : m[2];
   };
   for (const e of p.edits || []) {
+    // Unpack the grouped fields into the names the rest of this code uses.
+    e.groupWith = e.group?.with || null; e.groupClass = e.group?.className || null;
+    e.imageSrc = e.image?.src?.trim() || null; e.imageAlt = e.image?.alt?.trim() ? e.image.alt : null;
     const t = allowed.get(e.loc) || (e.action === 'token' ? targets[0] && allowed.get(targets[0].loc) : null);
     if (!t) continue;
     if (e.action === 'token') {
@@ -597,6 +597,13 @@ export async function propose({ request, targets, history = [], images = [], tok
   const notes = Array.isArray(p.notes) ? p.notes.filter((n) => Number.isInteger(n.note) && n.note > 0).map((n) => ({ note: n.note, status: n.status, summary: n.summary })) : null;
   if (m === 'explore') edits.forEach((e) => { if (!e.structure) e.offSystem = true; });
   if (m !== 'improve') { for (let k = edits.length - 1; k >= 0; k--) if (m === 'explore' && edits[k].structure?.type === 'token') edits.splice(k, 1); }
+  // "Try instead" and the question's options travel as one marked last line of the message (the strict answer
+  // format has no room for more fields); pull them out here.
+  { const lines = String(p.message || '').split('\n'); const last = (lines[lines.length - 1] || '').trim();
+    const ti = last.match(/^Try instead:\s*(.+?)\s*=>\s*(.+)$/i), ch = last.match(/^Choose:\s*(.+)$/i);
+    p.alt = ti ? { label: ti[1], request: ti[2] } : null;
+    p.ask = ch ? { question: lines.slice(0, -1).join('\n').trim(), options: ch[1].split('|').map((o) => o.trim()).filter(Boolean) } : null;
+    if (ti || ch) p.message = lines.slice(0, -1).join('\n').trim(); }
   return { scope: p.scope, message: p.message, mode: m, suggest: m === 'system' && p.suggest ? { mode: p.suggest.mode, why: p.suggest.why } : null, notes: notes?.length ? notes : null, alt: edits.length && p.alt?.label && p.alt?.request ? { label: String(p.alt.label).slice(0, 80), request: String(p.alt.request).slice(0, 400) } : null, ask: !edits.length && p.ask?.question && p.ask.options?.length >= 2 ? { question: String(p.ask.question).slice(0, 200), options: p.ask.options.slice(0, 3).map((o) => String(o).slice(0, 80)) } : null, edits, model: usedModel, usage: { input: usage.input || 0, output: usage.output || 0, cacheRead: usage.cacheRead || 0, cacheWrite: usage.cacheWrite || 0 } };
 }
 
