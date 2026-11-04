@@ -66,27 +66,25 @@
   }
 
   /* ---------- Hero: real screenshots of Tovi, starting in the AI conversation ---------- */
-  // Ask Tovi → its edit lands → Diagnose from the toolbar → notes pinned → the notes tool → Tovi applies the notes
-  // → a hand edit in the panel → Hand off. Every frame is the real editor; the cursor moves between real controls.
+  // Ask Tovi (its rim shimmers while it works) → the edit lands → Diagnose → notes pinned, a heading selected
+  // → a card selected → a note added → a hand edit in the panel → Hand off. Every frame is the real editor.
   {
-    const root = $('hero'), cur = $('hcur'), fr = [...root.querySelectorAll('.fr')];
-    const P = { send: [259, 864], away: [1150, 560], diag: [763, 851], annot: [721, 851], apply: [248, 746], radius: [1372, 408], hoff: [1360, 21], canvas: [900, 470] };
+    const root = $('hero'), cur = $('hcur'), rim = $('hrim'), fr = [...root.querySelectorAll('.fr')];
+    const P = { send: [259, 864], away: [1150, 560], diag: [763, 851], head: [520, 112], card: [430, 290], annot: [721, 851], note: [640, 230], radius: [1372, 408], hoff: [1360, 21] };
     const go = (k) => { cur.style.left = (P[k][0] / 1440) * 100 + '%'; cur.style.top = (P[k][1] / 900) * 100 + '%'; };
     const show = (i) => fr.forEach((f, j) => f.classList.toggle('on', j === i));
     const click = async (A) => { cur.classList.remove('click'); void cur.offsetWidth; cur.classList.add('click'); await A.wait(240); };
     scene(root, async (A) => {
-      show(0); go('send'); await A.wait(1400); await click(A);
-      show(1); go('away'); await A.wait(2200);
-      show(2); await A.wait(2600);
-      go('diag'); await A.wait(900); await click(A); show(3); await A.wait(2000);
-      show(4); await A.wait(2600);
-      go('annot'); await A.wait(900); await click(A); go('canvas'); await A.wait(500); show(5); await A.wait(1300);
-      show(6); await A.wait(1500);
-      go('apply'); await A.wait(900); await click(A); show(7); await A.wait(1800);
-      show(8); await A.wait(2400);
-      go('radius'); await A.wait(1000); await click(A); show(9); await A.wait(1300);
-      show(10); await A.wait(2000);
-      go('hoff'); await A.wait(1000); await click(A); show(11); await A.wait(3000);
+      show(0); rim.classList.remove('on'); go('send'); await A.wait(1300); await click(A);
+      show(1); rim.classList.add('on'); go('away'); await A.wait(2600);
+      show(2); rim.classList.remove('on'); await A.wait(2400);
+      go('diag'); await A.wait(900); await click(A); rim.classList.add('on'); await A.wait(1600); rim.classList.remove('on');
+      go('head'); await A.wait(500); show(3); await A.wait(2600);
+      go('card'); await A.wait(900); await click(A); show(4); await A.wait(1500);
+      go('annot'); await A.wait(900); await click(A); go('note'); await A.wait(800); await click(A); show(5); await A.wait(2200);
+      go('radius'); await A.wait(1000); await click(A); show(6); await A.wait(1300);
+      show(7); await A.wait(2000);
+      go('hoff'); await A.wait(1000); await click(A); show(8); await A.wait(3000);
       go('send'); await A.wait(600);
     }, () => { show(2); cur.style.display = 'none'; });
   }
