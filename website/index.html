@@ -75,7 +75,9 @@ h1 em{font-style:normal;color:var(--pink)}
 .lede b{color:var(--ink);font-weight:500}
 .heroActs{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .fine{margin:16px 0 0;font-size:13px;color:var(--ink3)}
-.stageWrap{position:relative;margin:80px auto 0;max-width:1360px;padding:0 32px;perspective:480px}
+/* Wide like Wonder's hero: far wider than the text column, about 5% margin each side. */
+.stageWrap{position:relative;margin:80px auto 0;width:min(calc(100vw - 96px),max(90vw,1504px));perspective:480px}
+@media (max-width:720px){.stageWrap{width:calc(100vw - 24px);margin-top:48px}}
 .hand{position:absolute;z-index:3;font:500 24px/1 var(--hand);color:var(--pink);pointer-events:none;white-space:nowrap}
 .hand svg{position:absolute;overflow:visible}
 .hand path{fill:none;stroke:var(--pink);stroke-width:1.6;stroke-linecap:round}
@@ -778,7 +780,7 @@ footer .sp{flex:1}
 }
 
 @media (max-width:720px){
-  .wrap,.stageWrap{padding:0 16px}
+  .wrap{padding:0 16px}
   .nav nav{display:none}
   .ruler{display:none}.nav{top:0}
   .hero{padding-top:56px}
