@@ -1629,3 +1629,42 @@ aside.side.r{border-left-color:var(--chromeLine)}
 :root[data-theme="light"] #panel .inp,:root[data-theme="light"] .scW,:root[data-theme="light"] #panel .m9,:root[data-theme="light"] #panel .inp.sized{background:#FFFFFF;box-shadow:var(--lift)}
 :root[data-theme="light"] #panel .inp:hover,:root[data-theme="light"] .scW:hover{box-shadow:var(--liftHover)}
 @media (prefers-color-scheme: light){:root[data-theme="system"]{--lift:0 0 0 .5px rgba(0,0,0,.07),0 1px 1px rgba(0,0,0,.035),0 1px 2px -1px rgba(0,0,0,.06);--liftHover:0 0 0 .5px rgba(0,0,0,.1),0 1px 1px rgba(0,0,0,.04),0 1px 2px -1px rgba(0,0,0,.07);--onFill:#FFFFFF;--onEdge:var(--lift)}:root[data-theme="system"] #panel .inp,:root[data-theme="system"] .scW,:root[data-theme="system"] #panel .m9,:root[data-theme="system"] #panel .inp.sized{background:#FFFFFF;box-shadow:var(--lift)}:root[data-theme="system"] #panel .inp:hover,:root[data-theme="system"] .scW:hover{box-shadow:var(--liftHover)}}
+/* Colours (nothing selected): compact Figma-style rows in three groups; one round swatch per colour, split
+   left/right for light and dark. */
+#panel .palette{gap:10px}
+#panel .palette .tgrp{display:flex;flex-direction:column}
+#panel .palette .tgH{font-size:11px;line-height:20px;color:var(--ink3)}
+#panel .palette .tok{justify-content:flex-start;gap:8px;min-height:24px}
+#panel .palette .tn{font-size:12px}
+#panel .palette .sw{position:relative;flex:0 0 auto;width:16px;height:16px;border-radius:50%;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(var(--hi),.14)}
+#panel .palette .sw .swatch{position:absolute;top:0;height:100%;width:50%;border-radius:0;box-shadow:none}
+#panel .palette .sw .swatch.l{left:0}
+#panel .palette .sw .swatch.r{right:0}
+#panel .palette .sw .swatch.one{left:0;width:100%}
+#panel .palette .sw::after{content:'';position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(var(--hi),.14);pointer-events:none}
+#panel .palette .sw .swatch:hover{filter:brightness(1.08)}
+#panel .palette .sw:has(.swatch.on){box-shadow:0 0 0 2px var(--chrome),0 0 0 3.5px var(--sel)}
+#panel .selHint .linkBtn{margin-top:6px}
+/* Image rows (a picture's Image section, a box's image fill): shaped like a fill row, thumbnail first. */
+#panel .inp.imgF{padding-left:5px}
+#panel .cchip.img{background-size:cover;background-position:center;background-color:rgba(var(--hi),.08);cursor:pointer}
+#panel .imgFName{flex:1;min-width:0;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#panel .imgF .u{flex:0 0 auto}
+/* The image panel: preview, Fill / Fit, where the image comes from, alt text. */
+.ipop{display:flex;flex-direction:column;gap:10px;width:240px}
+.ipPrev{aspect-ratio:4/3;border-radius:8px;overflow:hidden;display:grid;place-items:center;background:repeating-conic-gradient(rgba(var(--hi),.06) 0 25%,transparent 0 50%) 0 0/12px 12px;box-shadow:inset 0 0 0 1px rgba(var(--hi),.08)}
+.ipPrev img{width:100%;height:100%;display:block}
+.ipPrev .note{padding:0 16px;text-align:center}
+.ipFit{display:flex}
+.ipFit button{flex:1}
+.ipList{display:flex;flex-direction:column;gap:1px;margin:0 -4px}
+.ipSrc{display:flex;align-items:center;gap:10px;min-height:30px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:var(--ink);font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.ipSrc:hover{background:rgba(var(--hi),.06)}
+.ipSrc svg{flex:0 0 auto;color:var(--ink3)}
+.ipSrc span{display:flex;flex-direction:column}
+.ipSrc small{color:var(--ink3);font-size:11px}
+.ipAltL{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--ink2);margin-top:2px}
+.ipAltL .note{font-size:11px}
+.ipop .inp.area{height:auto;min-height:24px;padding:5px 8px}
+.ipop .inp.area textarea{line-height:16px}
+.ipLinkF .inp{height:28px;padding:0 8px}

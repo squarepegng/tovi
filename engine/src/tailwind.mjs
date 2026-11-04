@@ -143,6 +143,10 @@ export function matcher(prop, th) {
     case 'case': return (c) => /^(uppercase|lowercase|capitalize|normal-case)$/.test(c);
     case 'decor': return (c) => /^(underline|overline|line-through|no-underline)$/.test(c);
     case 'cols': return (c) => /^grid-cols-/.test(c);
+    // An image fill (a box with a background photo): the image, how it fills the box, and where it's anchored.
+    case 'bgImg': return (c) => /^bg-\[url\(/.test(c) || c === 'bg-none';
+    case 'bgSize': return (c) => /^bg-(cover|contain|auto)$/.test(c);
+    case 'bgPos': return (c) => /^bg-(center|top|bottom|left|right|left-top|left-bottom|right-top|right-bottom)$/.test(c);
     default: throw new Error(`Unknown property: ${prop}`);
   }
 }
@@ -212,6 +216,14 @@ export function classFor(prop, v, th) {
       return out.join(' ');
     }
     case 'clipText': return 'bg-clip-text text-transparent';
+    // bg-[url('/images/cabin.jpg')]: characters that would break the class are percent-encoded.
+    case 'bgImg': {
+      const u = String(v).trim();
+      if (!/^(https?:\/\/|\/|\.\/)[^\s]*$/.test(u.replace(/ /g, '%20'))) throw new Error('That image address isn’t usable.');
+      return `bg-[url('${u.replace(/ /g, '%20').replace(/'/g, '%27').replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/\]/g, '%5D').replace(/\[/g, '%5B')}')]`;
+    }
+    case 'bgSize': if (!['cover', 'contain', 'auto'].includes(v)) throw new Error('Unknown image size.'); return `bg-${v}`;
+    case 'bgPos': if (!/^(center|top|bottom|left|right)$/.test(v)) throw new Error('Unknown image position.'); return `bg-${v}`;
     case 'hide': return 'hidden';
     case 'clip': return 'overflow-hidden';
     case 'case': return { upper: 'uppercase', lower: 'lowercase', title: 'capitalize' }[v] || 'normal-case';
@@ -245,7 +257,7 @@ export function applyOps(list, ops, th) {
     if (prop === 'color') out = out.filter((c) => !(base0(c) && c === 'text-transparent' && removed.push(c)));
     if ((prop === 'gradient' || prop === 'clipText') && (value === 'none' || value === 'off' || value === false)) value = null;
     // Switches: "off" (or "none") takes the class away instead of writing an opposite one.
-    if (['hide', 'clip', 'case', 'decor'].includes(prop) && (value === 'off' || value === 'none' || value === false)) value = null;
+    if (['hide', 'clip', 'case', 'decor', 'bgImg', 'bgSize', 'bgPos'].includes(prop) && (value === 'off' || value === 'none' || value === false)) value = null;
     const m = matcher(prop, th);
     const base = (c) => !c.includes(':');
     // p-5 sets both axes: changing one axis splits it so the other is kept.
@@ -329,6 +341,8 @@ export function valueOfClass(prop, cls, th) {
   if (prop === 'shadow') return c === 'shadow' ? 'default' : c.replace(/^shadow-/, '');
   if (prop === 'align') return c.replace(/^text-/, '');
   if (prop === 'fit') return c.replace(/^object-/, '');
+  if (prop === 'bgImg') { const m = c.match(/url\('?([^')]*)'?\)/); return m ? decodeURIComponent(m[1]).split('/').pop() : 'none'; }
+  if (prop === 'bgSize' || prop === 'bgPos') return c.replace(/^bg-/, '');
   if (prop === 'hide') return 'hidden';
   if (prop === 'clip') return c === 'overflow-hidden' || c === 'overflow-clip' ? 'clipped' : c.replace(/^overflow-/, '');
   if (prop === 'case') return { uppercase: 'UPPERCASE', lowercase: 'lowercase', capitalize: 'Title Case', 'normal-case': 'as typed' }[c] || c;

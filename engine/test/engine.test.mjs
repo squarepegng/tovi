@@ -471,6 +471,19 @@ test('hide, clip, text case and decoration switch their class on and off', () =>
   assert.equal(on('text-sm line-through', { prop: 'decor', value: 'none' }), 'text-sm');
 });
 
+test('image fills: a background photo, how it fills the box, and removing it', () => {
+  const on = (cls, ops) => applyOps(cls.split(' '), ops, th).classes.join(' ');
+  const set = [{ prop: 'bgImg', value: '/images/cabin night.jpg' }, { prop: 'bgSize', value: 'cover' }, { prop: 'bgPos', value: 'center' }];
+  assert.equal(on('rounded-xl bg-surface p-6', set), "rounded-xl bg-surface p-6 bg-[url('/images/cabin%20night.jpg')] bg-cover bg-center");
+  // Replacing the photo swaps only the image class; the colour fill underneath stays.
+  assert.equal(on("bg-surface bg-[url('/a.jpg')] bg-cover", [{ prop: 'bgImg', value: '/b.png' }]), "bg-surface bg-[url('/b.png')] bg-cover");
+  assert.equal(on("bg-[url('/a.jpg')] bg-cover bg-center", [{ prop: 'bgSize', value: 'contain' }]), "bg-[url('/a.jpg')] bg-contain bg-center");
+  assert.equal(on("p-4 bg-[url('/a.jpg')] bg-cover bg-center", [{ prop: 'bgImg', value: 'none' }, { prop: 'bgSize', value: 'none' }, { prop: 'bgPos', value: 'none' }]), 'p-4');
+  // A link with characters that would break the class is encoded, and a script link is refused.
+  assert.equal(on('p-4', [{ prop: 'bgImg', value: "https://x.com/a(1)'.jpg" }]), "p-4 bg-[url('https://x.com/a%281%29%27.jpg')]");
+  assert.throws(() => on('p-4', [{ prop: 'bgImg', value: 'javascript:alert(1)' }]));
+});
+
 test('grid columns change on the screen size being edited only', () => {
   // From tablet up: the phone layout (one column) stays as it is.
   const out = rsp('grid gap-14 md:grid-cols-2', [{ prop: 'cols', value: 3 }], { mode: 'only', start: 'md', end: null });

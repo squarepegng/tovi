@@ -77,6 +77,9 @@
     case: { css: (v) => ({ 'text-transform': { upper: 'uppercase', lower: 'lowercase', title: 'capitalize' }[v] || 'none' }) },
     decor: { css: (v) => ({ 'text-decoration-line': { underline: 'underline', strike: 'line-through' }[v] || 'none' }) },
     cols: { min: 1, max: 12, css: (v) => ({ 'grid-template-columns': `repeat(${v}, minmax(0, 1fr))` }) },
+    bgImg: { css: (v) => ({ 'background-image': v && v !== 'none' ? `url("${String(v).replace(/"/g, '%22')}")` : 'none' }) },
+    bgSize: { css: (v) => ({ 'background-size': v && v !== 'none' ? v : '' }) },
+    bgPos: { css: (v) => ({ 'background-position': v && v !== 'none' ? v : '' }) },
   };
   // The app's scale for a property, as sorted numbers: font sizes, spacing, radius…
   const SCALE_OF = { fontSize: 'fontSize', lineHeight: 'lineHeight', radius: 'radius', rTL: 'radius', rTR: 'radius', rBR: 'radius', rBL: 'radius', padX: 'spacing', padY: 'spacing', mX: 'spacing', mY: 'spacing', gap: 'spacing', w: 'spacing', h: 'spacing', borderW: 'borderWidth', opacity: 'opacity' };
@@ -263,6 +266,26 @@
       setTimeout(() => $('fontQ')?.focus(), 0);
       return;
     }
+    if (k === 'img' || k === 'bgimg') {
+      // The image panel, shared by pictures and image fills: preview, Fill / Fit, where the image comes from, alt text.
+      const el = S.sel.el, pic = k === 'img', src = pic ? el.currentSrc || el.getAttribute('src') || '' : bgImgOf(el);
+      const fit = pic ? cs(el).objectFit : (cs(el).backgroundSize === 'contain' ? 'contain' : 'cover');
+      const types = pic ? '<span class="fpT">Image</span>' : `<div class="fpTypes"><button class="fpType" data-act="fpType" data-v="solid" title="Solid" aria-label="Solid"><i class="tSolid"></i></button><button class="fpType" data-act="fpType" data-v="gradient" title="Linear gradient" aria-label="Linear gradient"><i class="tGrad"></i></button><button class="fpType on" data-act="fpType" data-v="image" title="Image" aria-label="Image">${ico('image', 14)}</button></div>`;
+      const src1 = (act, v, icon, label, sub) => `<button class="ipSrc" data-act="${act}"${v ? ` data-v="${v}"` : ''}>${ico(icon, 14)}<span>${label}${sub ? `<small>${sub}</small>` : ''}</span></button>`;
+      f.innerHTML = `<div class="fpH">${types}${close}</div><div class="cpop ipop">
+        <div class="ipPrev">${src ? `<img src="${esc(src)}" alt="" style="object-fit:${fit === 'contain' ? 'contain' : 'cover'}">` : `<span class="note">No image yet. Pick one below.</span>`}</div>
+        ${src ? `<div class="seg ipFit"><button data-act="ipFit" data-v="cover" class="${fit === 'contain' ? '' : 'on'}" title="Fill the box, cropping the edges">Fill</button><button data-act="ipFit" data-v="contain" class="${fit === 'contain' ? 'on' : ''}" title="Show the whole image inside the box">Fit</button></div>` : ''}
+        <div class="ipList">${src1('ipFind', 'photo', 'search', 'Find a photo')}${src1('ipFind', 'illustration', 'pen', 'Draw one', 'An illustration made for this spot')}${src1('ipUpload', '', 'upload', 'Upload from this Mac…')}${src1('ipLink', '', 'link', 'Use a link…')}</div>
+        ${S.ipLink ? `<form class="ipLinkF"><label class="inp"><input id="ipLinkIn" placeholder="https://…" spellcheck="false" aria-label="Image link"></label></form>` : ''}
+        ${pic ? `<label class="ipAltL">Alt text<span class="note">What a screen reader says</span></label><label class="inp area"><textarea data-alt="1" rows="2" placeholder="Describe the image" aria-label="Alt text">${esc(el.getAttribute('alt') || '')}</textarea></label>` : ''}
+      </div>`;
+      f.hidden = false;
+      const pr = $('panel').getBoundingClientRect(), h2 = f.offsetHeight;
+      f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
+      f.style.top = Math.max(56, Math.min(innerHeight - h2 - 8, (S.fpY ?? 120) - 14)) + 'px';
+      if ($('fpop2')) $('fpop2').hidden = true;
+      return;
+    }
     if (k === 'shadow') {
       const o = shadowNow();
       head = `<label class="inp fpSel"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label>`;
@@ -271,7 +294,7 @@
       cpInit();
       head = tabsHTML2();
       const fill = k === 'bg' || k === 'grad';
-      const types = fill ? `<div class="fpTypes"><button class="fpType${k === 'bg' ? ' on' : ''}" data-act="fpType" data-v="solid" title="Solid" aria-label="Solid"><i class="tSolid"></i></button><button class="fpType${k === 'grad' ? ' on' : ''}" data-act="fpType" data-v="gradient" title="Linear gradient" aria-label="Linear gradient"><i class="tGrad"></i></button></div>` : `<div class="fpName">${NAMES[k]}</div>`;
+      const types = fill ? `<div class="fpTypes"><button class="fpType${k === 'bg' ? ' on' : ''}" data-act="fpType" data-v="solid" title="Solid" aria-label="Solid"><i class="tSolid"></i></button><button class="fpType${k === 'grad' ? ' on' : ''}" data-act="fpType" data-v="gradient" title="Linear gradient" aria-label="Linear gradient"><i class="tGrad"></i></button>${S.sel.el.tagName.toLowerCase() !== 'img' ? `<button class="fpType" data-act="fpType" data-v="image" title="Image" aria-label="Image">${ico('image', 14)}</button>` : ''}</div>` : `<div class="fpName">${NAMES[k]}</div>`;
       if (k === 'grad') { const g = gradOf() || { dir: 'r' }; body = types + gradHTML(g); }
       else body = types + pickerHTML(k, tokenOf(k));
     }
@@ -1301,6 +1324,13 @@
   const toCssRgb = (css) => { const doc = D || document, pr = doc.createElement('span'); pr.style.color = css; doc.body.appendChild(pr); const v = getComputedStyle(pr).color; pr.remove(); return v; };
   const stopSel = (key, cur, allowNone) => `<label class="inp"><i class="sw1" style="background:${esc(tokenSwatch(cur))}"></i><select data-gstop="${key}" aria-label="Gradient ${key}">${allowNone ? `<option value=""${cur ? '' : ' selected'}>No middle color</option>` : ''}${tokens().filter(([n]) => n !== 'transparent').map(([n]) => `<option${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
   const gradCss = (g) => `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${stopsOf(g).filter((st) => st.col).map((st) => `${tokenSwatch(st.col)} ${st.pos}%`).join(', ')})`;
+  // A box's background photo (Figma's image fill): its own row in Fill, opening the image panel.
+  const bgImgOf = (el) => { const m = el && cs(el).backgroundImage.match(/url\(["']?([^"')]+)["']?\)/); return m ? m[1] : ''; };
+  const fileOf = (src) => decodeURIComponent((String(src).split('?')[0].split('/').pop() || '')).slice(0, 60);
+  function imgFillRow(el) {
+    const src = bgImgOf(el);
+    return `<div class="cr"><label class="inp imgF" title="Image fill: ${esc(fileOf(src))}"><button class="cchip img" data-act="cpick" data-v="bgimg" style="background-image:url('${esc(src)}')" aria-label="Edit image fill"></button><button class="imgFName" data-act="cpick" data-v="bgimg">${esc(fileOf(src) || 'Image')}</button></label><button class="ib" data-act="rmBgImg" title="Remove image fill" aria-label="Remove image fill">${ico('minus')}</button></div>`;
+  }
   function fillBody(g, el) {
     if (!g) return colorRow('bg', 'Fill', 'rmFill');
     return `<div class="cr"><label class="inp" title="Fill"><button class="cchip" data-act="cpick" data-v="grad" style="background:${esc(gradCss(g))}" aria-label="Edit gradient"></button><span class="gName">Linear gradient</span></label></div>
@@ -1317,6 +1347,19 @@
     if (e.target.dataset?.fptype == null || !S.sel) return;
     S.cpick = e.target.value === 'gradient' ? 'grad' : 'bg'; S.cp = null; S.gstop = 'from';
     setFillType(e.target.value);
+  });
+  function setBgImg(src) {
+    if (!src) return;
+    const el = S.sel?.el, size = el && cs(el).backgroundSize === 'contain' ? 'contain' : 'cover';
+    commit({ ops: [{ prop: 'bgImg', value: src }, { prop: 'bgSize', value: size }, { prop: 'bgPos', value: 'center' }] });
+  }
+  document.addEventListener('submit', (e) => {
+    if (!e.target.matches?.('.ipLinkF')) return;
+    e.preventDefault();
+    const u = $('ipLinkIn')?.value.trim() || '';
+    if (!/^https?:\/\//.test(u)) { toast('That isn’t a web link. It should start with https://', '', true); return; }
+    S.ipLink = false;
+    if (S.cpick === 'bgimg') setBgImg(u); else structure({ type: 'image', src: u }, { keepSel: true });
   });
   function setFillType(v) {
     const g = gradOf();
@@ -1408,9 +1451,18 @@
   function paletteHTML() {
     if (S.tokens == null) { loadTokens(); return ''; }
     if (!S.tokens.length) return '';
-    const themes = [...new Set(S.tokens.flatMap((t) => t.values.map((v) => v.theme)))].slice(0, 3);
-    return `<div class="sec palette"><div class="secH"><span>Colours</span><span class="note">${themes.map((x) => esc(x[0].toUpperCase() + x.slice(1))).join(' · ')}</span></div><span class="note">Your design system. Changing one updates every screen that uses it.</span>
-      ${S.tokens.map((t) => `<div class="tok"><span class="tn">${esc(t.name)}</span><span class="sw">${themes.map((th) => { const v = t.values.find((x) => x.theme === th) || (th !== 'all' && t.values.find((x) => x.theme === 'all')); return v ? `<button type="button" class="swatch${S.tp?.name === t.name && S.tp?.theme === v.theme ? ' on' : ''}" style="background:${esc(v.hex)}" title="${esc(t.name)} · ${esc(th)} · ${esc(v.hex)}" data-token="${esc(t.name)}" data-theme="${esc(v.theme)}" data-hex="${esc(v.hex.slice(0, 7))}" aria-label="Edit ${esc(t.name)} ${esc(th)}"></button>` : '<span class="swatch none"></span>'; }).join('')}</span></div>`).join('')}</div>`;
+    const themes = [...new Set(S.tokens.flatMap((t) => t.values.map((v) => v.theme)))].slice(0, 2);
+    // Compact rows like Figma's colour styles, grouped the way designers think. One swatch per colour: with light
+    // and dark values it splits in half (left light, right dark), and each half opens its own value.
+    const group = (n) => /primary|secondary|accent|brand|success|warning|danger|destructive|error|info/i.test(n) ? 'Brand'
+      : /foreground|(^|-)fg$|content|text|ink|muted|heading|body/i.test(n) ? 'Text'
+      : /bg|background|surface|card|panel|popover|border|ring|input|line|divider|canvas/i.test(n) ? 'Backgrounds' : 'Other';
+    const half = (t, th, cls) => { const v = t.values.find((x) => x.theme === th) || (th !== 'all' && t.values.find((x) => x.theme === 'all')); return v ? `<button type="button" class="swatch ${cls}${S.tp?.name === t.name && S.tp?.theme === v.theme ? ' on' : ''}" style="background:${esc(v.hex)}" title="${esc(t.name)}${themes.length > 1 ? ` · ${esc(th)}` : ''} · ${esc(v.hex)}" data-token="${esc(t.name)}" data-theme="${esc(v.theme)}" data-hex="${esc(v.hex.slice(0, 7))}" aria-label="Edit ${esc(t.name)}${themes.length > 1 ? ` ${esc(th)}` : ''}"></button>` : `<span class="swatch ${cls} none"></span>`; };
+    const row = (t) => `<div class="tok"><span class="sw${themes.length > 1 ? ' split' : ''}">${themes.length > 1 ? half(t, themes[0], 'l') + half(t, themes[1], 'r') : half(t, themes[0], 'one')}</span><span class="tn">${esc(t.name)}</span></div>`;
+    const groups = ['Backgrounds', 'Text', 'Brand', 'Other'].map((g) => [g, S.tokens.filter((t) => group(t.name) === g)]).filter(([, l]) => l.length);
+    return `<div class="sec palette"><div class="secH"><span>Colours</span></div>
+      ${groups.map(([g, l]) => `<div class="tgrp"><span class="tgH">${g}</span>${l.map(row).join('')}</div>`).join('')}
+      <span class="note">Your design system: change one and every screen that uses it follows.${themes.length > 1 ? ` Left half ${esc(themes[0])}, right half ${esc(themes[1])}.` : ''}</span></div>`;
   }
   // Design-system colours open Tovi's own picker beside the swatch (never the browser's): drag the square or the
   // hue, or type a hex. Each release writes the token once, and every screen that uses it follows.
@@ -1565,15 +1617,12 @@
     if (S.side === 'history') { p.innerHTML = historyHTML(); return; }
     const s = S.sel;
     if (!s) {
-      // Nothing selected: say how to start, then what applies to the whole page (like Figma's page panel).
-      const keys = [['Select the parent', '⇧ ↵'], ['Select several', '⇧ Click'], ['Click through to the app', '⌘ Click'], ['Measure spacing', 'Hold ⌥'], ['Add an element', 'I'], ['Mark something for Tovi', 'A'], ['Ask Tovi', '⌘K']];
+      // Nothing selected: say how to start, then the app's design system. Page, screen size and shortcuts already
+      // live in the left header, the canvas label and the ? button, so they aren't repeated here.
+      const drafts = S.versions.draft.length;
       p.innerHTML = tabsHTML() + `<div class="scroll">
-        ${S.pageSel ? '' : `<div class="selHint"><span class="shIc">${ico('editFrame', 16)}</span><b>Select something to edit it</b><span>Click any element in your app, or pick it in Layers. Double-click text to retype it.</span></div>`}
-        <div class="sec"><div class="secH"><span class="nm">${ico('desktop')}Page</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
-          <div class="pgRow"><span>Screen</span><span>${DEV_LABEL[S.device]} · ${Math.round(W?.innerWidth || frame.clientWidth || 0)} px</span></div>
-          <div class="pgRow"><span>Changes</span>${S.versions.draft.length ? `<button class="linkBtn" data-act="history">${S.versions.draft.length} not saved yet</button>` : '<span>All saved</span>'}</div></div>
+        ${S.pageSel ? '' : `<div class="selHint"><span class="shIc">${ico('editFrame', 16)}</span><b>Select something to edit it</b><span>Click any element in your app, or pick it in Layers. Double-click text to retype it.</span>${drafts ? `<button class="linkBtn" data-act="history">${drafts} change${drafts === 1 ? '' : 's'} not saved as a version yet</button>` : ''}</div>`}
         ${paletteHTML()}
-        <div class="sec"><div class="secH"><span>Shortcuts</span><button class="linkBtn" data-act="keys">All</button></div><div class="keyList">${keys.map(([a, k]) => `<div><span>${a}</span><span class="kbd">${k}</span></div>`).join('')}</div></div>
       </div>`;
       return;
     }
@@ -1635,7 +1684,9 @@
         ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}${clipRow(el)}` : `<div class="r2">${opaF}<span></span></div>`, cornersBtn);
       // On text, "Fill" sits right under "Text color" and means the box behind it: call it Background there.
       const fillName = isTextOnly(el) ? 'Background' : 'Fill';
-      h += sec(fillName, hasFill ? fillBody(g, el) : '', hasFill ? hb('rmFill', 'minus', `Remove ${fillName.toLowerCase()}`) : hb('addFill', 'plus', `Add ${fillName.toLowerCase()}`));
+      const hasImgFill = !!bgImgOf(el) && el.tagName.toLowerCase() !== 'img';
+      const fillAct = hasFill ? hb('rmFill', 'minus', `Remove ${fillName.toLowerCase()}`) : hb(el.tagName.toLowerCase() === 'img' ? 'imgFillMenu' : 'addFill', 'plus', `Add ${fillName.toLowerCase()}`);
+      h += sec(fillName, (hasImgFill ? imgFillRow(el) : '') + (hasFill ? fillBody(g, el) : ''), fillAct);
       const hasStroke = val('borderW') > 0;
       h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${lf('Width', nf('borderW', 'sw', 'Stroke width'))}<span></span></div>` : '', hasStroke ? hb('rmStroke', 'minus', 'Remove stroke') : hb('addStroke', 'plus', 'Add stroke'));
       const sh = shadowOf();
@@ -2143,14 +2194,14 @@
       case 'copyLoc': navigator.clipboard?.writeText(activeLoc() || '').then(() => toast('Copied the code location', activeLoc() || '')).catch(() => {}); break;
       case 'parent': { const p = S.sel && pick(S.sel.el.parentElement); if (p) select(p); break; }
       case 'corners': S.corners = !S.corners; renderPanel(); break;
-      case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; S.fpY = a.getBoundingClientRect().top; if (v === 'grad') S.gstop = 'from'; renderPanel(); break;
+      case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; S.ipLink = false; S.fpY = a.getBoundingClientRect().top; if (v === 'grad') S.gstop = 'from'; renderPanel(); break;
       case 'fpClose': closeFpop(); break;
       case 'diagStop': S.diagStop = true; if (S.card?.progress) { S.card.progress = 'Stopping after this page…'; renderChat(); } break;
       case 'goPage': if (v !== S.path) goTo(v); break;
       case 'fontPick': pickFont(a); break;
       case 'gStop': if (e.target.closest('input')) { if (S.gstop !== v) { S.gstop = v; S.cp = null; } break; } S.gstop = v; S.cp = null; S.gpick = true; renderFpop(); break;
       case 'gPickClose': S.gpick = false; renderFpop(); break;
-      case 'fpType': { const want = v === 'gradient' ? 'grad' : 'bg'; if (S.cpick !== want) { S.cpick = want; S.cp = null; S.gstop = 'from'; setFillType(v); } break; }
+      case 'fpType': { if (v === 'image') { if (S.cpick !== 'bgimg') { S.cpick = 'bgimg'; S.ipLink = false; renderPanel(); } break; } const want = v === 'gradient' ? 'grad' : 'bg'; if (S.cpick !== want) { S.cpick = want; S.cp = null; S.gstop = 'from'; setFillType(v); } break; }
       case 'gFlip': { const g = gradOf(); if (!g) break; const st = stopsOf(g); const r = st.map((x) => ({ col: x.col, pos: 100 - x.pos })).reverse(); ['from', g.via ? 'via' : null, 'to'].filter(Boolean).forEach((kk, n) => { g[kk] = r[n].col; g[kk + 'Pos'] = r[n].pos; }); S.cp = null; commitGrad(g); break; }
       case 'gRot': { const g = gradOf(); if (!g) break; g.dir = ROT[(ROT.indexOf(g.dir) + 1) % ROT.length]; commitGrad(g); break; }
       case 'gAdd': { const g = gradOf(); if (!g || g.via) break; g.via = g.from; g.viaPos = Math.round((posOf(g, 'from') + posOf(g, 'to')) / 2); S.gstop = 'via'; S.cp = null; commitGrad(g); break; }
@@ -2160,6 +2211,12 @@
           // Auto layout off: gap and alignment do nothing without it, so they go too.
           commit({ ops: [{ prop: 'layout', value: 'none' }, { prop: 'gap', value: null }, { prop: 'justify', value: null }, { prop: 'alignItems', value: null }] });
         } else { if (a.dataset.act === 'token') S.cp = null; commit({ ops: [{ prop: a.dataset.p, value: v }] }); } break;
+      case 'rmBgImg': if (S.cpick === 'bgimg') S.cpick = null; commit({ ops: [{ prop: 'bgImg', value: 'none' }, { prop: 'bgSize', value: 'none' }, { prop: 'bgPos', value: 'none' }] }); break;
+      case 'imgFillMenu': { const r = a.getBoundingClientRect(); openMenu([{ label: 'Colour behind the image', icon: 'plus', run: () => commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }) }, { label: 'Change image…', icon: 'image', run: () => { S.cpick = 'img'; S.fpY = r.top; S.ipLink = false; renderPanel(); } }], { x: r.right - 236, y: r.bottom + 6 }); break; }
+      case 'ipFit': commit({ ops: S.cpick === 'img' ? [{ prop: 'fit', value: v }] : [{ prop: 'bgSize', value: v }] }); break;
+      case 'ipFind': openImagePicker({ kind: v, onPick: S.cpick === 'bgimg' ? ({ src }) => setBgImg(src) : undefined }); break;
+      case 'ipUpload': { const bg = S.cpick === 'bgimg'; pickFile().then(upload).then((src) => { if (src) bg ? setBgImg(src) : structure({ type: 'image', src }, { keepSel: true }); }).catch(() => {}); break; }
+      case 'ipLink': S.ipLink = !S.ipLink; renderFpop(); setTimeout(() => $('ipLinkIn')?.focus(), 0); break;
       case 'addFill': commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }); break;
       case 'rmFill': S.cpick = S.cp = null; if (gradOf()) commit({ ops: [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] }); else clearStyle([{ prop: 'bg', value: null }], [{ prop: 'bg', value: 'transparent' }], (el) => !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs(el).backgroundColor)); break;
       case 'rmShadow': clearStyle([{ prop: 'shadow', value: null }], [{ prop: 'shadow', value: 'none' }], (el) => cs(el).boxShadow.split(/,(?![^(]*\))/).some((x) => !/rgba\([^)]*,\s*0\)/.test(x) && /[1-9]\d*(\.\d+)?px/.test(x))); break;
@@ -3847,14 +3904,11 @@
   }
   function imageSection(el) {
     if (!el || el.tagName.toLowerCase() !== 'img') return '';
-    const src = el.getAttribute('src') || '', alt = el.getAttribute('alt') || '';
-    const fit = cs(el).objectFit;
-    // Like Figma and Paper: one compact row (thumbnail, what it is, Replace ▾); the four ways to replace live in the menu.
-    const file = decodeURIComponent((src.split('?')[0].split('/').pop() || '')), ext = (file.split('.').pop() || '').toUpperCase().slice(0, 4);
+    // A picture is the element itself (like text is), so it has its own Image section rather than a fill. One row
+    // like a fill row: thumbnail, name, size. Clicking it opens the image panel (fit, replace, alt text).
+    const src = el.getAttribute('src') || '', alt = el.getAttribute('alt') || '', file = fileOf(src);
     const dims = el.naturalWidth ? `${el.naturalWidth} × ${el.naturalHeight}` : '';
-    return sec('Image', `<div class="imgRow"><button class="imgThumb" data-act="imgReplace" title="Replace image"><img src="${esc(el.currentSrc || src)}" alt=""></button><span class="imgMeta"><b title="${esc(alt || file)}">${esc(alt || file || 'Image')}</b><small>${[dims, /^[A-Z]{3,4}$/.test(ext) ? ext : ''].filter(Boolean).join(' · ')}</small></span><button class="repBtn" data-act="imgReplace" aria-haspopup="menu">Replace${ico('chev', 10)}</button></div>
-      <label class="inp" title="Alt text"><span class="u">Alt</span><input type="text" data-alt="1" value="${esc(alt)}" placeholder="Describe the image"></label>
-      <div class="ibs txt">${['cover', 'contain', 'fill'].map((v) => `<button class="ib${fit === v ? ' on' : ''}" data-act="set" data-p="fit" data-v="${v}" title="${v === 'cover' ? 'Fill the box, crop the edges' : v === 'contain' ? 'Fit inside the box' : 'Stretch to the box'}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div>`);
+    return sec('Image', `<div class="cr"><label class="inp imgF" title="${esc(alt || file)}"><button class="cchip img" data-act="cpick" data-v="img" style="background-image:url('${esc(el.currentSrc || src)}')" aria-label="Edit image"></button><button class="imgFName" data-act="cpick" data-v="img">${esc(file || 'Image')}</button>${dims ? `<span class="u">${dims}</span>` : ''}</label></div>`);
   }
   /* image picker: real photos (Unsplash) or illustrations Claude draws, chosen from a few options */
   S.pick = null;
