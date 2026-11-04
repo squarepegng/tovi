@@ -1,16 +1,24 @@
 // The Vite plugin: tags elements while the app runs in dev, and exposes a
 // small local API the Tovi editor calls to read and change source files.
 import path from 'node:path';
+import { createRequire } from 'node:module';
+import { touchRecent } from './recent.mjs';
+import { PROJECTS_DIR } from './project.mjs';
 import fs from 'node:fs';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tagSource } from './ast.mjs';
 import { loadTheme } from './tailwind.mjs';
 import { createEditor, KerfError } from './edit.mjs';
-import { propose } from './ai.mjs';
+import { propose, diagnose, aiConfig, PROVIDERS, MODELS, listModels } from './ai.mjs';
 import { createSession } from './session.mjs';
+import { readPerson, savePerson } from './person.mjs';
+import { readPrefs, savePrefs } from './prefs.mjs';
 import { createLibrary } from './library.mjs';
 import { listTokens, tokenEdit } from './tokens.mjs';
-import { searchPhotos, photoUsed, illustrate } from './images.mjs';
+import { googleFontFiles } from './fonts.mjs';
+import { realShots, chromePath } from './shots.mjs';
+import { searchPhotos, photoUsed, illustrate, envKey, saveEnv } from './images.mjs';
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -26,6 +34,21 @@ function readBody(req) {
 const EDITOR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../editor');
 const ASSETS = { '/': ['index.html', 'text/html; charset=utf-8'], '/index.html': ['index.html', 'text/html; charset=utf-8'], '/editor.js': ['editor.js', 'text/javascript'], '/editor.css': ['editor.css', 'text/css'] };
 
+// Tailwind loads tailwind.config with a plain require first. On newer Node versions that can load an ES-module
+// config, which can never be reloaded, so edits Tovi makes to it (fonts, colour tokens) would only show after a
+// restart. Sending Tailwind to its fallback loader (jiti) for config files keeps them reloadable: Tailwind clears
+// that cache itself when the file changes.
+(function liveTailwindConfig() {
+  const Module = createRequire(import.meta.url)('node:module');
+  if (Module._kerfLive) return;
+  Module._kerfLive = true;
+  const load = Module._load;
+  Module._load = function (request, parent, ...rest) {
+    if (/[\\/]tailwind\.config\.[cm]?[jt]s$/.test(request) && /[\\/]tailwindcss[\\/]/.test(parent?.filename || '')) throw new Error('Tovi: load tailwind.config with jiti so it can be reloaded');
+    return load.call(this, request, parent, ...rest);
+  };
+})();
+
 // Tovi for one web app: tags JSX so elements map back to source, and serves the editor and its API.
 // Used by the Vite plugin below and by the Next.js runner.
 export async function createKerf(webRoot) {
@@ -40,6 +63,14 @@ export async function createKerf(webRoot) {
   const library = createLibrary(webRoot);
   const editor = createEditor(webRoot, () => theme, library);
   const session = createSession(webRoot, editor);
+  // The designer's GitHub account (when this Mac is signed in), for their picture in the editor.
+  let ghLogin = null;
+  const readLogin = () => new Promise((ok) => execFile('gh', ['api', 'user', '--jq', '.login'], { timeout: 6000 }, (err, out) => { if (!err && /^[\w-]{1,40}$/.test(String(out).trim())) ghLogin = String(out).trim(); ok(ghLogin); }));
+  readLogin();
+  // GitHub accounts this Mac is signed in to (names only; tokens are dropped and never leave gh).
+  const ghAccounts = () => new Promise((ok) => execFile('gh', ['auth', 'status', '--json', 'hosts'], { timeout: 6000 }, (err, out) => {
+    try { ok((JSON.parse(String(out)).hosts['github.com'] || []).filter((a) => a.state === 'success' && /^[\w-]{1,40}$/.test(a.login)).map((a) => ({ login: a.login, active: !!a.active }))); } catch { ok([]); }
+  }));
   const skip = /[\\/](node_modules|\.next|dist|build|out)[\\/]/;
   return {
     tag(code, file) {
@@ -56,6 +87,8 @@ export async function createKerf(webRoot) {
       try {
         const route = req.url.split('?')[0];
         if (req.method === 'GET' && ASSETS[route]) {
+          // Opening the editor counts as opening the project (for the start page's recent list).
+          if (route === '/' || route === '/index.html') touchRecent(webRoot, `http://${req.headers.host}/__kerf/`, PROJECTS_DIR);
           res.setHeader('Content-Type', ASSETS[route][1]);
           res.setHeader('Cache-Control', 'no-store');
           return res.end(fs.readFileSync(path.join(EDITOR, ASSETS[route][0]), 'utf8'));
@@ -65,8 +98,18 @@ export async function createKerf(webRoot) {
           const g = session.repoInfo();
           return send(200, { name: g.repo || pkg.name || path.basename(webRoot), branch: g.git ? g.branch : null, repo: g.repo, gh: g.gh, files: g.files || [] });
         }
+        if (req.method === 'GET' && route === '/models') return send(200, await listModels(new URL(req.url, 'http://x').searchParams.get('provider')));
+        if (req.method === 'GET' && route === '/prefs') return send(200, readPrefs());
+        if (req.method === 'GET' && route === '/accounts') return send(200, await ghAccounts());
+        if (req.method === 'GET' && route === '/person') return send(200, { name: readPerson(webRoot), login: ghLogin, avatar: ghLogin ? `https://github.com/${ghLogin}.png?size=96` : null });
         if (req.method === 'GET' && route === '/versions') return send(200, session.list());
         if (req.method === 'GET' && route === '/chat') return send(200, session.chat());
+        // Which AI keys are saved (never the keys themselves), for the Settings window.
+        // Which AI keys are saved (never the keys themselves), the chosen AI and its model.
+        if (req.method === 'GET' && route === '/keys') {
+          const c = aiConfig();
+          return send(200, { anthropic: !!envKey('ANTHROPIC_API_KEY'), openai: !!envKey('OPENAI_API_KEY'), gemini: !!envKey('GEMINI_API_KEY'), unsplash: !!envKey('UNSPLASH_ACCESS_KEY'), provider: c.provider, model: c.model, models: MODELS, defaults: Object.fromEntries(Object.entries(PROVIDERS).map(([k, v]) => [k, { label: v.label, model: v.model }])) });
+        }
         if (req.method === 'GET' && route === '/direction') { const d = session.direction(); return send(200, d ? { ...d, refs: d.refs.map(({ data, ...r }) => r) } : null); }
         if (req.method === 'GET' && route === '/images/photos') {
           const u = new URL(req.url, 'http://x').searchParams;
@@ -84,20 +127,68 @@ export async function createKerf(webRoot) {
         if (req.method === 'GET' && route === '/changes') return send(200, editor.history.map(({ rel, loc, change, summary, at }) => ({ file: rel, loc, change, summary, at })));
         if (req.method !== 'POST') return send(404, { error: 'Not found' });
         const body = await readBody(req);
+        if (route === '/keys' && req.method === 'POST') {
+          const { provider, key } = body || {};
+          const pr = PROVIDERS[provider];
+          const k = String(key || '').trim();
+          if (!pr) return send(400, { error: 'Pick Claude, OpenAI or Gemini.' });
+          if (/[^\x21-\x7E]/.test(k)) return send(400, { error: 'That key has letters that only look right (from another alphabet). Copy it again straight from your provider’s key page.' });
+          if (!/^\S{20,}$/.test(k)) return send(400, { error: `That does not look like a ${pr.label} key: it should be one long piece of text with no spaces.` });
+          saveEnv(pr.keyName, k);
+          return send(200, { ok: true });
+        }
+        if (route === '/ai-config' && req.method === 'POST') {
+          const provider = body?.provider, model = String(body?.model || '').trim();
+          if (!PROVIDERS[provider]) return send(400, { error: 'Pick Claude, OpenAI or Gemini.' });
+          if (model && !/^[\w.:/-]{2,80}$/.test(model)) return send(400, { error: 'That model name does not look right.' });
+          saveEnv('AI_PROVIDER', provider);
+          saveEnv('AI_MODEL', model || PROVIDERS[provider].model);
+          return send(200, { ok: true });
+        }
         if (route === '/chat') { session.setChat(body); return send(200, { ok: true }); }
+        // A small picture of the app for its card on Tovi's start page (kept in .kerf/, never committed).
+        if (route === '/thumb') {
+          const d = String(body?.data || '');
+          if (!/^[A-Za-z0-9+/=]{100,4000000}$/.test(d)) return send(400, { error: 'Not an image.' });
+          fs.mkdirSync(path.join(webRoot, '.kerf'), { recursive: true });
+          fs.writeFileSync(path.join(webRoot, '.kerf', 'thumb.jpg'), Buffer.from(d, 'base64'));
+          return send(200, { ok: true });
+        }
         if (route === '/direction') { const d = session.setDirection(body); return send(200, d ? { ...d, refs: d.refs.map(({ data, ...r }) => r) } : null); }
         // Every change is saved to .kerf/ so a restart keeps undo, versions and chat.
         const s0 = send;
         const send2 = (status, b) => { if (status === 200 && route !== '/inspect' && route !== '/ai') session.save(); return s0(status, b); };
         const writes = ['/edit', '/undo', '/ai/apply', '/structure'];
         if (writes.includes(route) && session.isPeeking()) return send(409, { error: 'You’re looking at an earlier version. Close it to keep editing.' });
-        if (route === '/version') return send2(200, session.snapshot());
+        if (route === '/person') return send(200, { name: savePerson(body?.name) });
+        // Switch which GitHub account this Mac uses (gh auth switch): only to an account already signed in.
+        if (route === '/account') {
+          const login = String(body?.login || '');
+          if (!(await ghAccounts()).some((a) => a.login === login)) return send(400, { error: 'That account isn’t signed in on this Mac.' });
+          const err = await new Promise((ok) => execFile('gh', ['auth', 'switch', '-h', 'github.com', '-u', login], { timeout: 10000 }, ok));
+          if (err) return send(500, { error: 'GitHub couldn’t switch accounts.' });
+          await readLogin();
+          return send(200, { name: readPerson(webRoot), login: ghLogin, avatar: ghLogin ? `https://github.com/${ghLogin}.png?size=96` : null });
+        }
+        // Add a Google Font to the project (one undoable change across index.html and tailwind.config).
+        if (route === '/fonts') {
+          const f = await googleFontFiles(webRoot, theme, body?.family, body?.category);
+          if (f.files.size) {
+            const sum = { added: [], removed: [], changes: [], offScale: [], text: null, props: [], labels: [`Added font “${f.family}”`] };
+            editor.applyFiles(f.files, `font:${f.key}`, { font: { family: f.family, key: f.key }, source: 'hand', name: `Font “${f.family}”` }, sum);
+            theme = await loadTheme(webRoot);
+          }
+          return send2(200, { key: f.key, family: f.family, added: f.files.size > 0 });
+        }
+        if (route === '/prefs') return send(200, savePrefs(body || {}));
+        if (route === '/version') return send2(200, session.snapshot(body || {}));
+        if (route === '/rename') return send2(200, session.rename(Number(body.n), body.name));
         if (route === '/restore') return send2(200, session.restore(Number(body.n)));
         if (route === '/peek') return send2(200, session.peekBefore(Number(body.n)));
         if (route === '/unpeek') return send2(200, session.unpeek());
         if (route === '/pr') return send2(200, session.pullRequest(body));
         if (route === '/inspect') return send(200, editor.describe(body.loc, body.dom));
-        if (route === '/edit') return send2(200, editor.edit(body.loc, { ops: body.ops, text: body.text, props: body.props, cva: body.cva, bp: body.bp, dom: body.dom, scope: body.scope, target: body.target, name: body.name }));
+        if (route === '/edit') return send2(200, editor.edit(body.loc, { ops: body.ops, text: body.text, props: body.props, propText: body.propText, cva: body.cva, bp: body.bp, dom: body.dom, scope: body.scope, target: body.target, name: body.name }));
         if (route === '/undo') return send2(200, editor.undo());
         if (route === '/token') return send2(200, await setToken(body));
         if (route === '/images/photo-used') return send(200, await photoUsed(body.download));
@@ -113,6 +204,17 @@ export async function createKerf(webRoot) {
         if (route === '/upload') {
           try { return send(200, library.saveUpload(body.name, body.data)); } catch (e) { throw new KerfError(e.message); }
         }
+        // Real screenshots from a hidden Chrome: the whole page and/or chosen elements (e.g. each section).
+        if (route === '/shots') {
+          if (!chromePath()) return send(200, { available: false });
+          const r = await realShots({ origin: `http://${req.headers.host}`, path: body?.path || '/', width: body?.width, height: body?.height, theme: body?.theme, locs: Array.isArray(body?.locs) ? body.locs : [], full: !!body?.full }).catch((e) => { console.error('Tovi: screenshot failed', e.message); return null; });
+          return send(200, r ? { available: true, ...r } : { available: false });
+        }
+        // A design review of the screen (or the selection): findings pinned to elements, shown as Tovi's notes.
+        if (route === '/diagnose') {
+          const targets = (body.targets || []).slice(0, 80).map((t) => { try { const d = editor.describe(t.loc, t.dom); return { ...t, tag: d.tag, file: d.file, classes: d.classes, classKind: d.classKind, sources: d.sources, textEditable: d.text.editable }; } catch { return null; } }).filter(Boolean);
+          return send(200, await diagnose({ targets, screen: body.screen, focus: body.focus, context: body.context, scope: body.scope }, theme));
+        }
         if (route === '/ai') {
           // Add what only the source knows: real tag, classes, whether text is editable.
           const targets = (body.targets || []).slice(0, 80).map((t) => {
@@ -125,9 +227,12 @@ export async function createKerf(webRoot) {
           }).filter(Boolean);
           let tokens = [];
           try { tokens = listTokens(webRoot, theme); } catch {}
-          return send(200, await propose({ request: body.request, targets, history: body.history, images: body.images, tokens, webRoot, screen: body.screen, context: body.context, mode: body.mode, direction: session.direction() }, theme, library));
+          return send(200, await propose({ request: body.request, targets, history: body.history, images: body.images, tokens, webRoot, screen: body.screen, focus: body.focus, light: !!body.light, fast: !!body.fast, context: body.context, mode: body.mode, direction: session.direction() }, theme, library));
         }
         if (route === '/ai/apply') {
+          // Everything one apply writes (styles, structure, code, tokens) belongs to its batch: one undo.
+          const h0 = editor.history.length;
+          const tagBatch = () => { if (body.batch) for (const h of editor.history.slice(h0)) h.change = { ...(h.change || {}), batch: String(body.batch) }; };
           // Apply from the bottom of each file up, structure last per element, so positions stay valid.
           const lineOf = (e) => Number(String(e.loc).split(':').slice(-2)[0]) || 0;
           const rank = (e) => (!e.structure ? 0 : e.structure.type === 'delete' ? 2 : 1);
@@ -163,7 +268,7 @@ export async function createKerf(webRoot) {
                 if (r.shift) shifts.push(r.shift);
                 return { loc: e.loc, ok: true, ...r };
               }
-              return { loc: e.loc, ok: true, ...editor.edit(e.loc, { ops: e.ops, text: e.text || undefined, props: e.props, bp: e.bp, dom: e.dom, target: e.target, source: 'ai', name: e.name }) };
+              return { loc: e.loc, ok: true, ...editor.edit(e.loc, { ops: e.ops, text: e.text || undefined, props: e.props, bp: e.bp, dom: e.dom, target: e.target, source: body.batch ? 'hand' : 'ai', name: e.name, ...(body.batch ? { batch: String(body.batch) } : {}) }) };
             } catch (err) {
               return { loc: e.loc, ok: false, error: err.message };
             }
@@ -177,6 +282,7 @@ export async function createKerf(webRoot) {
               results.push({ loc: e.loc, ok: false, error: err.message });
             }
           }
+          tagBatch();
           return send2(200, { results, n: editor.history.length });
         }
         return send(404, { error: 'Not found' });

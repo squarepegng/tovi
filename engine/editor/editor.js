@@ -2,23 +2,45 @@
 // editor around it (top bar, layers, design panel, toolbar). The iframe is
 // same-origin, so the editor reads and outlines the app's DOM directly.
 (() => {
+  // Theme: Settings → Appearance. Dark by default; "System" follows the Mac. A local copy is applied first so the page doesn't flash.
+  let theme = 'dark';
+  const applyTheme = (t) => { theme = t === 'light' || t === 'system' ? t : 'dark'; document.documentElement.dataset.theme = theme; try { localStorage.setItem('kerf.theme', theme); } catch {} };
+  try { applyTheme(localStorage.getItem('kerf.theme')); } catch {}
+  fetch('prefs').then((r) => r.json()).then((p) => applyTheme(p.theme)).catch(() => {});
   /* ---------- api ---------- */
-  const api = (route, body) =>
-    fetch('/__kerf' + route, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined).then(async (r) => {
+  // Talk to Tovi's server. When the connection blips (the server restarting, the app reloading), requests that only
+  // read are retried a few times before giving up; saves never are, so nothing is applied twice.
+  const READS = new Set(['/accounts', '/inspect', '/theme', '/project', '/versions', '/keys', '/models', '/prefs', '/person', '/chat', '/direction', '/tokens', '/changes']);
+  const OFFLINE = 'Tovi lost touch with your app for a moment. Check that the app is still running.';
+  const api = async (route, body) => {
+    const path = route.split('?')[0], read = !body || READS.has(path) || (path === '/pr' && body?.dryRun);
+    for (let attempt = 0; ; attempt++) {
+      let r;
+      try { r = await fetch('/__kerf' + route, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined); }
+      catch (e) {
+        if (read && attempt < 5) { await new Promise((res) => setTimeout(res, [300, 700, 1500, 2500, 4000][attempt])); continue; }
+        const err = new Error(OFFLINE); err.offline = true; throw err;
+      }
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || r.statusText);
       return j;
-    });
+    }
+  };
 
   /* ---------- state ---------- */
   const S = {
-    mode: 'preview', tool: 'select', tab: 'design', side: 'design', device: 'desktop',
+    mode: 'edit', tool: 'select', through: false, space: false, tab: 'design', side: 'design', device: 'desktop',
     sel: null, hover: null, theme: null, project: null, scope: 'all',
     count: 0, corners: false, cpick: null, editing: null, changesOpen: false,
     chat: [], card: null, askOpen: false, shape: 'box', notes: [], noteDraft: null, amber: [],
-    versions: { versions: [], draft: [], peeking: null }, open: {}, multi: [], alt: false, handleDrag: null, path: '/', hintSeen: false, layersOpen: innerWidth >= 1180,
+    versions: { versions: [], draft: [], peeking: null }, open: {}, multi: [], alt: false, handleDrag: null, path: '/', hintSeen: false, layersOpen: innerWidth >= 900, left: (() => { try { return localStorage.getItem('kerf.left') || 'chat'; } catch { return 'chat'; } })(),
   };
   const $ = (id) => document.getElementById(id);
+  // What a click on the app does: Interact (or holding ⌘) passes it to the app; Select picks the element.
+  const appClicks = () => S.mode === 'preview' || S.tool === 'interact' || (S.tool === 'select' && S.through);
+  const picking = () => S.mode === 'edit' && S.tool === 'select' && !S.through;
+  // ⌘ (Ctrl on Windows) held during a click while selecting: the click goes to the app.
+  const thru = (e) => S.mode === 'edit' && S.tool === 'select' && !!(e.metaKey || e.ctrlKey);
   const frame = $('frame');
   let W = null, D = null; // the app's window and document
 
@@ -46,12 +68,50 @@
     shadow: { css: () => ({}) },
     mX: { min: -400, max: 400, css: (v) => ({ 'margin-left': v + 'px', 'margin-right': v + 'px' }) },
     mY: { min: -400, max: 400, css: (v) => ({ 'margin-top': v + 'px', 'margin-bottom': v + 'px' }) },
+    mT: { min: -400, max: 400, css: (v) => ({ 'margin-top': v + 'px' }) },
+    mB: { min: -400, max: 400, css: (v) => ({ 'margin-bottom': v + 'px' }) },
     w: { max: 4000, css: PX('width') },
     h: { max: 4000, css: PX('height') },
+    hide: { css: (v) => ({ display: v === 'on' ? 'none' : '' }) },
+    clip: { css: (v) => ({ overflow: v === 'on' ? 'hidden' : 'visible' }) },
+    case: { css: (v) => ({ 'text-transform': { upper: 'uppercase', lower: 'lowercase', title: 'capitalize' }[v] || 'none' }) },
+    decor: { css: (v) => ({ 'text-decoration-line': { underline: 'underline', strike: 'line-through' }[v] || 'none' }) },
+    cols: { min: 1, max: 12, css: (v) => ({ 'grid-template-columns': `repeat(${v}, minmax(0, 1fr))` }) },
+    bgImg: { css: (v) => ({ 'background-image': v && v !== 'none' ? `url("${String(v).replace(/"/g, '%22')}")` : 'none' }) },
+    bgSize: { css: (v) => ({ 'background-size': v && v !== 'none' ? v : '' }) },
+    bgPos: { css: (v) => ({ 'background-position': v && v !== 'none' ? v : '' }) },
   };
+  // The app's scale for a property, as sorted numbers: font sizes, spacing, radius…
+  const SCALE_OF = { fontSize: 'fontSize', lineHeight: 'lineHeight', radius: 'radius', rTL: 'radius', rTR: 'radius', rBR: 'radius', rBL: 'radius', padX: 'spacing', padY: 'spacing', mX: 'spacing', mY: 'spacing', gap: 'spacing', w: 'spacing', h: 'spacing', borderW: 'borderWidth', opacity: 'opacity' };
+  function scaleSteps(p) {
+    const m = S.theme?.byKey?.[SCALE_OF[p]];
+    if (!m) return null;
+    const v = [...new Set(Object.values(m).filter((x) => typeof x === 'number' && isFinite(x) && x < 9999))].sort((a, b) => a - b);
+    return v.length > 2 ? v : null;
+  }
   const clamp = (p, v) => Math.max(PROPS[p].min ?? 0, Math.min(PROPS[p].max ?? 9999, v));
   // An element from a page that has since reloaded has no window: fall back to the current one.
   const cs = (el) => (el.ownerDocument?.defaultView || W || window).getComputedStyle(el);
+  // Colour picker maths: HSV for the square and hue slider, alpha 0–100.
+  const hex3 = (h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const hsvToHex = (h, s, v) => {
+    const f = (n) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+    return [f(5), f(3), f(1)].map((x) => ('0' + Math.round(x * 255).toString(16)).slice(-2)).join('').toUpperCase();
+  };
+  const hexToHsv = (hex) => {
+    const [r, g, b] = hex3(hex).map((x) => x / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return { h: (h * 60 + 360) % 360, s: mx ? d / mx : 0, v: mx };
+  };
+  const CSSPROP = { bg: 'backgroundColor', color: 'color', borderC: 'borderTopColor' };
+  // The element's colour for a property, with its transparency.
+  function colorNow(p) {
+    const m = S.sel?.el?.isConnected ? String(cs(S.sel.el)[CSSPROP[p]] || '').match(/[\d.]+/g) : null;
+    if (!m) return { hex: 'FFFFFF', a: 100 };
+    return { hex: m.slice(0, 3).map((x) => ('0' + Math.round(+x).toString(16)).slice(-2)).join('').toUpperCase(), a: m.length > 3 ? Math.round(+m[3] * 100) : 100 };
+  }
+  const cpOut = (c) => '#' + hsvToHex(c.h, c.s, c.v) + (c.a >= 100 ? '' : ('0' + Math.round(c.a * 2.55).toString(16)).slice(-2).toUpperCase());
   const rgbHex = (c) => {
     const m = String(c).match(/[\d.]+/g);
     if (!m) return '';
@@ -81,8 +141,15 @@
       case 'opacity': return Math.round(Number(c.opacity) * 100);
       case 'mX': return Math.round(parseFloat(c.marginLeft)) || 0;
       case 'mY': return Math.round(parseFloat(c.marginTop)) || 0;
+      case 'mT': return Math.round(parseFloat(c.marginTop)) || 0;
+      case 'mB': return Math.round(parseFloat(c.marginBottom)) || 0;
       case 'w': return Math.round(el.getBoundingClientRect().width);
       case 'h': return Math.round(el.getBoundingClientRect().height);
+      case 'hide': return c.display === 'none' ? 'on' : 'off';
+      case 'clip': return /hidden|clip/.test(c.overflow) ? 'on' : 'off';
+      case 'case': return { uppercase: 'upper', lowercase: 'lower', capitalize: 'title' }[c.textTransform] || 'none';
+      case 'decor': return /line-through/.test(c.textDecorationLine) ? 'strike' : /underline/.test(c.textDecorationLine) ? 'underline' : 'none';
+      case 'cols': return c.gridTemplateColumns.split(/\s+(?![^(]*\))/).filter(Boolean).length;
     }
     return '';
   }
@@ -106,6 +173,249 @@
     const cls = (info()?.classes || []).filter((c) => !c.includes(':') && c.startsWith(pre)).map((c) => c.slice(pre.length).split('/')[0]);
     return cls.find((c) => S.theme && c in S.theme.colors) || (cls.find((c) => /^\[#/.test(c)) || '').replace(/[[\]]/g, '');
   }
+  // The element's visible shadow (the first layer that shows), as Figma's fields: X, Y, blur, spread, colour, opacity.
+  function shadowNow() {
+    const el = S.sel?.el, out = { inset: false, x: 0, y: 4, blur: 4, spread: 0, hex: '000000', a: 25 };
+    if (!el?.isConnected) return out;
+    const layers = cs(el).boxShadow.split(/,(?![^(]*\))/).map((x) => x.trim()).filter((x) => x && x !== 'none');
+    for (const l of layers) {
+      const col = l.match(/rgba?\([^)]*\)/)?.[0] || 'rgb(0,0,0)', m = col.match(/[\d.]+/g).map(Number);
+      const a = m.length > 3 ? m[3] : 1, n = l.replace(col, '').match(/-?[\d.]+px/g)?.map(parseFloat) || [];
+      if (!a || (!n.some(Boolean))) continue;
+      return { inset: /inset/.test(l), x: n[0] || 0, y: n[1] || 0, blur: n[2] || 0, spread: n[3] || 0, hex: m.slice(0, 3).map((x) => ('0' + Math.round(x).toString(16)).slice(-2)).join('').toUpperCase(), a: Math.round(a * 100) };
+    }
+    return out;
+  }
+  const px = (n) => (n ? `${n}px` : '0');
+  const shadowValue = (o) => `[${o.inset ? 'inset_' : ''}${px(o.x)}_${px(o.y)}_${px(o.blur)}_${px(o.spread)}_#${o.hex}${o.a >= 100 ? '' : ('0' + Math.round(o.a * 2.55).toString(16)).slice(-2).toUpperCase()}]`;
+  function shadowBody() {
+    const o = shadowNow();
+    return `<div class="cr shRow"><button class="ib shIco${S.cpick === 'shadow' ? ' on' : ''}" data-act="cpick" data-v="shadow" title="Edit shadow" aria-label="Edit shadow"><i></i></button><label class="inp"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label></div>`;
+  }
+  function shadowFields(sh) {
+    const o = shadowNow(), keys = (S.theme?.shadow || []).filter((k) => k !== 'none' && k !== 'inner'), custom = !keys.includes(sh);
+    const f = (k, label, icon) => `<label class="inp" title="${label}">${icon ? `<span class="ic">${icon}</span>` : ''}<input type="text" inputmode="decimal" data-shv="${k}" value="${o[k]}" aria-label="${label}"></label>`;
+    return `<div class="shGrid">
+        <span class="shL">Style</span><label class="inp"><select data-sel="shadow" aria-label="Shadow style">${custom ? '<option selected>Custom</option>' : ''}${keys.map((k) => `<option value="${esc(k)}"${k === sh ? ' selected' : ''}>${k === 'DEFAULT' ? 'Default' : esc(k)}</option>`).join('')}</select>${ico('chev', 12)}</label>
+        <span class="shL">Position</span><div class="r2">${f('x', 'X', 'X')}${f('y', 'Y', 'Y')}</div>
+        <span class="shL">Blur</span>${f('blur', 'Blur')}
+        <span class="shL">Spread</span>${f('spread', 'Spread')}
+        <span class="shL">Color</span><label class="inp shC"><i class="sw1" style="background:#${o.hex}${('0' + Math.round(o.a * 2.55).toString(16)).slice(-2)}"></i><input data-shhex value="${o.hex}" maxlength="7" spellcheck="false" aria-label="Shadow colour"><input data-shv="a" value="${o.a}" inputmode="numeric" aria-label="Shadow opacity"><span class="u">%</span></label>
+      </div>`;
+  }
+
+  /* ---------- floating editor: colour, gradient and shadow, over the canvas beside the panel ---------- */
+  const NAMES = { bg: 'Fill', color: 'Text color', borderC: 'Stroke color' };
+  // Any CSS colour (a token's value, rgb(), hex) as hex + opacity, resolved in the app's page.
+  function toHexA(css) {
+    const doc = D || document, probe = doc.createElement('span');
+    probe.style.color = String(css || '#000').replace('<alpha-value>', '1');
+    doc.body.appendChild(probe);
+    const m = getComputedStyle(probe).color.match(/[\d.]+/g) || ['0', '0', '0'];
+    probe.remove();
+    return { hex: m.slice(0, 3).map((x) => ('0' + Math.round(+x).toString(16)).slice(-2)).join('').toUpperCase(), a: m.length > 3 ? Math.round(+m[3] * 100) : 100 };
+  }
+  function cpInit() {
+    if (S.cp && S.cp.p === S.cpick && S.cp.stop === S.gstop) return;
+    let n;
+    if (S.cpick === 'grad') { const g = gradOf() || {}; S.gstop = S.gstop && (S.gstop !== 'via' || g.via) ? S.gstop : 'from'; n = toHexA(tokenSwatch(g[S.gstop])); }
+    else n = colorNow(S.cpick);
+    S.cp = { p: S.cpick, stop: S.gstop, ...hexToHsv(n.hex), a: n.a };
+  }
+  const tabsHTML2 = () => { const tab = S.cpTab || 'custom'; return `<div class="cpTabs fpTabs"><button data-act="cpTab" data-v="custom" class="${tab === 'custom' ? 'on' : ''}">Custom</button><button data-act="cpTab" data-v="vars" class="${tab === 'vars' ? 'on' : ''}">Variables</button></div>`; };
+  // A colour you can see through: solid on the left half, the real opacity over a checkerboard on the right (Figma).
+  const chipBg = (hex, a) => { if (!(a < 100) || !/^#[0-9a-f]{6}$/i.test(hex)) return hex; const x = `${hex}${('0' + Math.round(a * 2.55).toString(16)).slice(-2)}`; return `linear-gradient(90deg,${hex} 50%,transparent 50%),linear-gradient(${x},${x}),repeating-conic-gradient(#BFBFBF 0 25%,#fff 0 50%) 0 0/6px 6px`; };
+  // The project's own colours, one click away under the custom picker.
+  const themeDots = (p) => { const t = tokens().slice(0, 16); return t.length ? `<div class="cpDots">${t.map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" aria-label="${esc(n)}" style="background:${esc(swatch(v))}"></button>`).join('')}</div>` : ''; };
+  function pickerHTML(p, tok) {
+    const c = S.cp, hx = hsvToHex(c.h, c.s, c.v);
+    if ((S.cpTab || 'custom') === 'vars') return `<div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('') || '<span class="note">This project has no colour variables yet.</span>'}</div>`;
+    return `<div class="cpSV" data-cpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
+      <div class="cpBar cpHue" data-cpdrag="hue"><i class="cpK" style="left:${c.h / 3.6}%;background:hsl(${c.h} 100% 50%)"></i></div>
+      <div class="cpBar cpAlpha" data-cpdrag="alpha" style="--c:#${hx}"><i class="cpK" style="left:${c.a}%"></i></div>
+      <div class="cpRow"><i class="cpSw" style="background:${chipBg('#' + hx, c.a)}"></i><span class="cpMode">Hex</span><label class="cpVal"><input data-cphex="${p}" value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"><input data-cpa="${p}" value="${c.a}" inputmode="numeric" aria-label="Opacity"><span>%</span></label></div>${themeDots(p)}`;
+  }
+  const ROT = ['t', 'tr', 'r', 'br', 'b', 'bl', 'l', 'tl'];
+  // Like Figma: a tall bar with a pin for each stop, then the stops as rows (position, colour, opacity).
+  function gradHTML(g) {
+    const stops = stopsOf(g), dirName = (DIRS.find(([v]) => v === g.dir) || [, '→ Right'])[1];
+    const pin = (st) => `<button class="gPin${S.gstop === st.k ? ' on' : ''}" data-act="gStop" data-v="${st.k}" data-gpin="${st.k}" style="left:${st.pos}%;--p:${st.pos};--c:${esc(tokenSwatch(st.col))}" aria-label="Stop at ${st.pos}%"><i></i></button>`;
+    const row = (st) => { const n = toHexA(tokenSwatch(st.col)); return `<div class="gRow2${S.gstop === st.k ? ' on' : ''}" data-act="gStop" data-v="${st.k}">
+        <label class="inp gPos"><input data-gpos="${st.k}" value="${st.pos}" inputmode="numeric" aria-label="Position"><span class="u">%</span></label>
+        <label class="inp gCol"><i class="sw1" style="background:${esc(tokenSwatch(st.col))}"></i><input data-ghex="${st.k}" value="${n.hex}" maxlength="7" spellcheck="false" aria-label="Stop colour"><input data-galpha="${st.k}" value="${n.a}" inputmode="numeric" aria-label="Stop opacity"><span class="u">%</span></label>
+        <button class="ib" data-act="gDel" data-v="${st.k}" title="Remove stop" aria-label="Remove stop"${stops.length < 3 ? ' disabled' : ''}>${ico('minus')}</button></div>`; };
+    return `<div class="gHead"><span class="gType">Linear</span><span class="gDir">${esc(dirName)}</span><button class="ib" data-act="gFlip" title="Flip the gradient" aria-label="Flip the gradient">${ico('swap')}</button><button class="ib" data-act="gRot" title="Rotate 45°" aria-label="Rotate 45 degrees">${ico('rotate')}</button></div>
+      <div class="gTrack"><div class="gPins" data-gbar>${stops.map(pin).join('')}</div><div class="gBar2" style="background:${esc(gradCss({ ...g, dir: 'r' }))}"></div></div>
+      <div class="gStopsH"><span>Stops</span><button class="ib" data-act="gAdd" title="${stops.length > 2 ? 'Tailwind gradients have up to three stops' : 'Add a stop'}" aria-label="Add a stop"${stops.length > 2 ? ' disabled' : ''}>${ico('plus')}</button></div>
+      ${stops.map(row).join('')}`;
+  }
+  function renderFpop() {
+    let f = $('fpop');
+    if (!f) { f = document.createElement('div'); f.id = 'fpop'; f.className = 'fpop'; f.setAttribute('role', 'dialog'); document.body.appendChild(f); }
+    const k = S.cpick;
+    if (k !== 'grad' && $('fpop2')) $('fpop2').hidden = true;
+    if (!k || !S.sel?.el) { f.hidden = true; return; }
+    const close = `<button class="ib fpX" data-act="fpClose" aria-label="Close" title="Close · Esc">${ico('x')}</button>`;
+    let head = '', body = '';
+    if (k === 'font') {
+      f.innerHTML = `<div class="fpH"><span class="fpT">Font</span>${close}</div><div class="cpop fontPop"><label class="inp fontQ">${ico('search', 14)}<input id="fontQ" placeholder="Search fonts" autocomplete="off" spellcheck="false" aria-label="Search fonts" value="${esc(S.fontQ || '')}"></label><div class="fontList" id="fontList">${fontListHTML()}</div></div>`;
+      f.hidden = false;
+      const pr = $('panel').getBoundingClientRect(), h = f.offsetHeight;
+      f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
+      f.style.top = Math.max(56, Math.min(innerHeight - h - 8, (S.fpY ?? 120) - 14)) + 'px';
+      setTimeout(() => $('fontQ')?.focus(), 0);
+      return;
+    }
+    if (k === 'img' || k === 'bgimg') {
+      // The image panel, shared by pictures and image fills: preview, Fill / Fit, where the image comes from, alt text.
+      const el = S.sel.el, pic = k === 'img', src = pic ? el.currentSrc || el.getAttribute('src') || '' : bgImgOf(el);
+      const fit = pic ? cs(el).objectFit : (cs(el).backgroundSize === 'contain' ? 'contain' : 'cover');
+      const types = pic ? '<span class="fpT">Image</span>' : `<div class="fpTypes"><button class="fpType" data-act="fpType" data-v="solid" title="Solid" aria-label="Solid"><i class="tSolid"></i></button><button class="fpType" data-act="fpType" data-v="gradient" title="Linear gradient" aria-label="Linear gradient"><i class="tGrad"></i></button><button class="fpType on" data-act="fpType" data-v="image" title="Image" aria-label="Image">${ico('image', 14)}</button></div>`;
+      const src1 = (act, v, icon, label, sub) => `<button class="ipSrc" data-act="${act}"${v ? ` data-v="${v}"` : ''}>${ico(icon, 14)}<span>${label}${sub ? `<small>${sub}</small>` : ''}</span></button>`;
+      f.innerHTML = `<div class="fpH">${types}${close}</div><div class="cpop ipop">
+        <div class="ipPrev">${src ? `<img src="${esc(src)}" alt="" style="object-fit:${fit === 'contain' ? 'contain' : 'cover'}">` : `<span class="note">No image yet. Pick one below.</span>`}</div>
+        ${src ? `<div class="seg ipFit"><button data-act="ipFit" data-v="cover" class="${fit === 'contain' ? '' : 'on'}" title="Fill the box, cropping the edges">Fill</button><button data-act="ipFit" data-v="contain" class="${fit === 'contain' ? 'on' : ''}" title="Show the whole image inside the box">Fit</button></div>` : ''}
+        <div class="ipList">${src1('ipFind', 'photo', 'search', 'Find a photo')}${src1('ipFind', 'illustration', 'pen', 'Draw one', 'An illustration made for this spot')}${src1('ipUpload', '', 'upload', 'Upload from this Mac…')}${src1('ipLink', '', 'link', 'Use a link…')}</div>
+        ${S.ipLink ? `<form class="ipLinkF"><label class="inp"><input id="ipLinkIn" placeholder="https://…" spellcheck="false" aria-label="Image link"></label></form>` : ''}
+        ${pic ? `<label class="ipAltL">Alt text<span class="note">What a screen reader says</span></label><label class="inp area"><textarea data-alt="1" rows="2" placeholder="Describe the image" aria-label="Alt text">${esc(el.getAttribute('alt') || '')}</textarea></label>` : ''}
+      </div>`;
+      f.hidden = false;
+      const pr = $('panel').getBoundingClientRect(), h2 = f.offsetHeight;
+      f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
+      f.style.top = Math.max(56, Math.min(innerHeight - h2 - 8, (S.fpY ?? 120) - 14)) + 'px';
+      if ($('fpop2')) $('fpop2').hidden = true;
+      return;
+    }
+    if (k === 'shadow') {
+      const o = shadowNow();
+      head = `<label class="inp fpSel"><select data-shtype aria-label="Shadow type"><option value="drop"${o.inset ? '' : ' selected'}>Drop shadow</option><option value="inner"${o.inset ? ' selected' : ''}>Inner shadow</option></select>${ico('chev', 12)}</label>`;
+      body = shadowFields(shadowOf());
+    } else {
+      cpInit();
+      head = tabsHTML2();
+      const fill = k === 'bg' || k === 'grad';
+      const types = fill ? `<div class="fpTypes"><button class="fpType${k === 'bg' ? ' on' : ''}" data-act="fpType" data-v="solid" title="Solid" aria-label="Solid"><i class="tSolid"></i></button><button class="fpType${k === 'grad' ? ' on' : ''}" data-act="fpType" data-v="gradient" title="Linear gradient" aria-label="Linear gradient"><i class="tGrad"></i></button>${S.sel.el.tagName.toLowerCase() !== 'img' ? `<button class="fpType" data-act="fpType" data-v="image" title="Image" aria-label="Image">${ico('image', 14)}</button>` : ''}</div>` : `<div class="fpName">${NAMES[k]}</div>`;
+      if (k === 'grad') { const g = gradOf() || { dir: 'r' }; body = types + gradHTML(g); }
+      else body = types + pickerHTML(k, tokenOf(k));
+    }
+    f.innerHTML = `<div class="fpH">${head}${close}</div><div class="cpop" data-cpop="${k}">${body}</div>`;
+    f.hidden = false;
+    // Beside the panel, level with the row that opened it, kept on screen.
+    const pr = $('panel').getBoundingClientRect(), h = f.offsetHeight;
+    f.style.right = Math.max(8, innerWidth - pr.left + 8) + 'px';
+    f.style.top = Math.max(56, Math.min(innerHeight - h - 8, (S.fpY ?? 120) - 14)) + 'px';
+    renderFpop2(f);
+  }
+  // A gradient stop's colour picker, in its own panel to the left of the gradient panel (like Framer).
+  // Opens when a stop's pin or row is clicked; the gradient panel stays as it is.
+  function renderFpop2(main) {
+    let f2 = $('fpop2');
+    if (!f2) { f2 = document.createElement('div'); f2.id = 'fpop2'; f2.className = 'fpop'; f2.setAttribute('role', 'dialog'); f2.setAttribute('aria-label', 'Stop colour'); document.body.appendChild(f2); }
+    if (S.cpick !== 'grad' || !S.gpick || main?.hidden) { f2.hidden = true; return; }
+    const g = gradOf() || { dir: 'r' };
+    cpInit();
+    f2.innerHTML = `<div class="fpH">${tabsHTML2()}<button class="ib fpX" data-act="gPickClose" aria-label="Close" title="Close">${ico('x')}</button></div><div class="cpop" data-cpop="grad">${pickerHTML('grad', g[S.gstop])}</div>`;
+    f2.hidden = false;
+    const r = main.getBoundingClientRect(), h = f2.offsetHeight;
+    f2.style.right = Math.max(8, innerWidth - r.left + 8) + 'px';
+    f2.style.top = Math.max(56, Math.min(innerHeight - h - 8, r.top)) + 'px';
+  }
+  // Popular Google Fonts, by role. Any other Google Font can be typed in.
+  const GFONTS = [
+    ['Inter', 'sans-serif'], ['Geist', 'sans-serif'], ['Manrope', 'sans-serif'], ['DM Sans', 'sans-serif'], ['Plus Jakarta Sans', 'sans-serif'], ['Outfit', 'sans-serif'], ['Figtree', 'sans-serif'], ['Space Grotesk', 'sans-serif'], ['Sora', 'sans-serif'], ['Work Sans', 'sans-serif'], ['Poppins', 'sans-serif'], ['Montserrat', 'sans-serif'], ['Lato', 'sans-serif'], ['Open Sans', 'sans-serif'], ['Roboto', 'sans-serif'], ['Nunito Sans', 'sans-serif'], ['Rubik', 'sans-serif'], ['Karla', 'sans-serif'], ['Urbanist', 'sans-serif'], ['Lexend', 'sans-serif'], ['Onest', 'sans-serif'], ['Hanken Grotesk', 'sans-serif'], ['Bricolage Grotesque', 'sans-serif'], ['Archivo', 'sans-serif'], ['IBM Plex Sans', 'sans-serif'],
+    ['Playfair Display', 'serif'], ['DM Serif Display', 'serif'], ['Fraunces', 'serif'], ['Lora', 'serif'], ['Cormorant Garamond', 'serif'], ['EB Garamond', 'serif'], ['Libre Baskerville', 'serif'], ['Source Serif 4', 'serif'], ['Crimson Pro', 'serif'], ['Instrument Serif', 'serif'], ['Bodoni Moda', 'serif'], ['Merriweather', 'serif'], ['Newsreader', 'serif'], ['Spectral', 'serif'],
+    ['Syne', 'display'], ['Unbounded', 'display'], ['Bebas Neue', 'display'], ['Abril Fatface', 'display'],
+    ['JetBrains Mono', 'monospace'], ['IBM Plex Mono', 'monospace'], ['Geist Mono', 'monospace'], ['Space Mono', 'monospace'], ['Caveat', 'handwriting'],
+  ];
+  const CAT = { 'sans-serif': 'Sans serif', serif: 'Serif', display: 'Display', monospace: 'Mono', handwriting: 'Handwriting' };
+  // Each font previews in its own face: Google serves just the letters of its name, so this stays tiny.
+  const fontsShown = new Set();
+  function previewFont(family) {
+    if (fontsShown.has(family) || /^ui-|system/i.test(family)) return;
+    fontsShown.add(family);
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = `https://fonts.googleapis.com/css2?family=${family.trim().replace(/\s+/g, '+')}&text=${encodeURIComponent(family)}&display=swap`;
+    document.head.appendChild(l);
+  }
+  function fontListHTML() {
+    const q = (S.fontQ || '').trim().toLowerCase();
+    const mine = Object.entries(S.theme?.fonts || {}).filter(([, f]) => !/^ui-/.test(f) && (!q || f.toLowerCase().includes(q)));
+    const have = new Set(mine.map(([, f]) => f.toLowerCase()));
+    const google = GFONTS.filter(([f]) => !have.has(f.toLowerCase()) && (!q || f.toLowerCase().includes(q)));
+    const cur = (info()?.classes || []).filter((c) => !c.includes(':')).map((c) => c.slice(5)).find((k) => (S.theme?.keys?.fontFamily || []).includes(k));
+    const row = (label, attrs, family, sub, on) => { previewFont(family); return `<button class="fontRow${on ? ' on' : ''}" ${attrs}><span class="fName" style="font-family:'${esc(family)}',system-ui">${esc(label)}</span><span class="fSub">${esc(sub)}</span></button>`; };
+    const typed = q && !mine.length && !google.length && /^[a-z0-9][a-z0-9 ]{1,48}$/i.test(S.fontQ.trim());
+    return `${mine.length ? `<div class="fHead">In this project</div>${mine.map(([k, f]) => row(f, `data-act="fontPick" data-v="${esc(k)}"`, f, k, k === cur)).join('')}` : ''}
+      ${google.length ? `<div class="fHead">Google Fonts</div>${google.map(([f, c]) => row(f, `data-act="fontPick" data-g="${esc(f)}" data-cat="${c}"`, f, CAT[c], false)).join('')}` : ''}
+      ${typed ? `<button class="fontRow use" data-act="fontPick" data-g="${esc(S.fontQ.trim())}" data-cat="sans-serif"><span class="fName">Use “${esc(S.fontQ.trim())}” from Google Fonts</span></button>` : ''}
+      ${!mine.length && !google.length && !typed ? '<span class="note">No fonts match.</span>' : ''}`;
+  }
+  // Pick a font: a project font applies at once; a Google Font is added to the project first (one undoable change).
+  async function pickFont(btn) {
+    const family = btn.dataset.g;
+    let key = btn.dataset.v;
+    if (family) {
+      btn.classList.add('busy');
+      btn.querySelector('.fSub')?.replaceChildren(document.createTextNode('Adding…'));
+      try {
+        const r = await api('/fonts', { family, category: btn.dataset.cat });
+        key = r.key;
+        S.theme = await api('/theme');
+        fontCss = null; // screenshots pick up the new font
+        if (r.added) toast(`Added ${family} to your fonts`);
+      } catch (e) { toast(e.message, '', true); renderFpop(); return; }
+    }
+    S.cpick = null; S.fontQ = '';
+    await commit({ ops: [{ prop: 'fontFamily', value: key }] });
+  }
+  document.addEventListener('input', (e) => { if (e.target.id !== 'fontQ') return; S.fontQ = e.target.value; $('fontList').innerHTML = fontListHTML(); });
+  function closeFpop() { if (!S.cpick) return; S.cpick = S.cp = null; S.gpick = false; renderPanel(); }
+  // Save the picker's colour: a property, or the chosen gradient stop.
+  function cpCommit(c) {
+    if (c.p !== 'grad') return commit({ ops: [{ prop: c.p, value: cpOut(c) }] });
+    const g = gradOf() || { dir: 'r' };
+    g[c.stop || 'from'] = cpOut(c);
+    return commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] });
+  }
+  function cpPreview(c) {
+    if (c.p !== 'grad') return preview(S.sel.el, c.p, cpOut(c));
+    const g = { ...(gradOf() || { dir: 'r' }) };
+    g[c.stop || 'from'] = cpOut(c);
+    previewGrad(g);
+    previewed = { el: S.sel.el, keys: ['background-image'] };
+    const pin = document.querySelector(`.gPin[data-v="${c.stop}"]`);
+    if (pin) pin.style.setProperty('--c', cpOut(c));
+  }
+  function previewGrad(g) {
+    S.sel.el.style.setProperty('background-image', gradCss(g), 'important');
+    previewed = { el: S.sel.el, keys: ['background-image'] };
+    const bar = document.querySelector('.gBar2');
+    if (bar) bar.style.background = gradCss({ ...g, dir: 'r' });
+  }
+  const commitGrad = (g) => commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] });
+  // Drag a stop's pin along the bar to move it (kept between its neighbours); saved on release.
+  document.addEventListener('pointerdown', (e) => {
+    const pin = e.target.closest?.('[data-gpin]');
+    if (!pin || !S.sel) return;
+    const k = pin.dataset.gpin, bar = pin.closest('[data-gbar]'), g = gradOf();
+    if (!g) return;
+    e.preventDefault();
+    if (S.gstop !== k) { S.gstop = k; S.cp = null; }
+    const stops = stopsOf(g), i = stops.findIndex((st) => st.k === k);
+    const lo = i > 0 ? stops[i - 1].pos : 0, hi = i < stops.length - 1 ? stops[i + 1].pos : 100;
+    let moved = false;
+    const at = (ev) => {
+      const r = bar.getBoundingClientRect(), n = Math.round(Math.max(lo, Math.min(hi, ((ev.clientX - r.left) / r.width) * 100)));
+      if (n === posOf(g, k) && !moved) return;
+      moved = true; g[k + 'Pos'] = n; pin.style.left = n + '%'; pin.style.setProperty('--p', n);
+      const inp = document.querySelector(`[data-gpos="${k}"]`); if (inp) inp.value = n;
+      previewGrad(g);
+    };
+    pin.setPointerCapture(e.pointerId);
+    const up = () => { pin.removeEventListener('pointermove', at); pin.removeEventListener('pointerup', up); pin.removeEventListener('pointercancel', up); if (moved) commitGrad(g); else { S.gpick = true; renderFpop(); } };
+    pin.addEventListener('pointermove', at); pin.addEventListener('pointerup', up); pin.addEventListener('pointercancel', up);
+  }, true);
   function shadowOf() {
     const c = (info()?.classes || []).find((x) => !x.includes(':') && (x === 'shadow' || x.startsWith('shadow-')));
     if (!c) return 'none';
@@ -116,7 +426,7 @@
   const pick = (t) => (t && t.closest ? t.closest('[data-kerf],[data-kerf-use]') : null);
   const defOf = (el) => el.getAttribute('data-kerf');
   const useOf = (el) => el.getAttribute('data-kerf-use');
-  const layerIcon = (el) => { const k = kindOf(el); return / icon$|^Icon$/.test(k) ? 'spark' : k === 'Image' ? 'image' : useOf(el) && /^[A-Z]/.test(el.getAttribute('data-kerf-n') || '') ? 'comp' : TEXTY.has(k) && !el.childElementCount ? 'text' : k === 'Row' ? 'padH' : k === 'Stack' ? 'padV' : 'frame'; };
+  const layerIcon = (el) => { const k = kindOf(el); return / icon$|^Icon$/.test(k) ? 'shapes' : k === 'Image' ? 'image' : useOf(el) && /^[A-Z]/.test(el.getAttribute('data-kerf-n') || '') ? 'comp' : TEXTY.has(k) && !el.childElementCount ? 'text' : k === 'Row' ? 'padH' : k === 'Stack' ? 'padV' : 'frame'; };
   const nameOf = (el) => el.getAttribute('data-kerf-n') || el.tagName.toLowerCase();
   const fileName = (loc) => (loc || '').split(':')[0].split('/').pop();
   /* names a designer would use: "Title “Stratemark”", "Button “Enter”", "Row", "Key round icon" */
@@ -141,6 +451,12 @@
     if (tag === 'input' || tag === 'textarea') return clip(el.getAttribute('placeholder') || el.value);
     return clip(el.textContent);
   }
+  // The panel header: the kind as the name, and what it says or shows as a quiet second part (no quotes).
+  function headName(el) {
+    const k = kindOf(el), full = dName(el);
+    const w = full === k ? '' : (/^(img)$/i.test(el.tagName) ? el.getAttribute('alt') : /^(input|textarea)$/i.test(el.tagName) ? el.value || el.placeholder : el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120) || full.slice(k.length).replace(/^\s*“|”$/g, '');
+    return `<b class="hk">${esc(k)}</b>${w ? `<span class="hw" title="${esc(w)}">${esc(w)}</span>` : ''}`;
+  }
   function dName(el) {
     if (!el) return '';
     const k = kindOf(el), w = wordsOf(el);
@@ -156,35 +472,134 @@
     S.srcScope = 'key';
     S.iconQ = null;
     closeIconPop?.();
-    if (!el) { S.multi = []; S.sel = null; S.cpick = null; renderPanel(); renderLayers(); return; }
-    const list = [...sameLoc(el)];
-    S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null };
+    if (!el) { S.multi = []; S.sel = null; S.cpick = S.cp = null; renderPanel(); renderLayers(); chatCtx(); return; }
+    S.pageSel = false;
+    const list = [...sameLoc(el)], prev = S.sel;
+    S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null, path: pathOf(el) };
+    // "This one" / "Only here" is a choice for one element: a new selection starts from the default again
+    // (all copies, every look-alike), so edits keep reaching every copy unless you choose otherwise.
+    if (!prev || prev.def !== S.sel.def || prev.use !== S.sel.use) {
+      S.scope = 'auto';
+      try { S.simScope = localStorage.getItem('kerf.sim') || 'all'; } catch { S.simScope = 'all'; }
+    }
     if (!S.sel.def) S.scope = 'here';
     else if (!S.sel.use) S.scope = 'all';
-    S.cpick = null;
+    S.cpick = S.cp = null;
     let p = el.parentElement;
     while (p) { const t = pick(p); if (!t) break; S.open[keyOf(t)] = true; p = t.parentElement; }
     renderPanel();
     renderLayers();
-    await loadInfo();
+    chatCtx();
+    S.sel.ready = loadInfo();
+    await S.sel.ready;
+    if (S.pendingInsert && S.sel?.el === el) { S.pendingInsert = false; pickHint(false); S.insertPos = defaultPos(); openInsert(); }
+  }
+  // The chat box says what Tovi will look at: the selection, or the whole screen.
+  // What a request is about, in words: the element's name plus its first bit of text when the name alone is vague
+  // (Frame “Natural materials”), so the chat says what you were pointing at.
+  function ctxName(el) {
+    const n = dName(el);
+    if (/[“"]/.test(n)) return n;
+    const t = (el.innerText || '').split('\n').map((x) => x.trim()).find(Boolean);
+    return t ? `${n} “${t.length > 28 ? t.slice(0, 27) + '…' : t}”` : n;
+  }
+  function chatCtx() {
+    const c = document.querySelector('#lbody .kcCtx');
+    if (c) c.innerHTML = `${ico(S.sel ? 'frame' : 'desktop', 12)}${S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen'}`;
+  }
+  // Where this instance of a component is used. Components that don't pass their props through to the HTML
+  // leave no tag on the page, but React (in development) still knows each element's component and its props.
+  function usageOf(el, comp) {
+    for (let h = el; h; h = h.parentElement) if (h.getAttribute?.('data-kerf-use') && h.getAttribute('data-kerf-n') === comp) return h.getAttribute('data-kerf-use');
+    const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+    let f = key ? el[key] : null;
+    for (let i = 0; f && i < 300; i++, f = f.return) {
+      const p = f.memoizedProps;
+      if (p && p['data-kerf-n'] === comp && p['data-kerf-use']) return p['data-kerf-use'];
+    }
+    return null;
+  }
+  // Look-alikes: copies written separately in the code that look the same (four feature cards), and the
+  // matching parts inside them (each card's title). Style edits can go to all of them, like Figma's
+  // "select matching layers". Copies made by one piece of code are already "Repeated" and left out.
+  S.simScope = (() => { try { return localStorage.getItem('kerf.sim') || 'all'; } catch { return 'all'; } })();
+  S.scaleArrows = (() => { try { return localStorage.getItem('kerf.scale') !== 'off'; } catch { return true; } })();
+  const baseCls = (e) => new Set([...e.classList].filter((c) => !c.includes(':')));
+  function overlap(a, b) {
+    const A = baseCls(a), B = baseCls(b);
+    if (!A.size && !B.size) return 1;
+    let n = 0;
+    for (const c of A) if (B.has(c)) n++;
+    return n / (A.size + B.size - n);
+  }
+  const shape = (e) => e.tagName + '>' + [...e.children].map((c) => c.tagName).join(',');
+  const looksLike = (a, b) => a.tagName === b.tagName && shape(a) === shape(b) && overlap(a, b) >= 0.5;
+  const isTagged = (e) => e.matches?.('[data-kerf],[data-kerf-use]');
+  function similarOf(el) {
+    if (!el?.isConnected || !isTagged(el)) return [];
+    let unit = el;
+    const path = [];
+    for (let depth = 0; depth < 6 && unit.parentElement && unit.parentElement !== D.body; depth++) {
+      const sibs = [...unit.parentElement.children].filter((x) => x !== unit && looksLike(x, unit) && (defOf(x) || useOf(x)) !== (defOf(unit) || useOf(unit)));
+      if (sibs.length) {
+        const out = [];
+        for (const sb of sibs) {
+          let t = sb;
+          for (const i of path) { t = t?.children[i]; if (!t) break; }
+          if (t && t.tagName === el.tagName && isTagged(t) && overlap(t, el) >= 0.5 && (defOf(t) || useOf(t)) !== (defOf(el) || useOf(el))) out.push(t);
+        }
+        return out.slice(0, 40);
+      }
+      path.unshift([...unit.parentElement.children].indexOf(unit));
+      unit = unit.parentElement;
+    }
+    return [];
   }
   async function loadInfo() {
     const s = S.sel;
     if (!s) return;
     const dom = [...s.el.classList];
-    const get = (loc) => (loc ? api('/inspect', { loc, dom }).catch((e) => ({ error: e.message })) : null);
+    const get = (loc) => (loc ? api('/inspect', { loc, dom }).catch((e) => ({ error: e.message, offline: e.offline })) : null);
     const [d, u] = await Promise.all([get(s.def), get(s.use)]);
     if (S.sel !== s) return;
+    // Text that's a component prop ({title}, {children}): edit the string where the component is used.
+    for (const inf of [d, u]) {
+      const vp = inf?.text?.viaProp;
+      if (!vp || inf.text.editable) continue;
+      const useLoc = usageOf(s.el, vp.comp);
+      const ui = !useLoc ? null : useLoc === s.use ? u : await get(useLoc);
+      if (S.sel !== s) return;
+      const file = useLoc ? useLoc.replace(/:\d+:\d+$/, '').split('/').pop() : '';
+      const val = vp.prop === 'children' ? (ui?.text?.editable ? ui.text.value : null) : (ui?.props || []).find((x) => x.name === vp.prop && x.editable && x.kind === 'string')?.value;
+      if (val != null) inf.text = { editable: true, value: String(val), via: { loc: useLoc, prop: vp.prop, file } };
+      else if (useLoc) inf.text = { editable: false, reason: `This text is passed in from ${file}, where it’s set by code. Change it there, or ask a developer.` };
+    }
+    // A component that passes everything through (<button {...props} />) gets its label where it's used.
+    if (d && !d.error && !d.text?.editable && u?.text?.editable && !d.text?.via) {
+      d.text = { editable: true, value: u.text.value, via: { loc: s.use, prop: 'children', file: s.use.replace(/:\d+:\d+$/, '').split('/').pop() } };
+    }
     s.defInfo = d;
     s.useInfo = u;
+    s.similar = similarOf(s.el);
     renderPanel();
   }
   // After an edit the app re-renders and the element may be a new node: find it again.
+  // Where an element sits in the page, so it can be found again after an edit moves its code (a line added
+  // above it changes its source location).
+  const pathOf = (el) => { const p = []; while (el && el.parentElement) { p.unshift([...el.parentElement.children].indexOf(el)); el = el.parentElement; } return p; };
+  const atPath = (doc, p) => { let el = doc.documentElement; for (const i of p || []) { el = el?.children[i]; if (!el) return null; } return el; };
   function refind() {
     const s = S.sel;
-    if (!s || !D || (s.el.isConnected && s.el.ownerDocument === D)) return;
-    const list = D.querySelectorAll(s.def ? `[data-kerf="${CSS.escape(s.def)}"]` : `[data-kerf-use="${CSS.escape(s.use)}"]`);
-    if (list.length) { s.el = list[Math.min(s.idx, list.length - 1)]; s.repeat = list.length; }
+    if (!s || !D) return;
+    if (!(s.el.isConnected && s.el.ownerDocument === D)) {
+      const list = D.querySelectorAll(s.def ? `[data-kerf="${CSS.escape(s.def)}"]` : `[data-kerf-use="${CSS.escape(s.use)}"]`);
+      if (list.length) { s.el = list[Math.min(s.idx, list.length - 1)]; s.repeat = list.length; }
+      else { const el = s.path && atPath(D, s.path); if (el && (defOf(el) || useOf(el))) s.el = el; }
+    }
+    // The code may have moved: always take the element's current source location.
+    const d = defOf(s.el), u = useOf(s.el);
+    if ((d && d !== s.def) || (u && u !== s.use)) { s.def = d || s.def; s.use = u || s.use; s.defInfo = s.useInfo = null; }
+    s.path = pathOf(s.el);
   }
 
   /* ---------- editing ---------- */
@@ -200,25 +615,36 @@
     previewed = null;
   }
   async function commit(change) {
-    const loc = activeLoc();
+    // Component properties always belong to this use of the component.
+    const loc = change.props?.length && S.sel?.use ? S.sel.use : activeLoc();
     if (!loc) return;
+    const via = change.text != null && !S.multi.length ? info()?.text?.via : null;
+    if (via) {
+      // The text is a prop of a component: change the string where this one is used.
+      try {
+        const who = S.sel ? dName(S.sel.el) : '';
+        const r = await api('/edit', via.prop === 'children' ? { loc: via.loc, text: change.text, name: who } : { loc: via.loc, props: [{ name: via.prop, value: change.text }], propText: true, name: who });
+        if (r.changed) S.count = r.n;
+        afterEdit();
+      } catch (e) { toast(e.message, '', true); }
+      return;
+    }
     try {
-      if (S.multi.length) {
-        // Several selected: apply the same change to each one, in a safe order.
-        const edits = [{ loc, ...change, cva: cvaParam(), name: dName(S.sel.el), dom: [...S.sel.el.classList] }, ...S.multi.map((m) => ({ loc: locOf(m), ...change, name: dName(m.el), dom: [...m.el.classList] }))];
-        const r = await api('/ai/apply', { edits: edits.map((e) => ({ loc: e.loc, ops: e.ops || [], props: e.props || [], text: e.text, name: e.name, dom: e.dom, bp: bpParam() })) });
+      // Look-alikes follow style changes (never text or component properties, which are each their own).
+      const alike = !S.multi.length && S.simScope === 'all' && change.ops?.length && change.text == null && !change.props?.length ? (S.sel?.similar || []).filter((x) => x.isConnected) : [];
+      const group = S.multi.length ? S.multi : alike.map((el) => ({ el, def: defOf(el), use: useOf(el) }));
+      if (group.length) {
+        // Several at once: apply the same change to each one, in a safe order, as one undo step.
+        const edits = [{ loc, ...change, cva: cvaParam(), name: dName(S.sel.el), dom: [...S.sel.el.classList] }, ...group.map((m) => ({ loc: locOf(m), ...change, name: dName(m.el), dom: [...m.el.classList] }))];
+        const r = await api('/ai/apply', { batch: Date.now(), edits: edits.map((e) => ({ loc: e.loc, ops: e.ops || [], props: e.props || [], text: e.text, name: e.name, dom: e.dom, bp: bpParam() })) });
         S.count = r.n;
-        const ok = r.results.filter((x) => x.ok && x.changed).length;
-        toast(`${ok} element${ok === 1 ? '' : 's'} · ${(r.results.find((x) => x.summary)?.summary.labels || []).join(' · ')}`, r.results.some((x) => !x.ok) ? r.results.find((x) => !x.ok).error : '', false, true);
+        // Like Figma, a routine edit says nothing: the canvas shows it. Only a failure is worth a note.
+        const bad = r.results.find((x) => !x.ok);
+        if (bad) toast(bad.error, '', true);
       } else {
-        const r = await api('/edit', { loc, ...change, cva: cvaParam(), bp: bpParam(), dom: S.sel ? [...S.sel.el.classList] : [], scope: S.srcScope || 'key', name: S.sel ? dName(S.sel.el) : null });
+        const r = await api('/edit', { loc, ...change, cva: cvaParam(), bp: colsBp(change) || bpParam(), dom: S.sel ? [...S.sel.el.classList] : [], scope: S.srcScope || 'key', name: S.sel ? dName(S.sel.el) : null });
         if (r.changed) {
           S.count = r.n;
-          const sm = r.summary;
-          const who = S.sel ? dName(S.sel.el) : '';
-          const where = sm.scope === 'variant' ? ` (all “${activeVariant()?.variant}”)` : sm.scope === 'all' ? ' (every one)' : '';
-          if (sm.size) sm.labels = (sm.labels || []).map((l) => l.replace(/ \((only on \w+|all sizes)\)$/, ''));
-          toast(`${who}${where} · ${(sm.labels || []).join(' · ')}${sm.size ? ` · ${sm.size.toLowerCase()}` : ''}`, sm.offScale.length ? 'Some values are off your design scale' : '', false, true, `${fileName(r.file)}: ${[sm.removed.join(' ') || '—', sm.added.join(' ')].join(' → ')}`);
         }
       }
       afterEdit();
@@ -226,6 +652,14 @@
       clearPreview();
       toast(e.message, '', true);
     }
+  }
+  // Remove a style the way a developer would: delete the element's own class. Only if the style still shows
+  // (it comes from somewhere else, like a CSS class) add an override such as shadow-none or border-0.
+  async function clearStyle(ops, override, stillShows) {
+    await commit({ ops });
+    await new Promise((r) => setTimeout(r, 900));
+    refind();
+    if (S.sel?.el && stillShows(S.sel.el)) await commit({ ops: override });
   }
   function afterEdit() {
     // Give Vite and Tailwind a moment to reload, then show the real result.
@@ -237,24 +671,30 @@
   const pending = {};
   function commitSoon(prop, value) {
     clearTimeout(pending[prop]);
-    pending[prop] = setTimeout(() => commit({ ops: [{ prop, value }] }), 450);
+    pending[prop] = setTimeout(() => commit({ ops: [{ prop, value }] }), 300);
   }
   async function undo() {
     try {
       const r = await api('/undo', {});
-      if (r.undone) { S.count = r.n; toast(r.label ? `Undone: ${r.label}` : 'Undone'); afterEdit(); renderChanges(); }
+      if (r.undone) { cue('undo'); S.count = r.n; toast(r.label ? `Undone: ${r.label}` : 'Undone'); afterEdit(); renderChanges(); }
       else toast('Nothing to undo');
     } catch (e) { toast(e.message, '', true); }
   }
 
   /* ---------- text editing on the canvas ---------- */
-  function beginText() {
-    const s = S.sel, ti = info()?.text;
-    if (!s || !ti) return;
+  async function beginText() {
+    const s = S.sel;
+    if (!s || S.editing) return;
+    // Double-clicking right after selecting: the element's details may still be loading.
+    if (!info() && s.ready) await s.ready;
+    const ti = info()?.text;
+    if (S.sel !== s || !ti) return;
     if (!ti.editable) { toast(ti.reason, '', true); return; }
     const el = s.el, orig = el.textContent;
     S.editing = el;
-    el.contentEditable = 'true';
+    // Plain text only: pasting never brings in another page's fonts or colours.
+    try { el.contentEditable = 'plaintext-only'; } catch {}
+    if (el.contentEditable !== 'plaintext-only') el.contentEditable = 'true';
     el.focus();
     const r = D.createRange();
     r.selectNodeContents(el);
@@ -264,12 +704,13 @@
       el.removeEventListener('blur', bl);
       el.contentEditable = 'false';
       S.editing = null;
-      const v = el.textContent.trim();
-      if (save && v && v !== orig.trim()) commit({ text: v });
+      const v = el.textContent.replace(/\s+/g, ' ').trim();
+      if (save && v && v !== orig.replace(/\s+/g, ' ').trim()) commit({ text: v });
       else el.textContent = orig;
     };
     const kd = (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); el.blur(); }
+      // Enter saves. Line breaks aren't written to code yet, so Shift+Enter does nothing rather than lose words.
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (!e.shiftKey) el.blur(); }
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); el.removeEventListener('blur', bl); done(false); }
     };
     const bl = () => done(true);
@@ -279,10 +720,15 @@
 
   /* ---------- icons ---------- */
   const IC = {
-    kerf: '<rect x="2" y="3" width="5.5" height="10" rx="1.5" fill="currentColor"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" fill="currentColor" opacity=".45"/>',
+    kerf: '<rect x="2" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoA)"/><rect x="8.5" y="3" width="5.5" height="10" rx="1.5" style="fill:var(--logoB)"/>',
     play: '<path d="M5 3.2v9.6l7.5-4.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
     edit: '<rect x="2" y="2" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8.5 8.5l5.2 2-2.3.7-.7 2.3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
     undo: '<path d="M4 6h6a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M6.5 3.5L4 6l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
+    cursor: '<path d="M4 2.5l8.5 5.2-3.7.9 2.1 4.1-1.5.8-2.1-4.2L4.6 12z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
+    // Edit tool: a pen working on a frame.
+    editFrame: '<path d="M7.2 2.6H4.1a1.5 1.5 0 0 0-1.5 1.5v7.8a1.5 1.5 0 0 0 1.5 1.5h7.8a1.5 1.5 0 0 0 1.5-1.5V8.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M12.1 1.9a1.35 1.35 0 0 1 1.95 1.9L8.6 9.3l-2.6.7.7-2.6z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>',
+    tap: '<path d="M6.5 8.5V3.2a1.1 1.1 0 0 1 2.2 0v4.3m0-1.1a1.1 1.1 0 0 1 2.2 0v1.3m0-.4a1.1 1.1 0 0 1 2.1 0V10a4 4 0 0 1-4 4H8.6a3.6 3.6 0 0 1-2.9-1.5L3.4 9.4a1.1 1.1 0 0 1 1.7-1.3l1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
+    hand: '<path d="M5.2 8.6V4.4a1 1 0 0 1 2 0v3.4m0-4.6a1 1 0 0 1 2 0v4.4m0-3.4a1 1 0 0 1 2 0v3.6m0-2a1 1 0 0 1 2 0v3.4A4.6 4.6 0 0 1 8.6 14h-.4a4.4 4.4 0 0 1-3.6-1.9L2.9 9.6a1 1 0 0 1 1.5-1.3l.8.8" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
     task: '<rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.2 6h5.6M5.2 8.4h5.6M5.2 10.8h3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     list: '<path d="M5.5 4h8M5.5 8h8M5.5 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="2.8" cy="4" r=".9" fill="currentColor"/><circle cx="2.8" cy="8" r=".9" fill="currentColor"/><circle cx="2.8" cy="12" r=".9" fill="currentColor"/>',
     up: '<path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -291,12 +737,21 @@
     minus: '<path d="M3.5 8h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     chev: '<path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
     chevR: '<path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
+    tUnder: '<path d="M5 3v4.5a3 3 0 0 0 6 0V3M4 13h8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+    tStrike: '<path d="M10.8 4.6C10.3 3.6 9.3 3 8 3 6.4 3 5.2 3.9 5.2 5.2c0 .8.4 1.4 1.2 1.8M3 8h10M10.5 9.4c.2.3.3.7.3 1.1 0 1.5-1.3 2.5-2.9 2.5-1.4 0-2.5-.6-3-1.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+    tCase: '<path d="M1.5 4h6M4.5 4v8M8.5 4h6M11.5 4v8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     alL: '<path d="M3 4h10M3 8h6M3 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     alC: '<path d="M3 4h10M5 8h6M4 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     alR: '<path d="M3 4h10M7 8h6M5 12h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     corners: '<path d="M3 6V4.5A1.5 1.5 0 0 1 4.5 3H6M10 3h1.5A1.5 1.5 0 0 1 13 4.5V6M13 10v1.5a1.5 1.5 0 0 1-1.5 1.5H10M6 13H4.5A1.5 1.5 0 0 1 3 11.5V10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>',
     rad: '<path d="M4 12V8a4 4 0 0 1 4-4h4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
-    opa: '<circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8 3a5 5 0 0 1 0 10z" fill="currentColor"/>',
+    opaSq: '<rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor"/><path d="M13.5 5v6a2.5 2.5 0 0 1-2.5 2.5H5z" fill="currentColor"/>',
+    radAll: '<path d="M2.75 6V4.25a1.5 1.5 0 0 1 1.5-1.5H6M10 2.75h1.75a1.5 1.5 0 0 1 1.5 1.5V6M13.25 10v1.75a1.5 1.5 0 0 1-1.5 1.5H10M6 13.25H4.25a1.5 1.5 0 0 1-1.5-1.5V10" fill="none" stroke="currentColor" stroke-linecap="round"/>',
+    marH: '<path d="M2.5 3v10M13.5 3v10" stroke="currentColor" stroke-linecap="round"/><rect x="5.25" y="4.5" width="5.5" height="7" rx="1.25" fill="none" stroke="currentColor"/>',
+    marT: '<path d="M3 2.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="5.25" width="7" height="8" rx="1.25" fill="none" stroke="currentColor"/>',
+    marB: '<path d="M3 13.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="2.75" width="7" height="8" rx="1.25" fill="none" stroke="currentColor"/>',
+    marSides: '<rect x="5" y="5" width="6" height="6" rx="1.25" fill="none" stroke="currentColor"/><path d="M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5" stroke="currentColor" stroke-linecap="round"/>',
+    marV: '<path d="M3 2.5h10M3 13.5h10" stroke="currentColor" stroke-linecap="round"/><rect x="4.5" y="5.25" width="7" height="5.5" rx="1.25" fill="none" stroke="currentColor"/>',
     gap: '<path d="M3 3v10M13 3v10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M6 8h4M7 6.5L5.5 8 7 9.5M9 6.5l1.5 1.5L9 9.5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>',
     padH: '<rect x="2.5" y="3.5" width="11" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M5 6v4M11 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
     padV: '<rect x="2.5" y="3.5" width="11" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M5.5 6h5M5.5 10h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
@@ -319,9 +774,16 @@
     branch: '<circle cx="4.5" cy="3.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="4.5" cy="12.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><circle cx="11.5" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M4.5 5.1v5.8M11.5 7.6c0 2.6-7 1.4-7 3.3" fill="none" stroke="currentColor" stroke-width="1.1"/>',
     check: '<path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
     eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.2"/>',
+    dots: '<circle cx="3.5" cy="8" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/><circle cx="12.5" cy="8" r="1.2" fill="currentColor"/>',
+    gear: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g>',
+    markAI: '<path d="M4.2 13.6l.7-2.9 6.4-6.4a1.5 1.5 0 0 1 2.1 2.1l-6.4 6.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M10.3 5.3l2.1 2.1" stroke="currentColor" stroke-width="1.3"/><path d="M3.6 1.4c.15 1 .45 1.3 1.45 1.45-1 .15-1.3.45-1.45 1.45-.15-1-.45-1.3-1.45-1.45 1-.15 1.3-.45 1.45-1.45z" fill="currentColor" stroke="currentColor" stroke-width=".5" stroke-linejoin="round"/>',
+    diag: '<path d="M2 5V3.5A1.5 1.5 0 0 1 3.5 2H5M11 2h1.5A1.5 1.5 0 0 1 14 3.5V5M14 11v1.5a1.5 1.5 0 0 1-1.5 1.5H11M5 14H3.5A1.5 1.5 0 0 1 2 12.5V11" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="7.5" cy="7.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9.4 9.4L11 11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+    comment: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></g>',
+    addEl: '<g transform="scale(.6667)" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></g>',
     sidebar: '<rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M6 3v10" stroke="currentColor" stroke-width="1.25"/>',
     trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>',
     dup: '<rect x="5" y="5" width="8.5" height="8.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M3 10.5V3.8c0-.4.4-.8.8-.8h6.7" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>',
+    rotate: '<path d="M12.5 8a4.5 4.5 0 1 1-1.3-3.2M11.5 2.3v2.8H8.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
     swap: '<path d="M3 5.5h9l-2.5-2.5M13 10.5H4l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
     image: '<rect x="2.5" y="3" width="11" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="6" cy="6.5" r="1.2" fill="currentColor"/><path d="M3 12l3.5-3.5 2.5 2.5 2-2 2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>',
     code: '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -333,8 +795,14 @@
     mic: '<rect x="6" y="2" width="4" height="7.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M3.8 7.5a4.2 4.2 0 0 0 8.4 0M8 11.8V14" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>',
     reload: '<path d="M13 8a5 5 0 1 1-1.5-3.5M13 3v3h-3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
   };
-  const ico = (n, s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 16 16" aria-hidden="true">${IC[n]}</svg>`;
-  const cornerIco = (deg) => `<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><g transform="rotate(${deg} 8 8)">${IC.rad}</g></svg>`;
+  // Icons: Lucide (lucide.dev, ISC licence) for everything common, Tovi's own drawings only for its special
+  // field icons and marks. Every icon draws its lines at the same 1.25px on screen, whatever its size.
+  const LU = {"play":"<path d=\"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z\" />","edit":"<path d=\"M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033z\" /> <path d=\"M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6\" />","undo":"<path d=\"M9 14 4 9l5-5\" /> <path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\" />","cursor":"<path d=\"M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z\" />","editFrame":"<path d=\"M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033z\" /> <path d=\"M5 3a2 2 0 0 0-2 2\" /> <path d=\"M19 3a2 2 0 0 1 2 2\" /> <path d=\"M5 21a2 2 0 0 1-2-2\" /> <path d=\"M9 3h1\" /> <path d=\"M9 21h2\" /> <path d=\"M14 3h1\" /> <path d=\"M3 9v1\" /> <path d=\"M21 9v2\" /> <path d=\"M3 14v1\" />","tap":"<path d=\"M22 14a8 8 0 0 1-8 8\" /> <path d=\"M18 11v-1a2 2 0 0 0-2-2a2 2 0 0 0-2 2\" /> <path d=\"M14 10V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1\" /> <path d=\"M10 9.5V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v10\" /> <path d=\"M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15\" />","hand":"<path d=\"M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2\" /> <path d=\"M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2\" /> <path d=\"M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8\" /> <path d=\"M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15\" />","task":"<path d=\"M13 5h8\" /> <path d=\"M13 12h8\" /> <path d=\"M13 19h8\" /> <path d=\"m3 17 2 2 4-4\" /> <path d=\"m3 7 2 2 4-4\" />","list":"<path d=\"M3 5h.01\" /> <path d=\"M3 12h.01\" /> <path d=\"M3 19h.01\" /> <path d=\"M8 5h13\" /> <path d=\"M8 12h13\" /> <path d=\"M8 19h13\" />","up":"<path d=\"m5 12 7-7 7 7\" /> <path d=\"M12 19V5\" />","x":"<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />","plus":"<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />","minus":"<path d=\"M5 12h14\" />","chev":"<path d=\"m6 9 6 6 6-6\" />","chevR":"<path d=\"m9 18 6-6-6-6\" />","alL":"<path d=\"M21 5H3\" /> <path d=\"M15 12H3\" /> <path d=\"M17 19H3\" />","alC":"<path d=\"M21 5H3\" /> <path d=\"M17 12H7\" /> <path d=\"M19 19H5\" />","alR":"<path d=\"M21 5H3\" /> <path d=\"M21 12H9\" /> <path d=\"M21 19H7\" />","corners":"<path d=\"M3 7V5a2 2 0 0 1 2-2h2\" /> <path d=\"M17 3h2a2 2 0 0 1 2 2v2\" /> <path d=\"M21 17v2a2 2 0 0 1-2 2h-2\" /> <path d=\"M7 21H5a2 2 0 0 1-2-2v-2\" />","opa":"<circle cx=\"15\" cy=\"9\" r=\"7\" /> <circle cx=\"9\" cy=\"15\" r=\"7\" />","comp":"<path d=\"M15.536 11.293a1 1 0 0 0 0 1.414l2.376 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z\" /> <path d=\"M2.297 11.293a1 1 0 0 0 0 1.414l2.377 2.377a1 1 0 0 0 1.414 0l2.377-2.377a1 1 0 0 0 0-1.414L6.088 8.916a1 1 0 0 0-1.414 0z\" /> <path d=\"M8.916 17.912a1 1 0 0 0 0 1.415l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.415l-2.377-2.376a1 1 0 0 0-1.414 0z\" /> <path d=\"M8.916 4.674a1 1 0 0 0 0 1.414l2.377 2.376a1 1 0 0 0 1.414 0l2.377-2.376a1 1 0 0 0 0-1.414l-2.377-2.377a1 1 0 0 0-1.414 0z\" />","frame":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" />","text":"<path d=\"M12 4v16\" /> <path d=\"M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2\" /> <path d=\"M9 20h6\" />","spark":"<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\" />","pen":"<path d=\"M13 21h8\" /> <path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" />","pin":"<path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0\" /> <circle cx=\"12\" cy=\"10\" r=\"3\" />","box":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" />","circle":"<circle cx=\"12\" cy=\"12\" r=\"10\" />","arrow":"<path d=\"M13 5H19V11\" /> <path d=\"M19 5L5 19\" />","history":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" /> <path d=\"M12 7v5l4 2\" />","desktop":"<rect width=\"20\" height=\"14\" x=\"2\" y=\"3\" rx=\"2\" /> <line x1=\"8\" x2=\"16\" y1=\"21\" y2=\"21\" /> <line x1=\"12\" x2=\"12\" y1=\"17\" y2=\"21\" />","tablet":"<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\" ry=\"2\" /> <line x1=\"12\" x2=\"12.01\" y1=\"18\" y2=\"18\" />","mobile":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\" /> <path d=\"M12 18h.01\" />","branch":"<path d=\"M15 6a9 9 0 0 0-9 9V3\" /> <circle cx=\"18\" cy=\"6\" r=\"3\" /> <circle cx=\"6\" cy=\"18\" r=\"3\" />","check":"<path d=\"M20 6 9 17l-5-5\" />","eye":"<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />","dots":"<circle cx=\"12\" cy=\"12\" r=\"1\" /> <circle cx=\"19\" cy=\"12\" r=\"1\" /> <circle cx=\"5\" cy=\"12\" r=\"1\" />","gear":"<path d=\"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />","diag":"<path d=\"M3 7V5a2 2 0 0 1 2-2h2\" /> <path d=\"M17 3h2a2 2 0 0 1 2 2v2\" /> <path d=\"M21 17v2a2 2 0 0 1-2 2h-2\" /> <path d=\"M7 21H5a2 2 0 0 1-2-2v-2\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" /> <path d=\"m16 16-1.9-1.9\" />","comment":"<path d=\"M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719\" />","addEl":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M8 12h8\" /> <path d=\"M12 8v8\" />","sidebar":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M9 3v18\" />","trash":"<path d=\"M10 11v6\" /> <path d=\"M14 11v6\" /> <path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\" /> <path d=\"M3 6h18\" /> <path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\" />","dup":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /> <path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />","rotate":"<path d=\"M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" />","swap":"<path d=\"M8 3 4 7l4 4\" /> <path d=\"M4 7h16\" /> <path d=\"m16 21 4-4-4-4\" /> <path d=\"M20 17H4\" />","image":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" /> <circle cx=\"9\" cy=\"9\" r=\"2\" /> <path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\" />","code":"<path d=\"m16 18 6-6-6-6\" /> <path d=\"m8 6-6 6 6 6\" />","search":"<path d=\"m21 21-4.34-4.34\" /> <circle cx=\"11\" cy=\"11\" r=\"8\" />","heading":"<path d=\"M18 20V4\" /> <path d=\"M6 12H18\" /> <path d=\"M6 20V4\" />","button":"<rect width=\"20\" height=\"12\" x=\"2\" y=\"6\" rx=\"2\" />","zin":"<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />","clip":"<path d=\"m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551\" />","mic":"<path d=\"M12 19v3\" /> <path d=\"M19 10v2a7 7 0 0 1-14 0v-2\" /> <rect x=\"9\" y=\"2\" width=\"6\" height=\"13\" rx=\"3\" />","reload":"<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" /> <path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\" /> <path d=\"M8 16H3v5\" />","lh":"<path d=\"M15 14H9\" /> <path d=\"M21 21H3\" /> <path d=\"M21 3H3\" /> <path d=\"m8 16 3.453-7.648a.6.6 0 011.094.001L16 16\" />","ls":"<path d=\"M15 14H9\" /> <path d=\"M21 3v18\" /> <path d=\"M3 3v18\" /> <path d=\"m8 16 3.453-7.648a.6.6 0 011.094.001L16 16\" />","down":"<path d=\"M12 5v14\" /> <path d=\"m19 12-7 7-7-7\" />","group":"<path d=\"M3 7V5c0-1.1.9-2 2-2h2\" /> <path d=\"M17 3h2c1.1 0 2 .9 2 2v2\" /> <path d=\"M21 17v2c0 1.1-.9 2-2 2h-2\" /> <path d=\"M7 21H5c-1.1 0-2-.9-2-2v-2\" /> <rect width=\"7\" height=\"5\" x=\"7\" y=\"7\" rx=\"1\" /> <rect width=\"7\" height=\"5\" x=\"10\" y=\"12\" rx=\"1\" />","ungroup":"<rect width=\"8\" height=\"6\" x=\"5\" y=\"4\" rx=\"1\" /> <rect width=\"8\" height=\"6\" x=\"11\" y=\"14\" rx=\"1\" />","parent":"<polyline points=\"14 9 9 4 4 9\" /> <path d=\"M20 20h-7a4 4 0 0 1-4-4V4\" />","shapes":"<path d=\"M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z\" /> <rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\" /> <circle cx=\"17.5\" cy=\"17.5\" r=\"3.5\" />","sliders":"<line x1=\"21\" x2=\"14\" y1=\"4\" y2=\"4\" /> <line x1=\"10\" x2=\"3\" y1=\"4\" y2=\"4\" /> <line x1=\"21\" x2=\"12\" y1=\"12\" y2=\"12\" /> <line x1=\"8\" x2=\"3\" y1=\"12\" y2=\"12\" /> <line x1=\"21\" x2=\"16\" y1=\"20\" y2=\"20\" /> <line x1=\"12\" x2=\"3\" y1=\"20\" y2=\"20\" /> <line x1=\"14\" x2=\"14\" y1=\"2\" y2=\"6\" /> <line x1=\"8\" x2=\"8\" y1=\"10\" y2=\"14\" /> <line x1=\"16\" x2=\"16\" y1=\"18\" y2=\"22\" />","grid":"<rect width=\"7\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\" /> <rect width=\"7\" height=\"7\" x=\"14\" y=\"3\" rx=\"1\" /> <rect width=\"7\" height=\"7\" x=\"14\" y=\"14\" rx=\"1\" /> <rect width=\"7\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\" />","underline":"<path d=\"M6 4v6a6 6 0 0 0 12 0V4\" /> <line x1=\"4\" x2=\"20\" y1=\"20\" y2=\"20\" />","strike":"<path d=\"M16 4H9a3 3 0 0 0-2.83 4\" /> <path d=\"M14 12a4 4 0 0 1 0 8H6\" /> <line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\" />","caseUp":"<path d=\"m3 15 4-8 4 8\" /> <path d=\"M4 13h6\" /> <path d=\"M15 11h4.5a2 2 0 0 1 0 4H15V7h4a2 2 0 0 1 0 4\" />","eyeOff":"<path d=\"M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49\" /> <path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\" /> <path d=\"M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143\" /> <path d=\"m2 2 20 20\" />","upload":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" /> <polyline points=\"17 8 12 3 7 8\" /> <line x1=\"12\" x2=\"12\" y1=\"3\" y2=\"15\" />","link":"<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\" /> <path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\" />"};
+  const LINE = 1.25;
+  const ico = (n, s = 14) => LU[n]
+    ? `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${(LINE * 24 / s).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LU[n]}</svg>`
+    : `<svg width="${s}" height="${s}" viewBox="0 0 16 16" stroke-width="${(LINE * 16 / s).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${String(IC[n] || '').replace(/ stroke-width="[\d.]+"/g, '')}</svg>`;
+  const cornerIco = (deg) => `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><g transform="rotate(${deg} 8 8)">${IC.rad}</g></svg>`;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const tip = (label, key) => `<span class="tip">${label}${key ? `<span class="k">${key}</span>` : ''}</span>`;
   const hb = (act, icon, title, v = '', extra = '') => `<button class="ib sm" data-act="${act}" data-v="${v}" ${extra} title="${title}" aria-label="${title}">${ico(icon)}</button>`;
@@ -360,24 +828,37 @@
   }
   function renderTop() {
     const p = S.project || {};
-    const n = S.versions.draft.length + S.versions.versions.reduce((a, v) => a + v.changes.length, 0);
-    $('top').innerHTML = `<div class="tside">
-        <button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Layers" aria-label="Show or hide layers" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>
-        <button class="logoBtn" data-act="kerfMenu" title="Tovi menu" aria-label="Tovi menu" aria-haspopup="menu">${ico('kerf', 16)}${ico('chev', 10)}</button>
+    // Changes not yet handed off. The button stays usable after a hand off so a failed push can be sent again.
+    const total = S.versions.draft.length + S.versions.versions.reduce((a, v) => a + v.changes.length, 0), n = Math.max(0, total - (S.versions.sent || 0));
+    // No top bar (like Paper): the left column's header has the menu, project and page; the right column's header has
+    // history, you, zoom and Hand off; screen sizes and Present float at the top of the canvas.
+    $('top').innerHTML = `<button class="logoBtn" data-act="kerfMenu" title="Tovi menu" aria-label="Tovi menu" aria-haspopup="menu">${ico('kerf', 16)}${ico('chev', 10)}</button>
         <span class="crumbs"><span class="proj" title="${esc(p.repo || p.name || '')}">${esc(String(p.name || 'Tovi').split('/').pop())}</span><span class="sep">/</span><button class="pageBtn" data-act="pagesMenu" title="Pages" aria-haspopup="menu">${esc(pageName(S.path))}${ico('chev', 10)}</button></span>
-      </div>
-      <div class="tmid"><div class="bps" role="radiogroup" aria-label="Screen size">${Object.keys(DEVICES).map((d) => `<button class="${S.device === d ? 'on' : ''}" data-act="device" data-v="${d}" role="radio" aria-checked="${S.device === d}" title="${DEV_LABEL[d]} · ${devRange(d)}">${ico(d, 14)}<span>${DEV_LABEL[d]}</span></button>`).join('')}</div></div>
-      <div class="tside r">
-        <button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
+        <button class="icon${S.layersOpen && S.mode === 'edit' ? ' on' : ''}" data-act="layersToggle" title="Side panel: Chat and Layers (⇧\\)" aria-label="Show or hide the side panel" ${S.mode === 'edit' ? '' : 'disabled'}>${ico('sidebar', 16)}</button>`;
+    $('topC').innerHTML = '';
+    $('topR').innerHTML = `<button class="meAv" data-act="meMenu" title="${esc(S.me?.name || 'You')}" aria-label="You: ${esc(S.me?.name || 'You')}" aria-haspopup="menu"><span class="meImg">${meAvatar()}</span>${ico('chev', 10)}</button>
+        <span class="sp"></span>
         <button class="icon${S.side === 'history' ? ' on' : ''}" data-act="history" title="Version history" aria-label="Version history">${ico('history', 16)}${S.versions.versions.length ? '<i class="badgeDot"></i>' : ''}</button>
-        <button class="primary" data-act="pr" ${n ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>
-      </div>`;
+        <button class="zpct" data-act="zoomMenu" title="Zoom" aria-haspopup="menu">${Math.round(S.z * 100)}%${ico('chev', 10)}</button>
+        <button class="primary" data-act="pr" ${total ? '' : 'disabled'} title="Send your changes to developers as one pull request">Hand off${n ? `<span class="count">${n}</span>` : ''}</button>`;
   }
 
+  // Your menu (avatar, like Figma's): who you are, switch GitHub account, settings, back to projects.
+  async function meMenu(a) {
+    const r = a.getBoundingClientRect(), at = { x: r.left, y: r.bottom + 6 };
+    const accts = await api('/accounts').catch(() => []);
+    const sw = (login) => api('/account', { login }).then((p) => { S.me = p; renderTop(); toast(`Now using GitHub ${p.login}`, 'Hand offs and pull requests go from this account.'); }).catch((err) => toast(err.message, '', true));
+    openMenu([{ head: S.me?.login ? `${S.me.name} · GitHub ${S.me.login}` : S.me?.name || 'You' },
+      ...(accts.length > 1 ? [...accts.map((x) => ({ label: x.login, on: x.active, run: () => x.active || sw(x.login) })), '-'] : []),
+      { label: 'Add a GitHub account…', icon: 'plus', run: () => { navigator.clipboard?.writeText('gh auth login --web').catch(() => {}); toast('Run gh auth login --web in Terminal (copied)', 'Sign in on GitHub’s page, then pick the account here.'); } },
+      '-',
+      { label: 'Settings', icon: 'gear', kbd: '⌘,', run: () => document.querySelector('[data-act="settings"]')?.click() },
+      { label: 'Back to projects', icon: 'chevR', run: () => { location.href = 'http://localhost:4100/'; } }], at);
+  }
   /* menus: one popover for the Tovi menu, pages, zoom and right-click */
   function openMenu(items, at) {
     const m = $('menu');
-    m.innerHTML = items.map((it, i) => it === '-' ? '<div class="msep"></div>' : it.input ? `<form class="minput" data-mi="${i}"><input placeholder="${esc(it.placeholder || '')}" value="${esc(it.value || '')}" spellcheck="false" aria-label="${esc(it.placeholder || '')}"></form>` : it.head ? `<div class="mhead">${esc(it.head)}</div>` : `<button class="mi${it.on ? ' on' : ''}${it.danger ? ' danger' : ''}" data-mi="${i}" ${it.disabled ? 'disabled' : ''} role="menuitem"><span class="mchk">${it.on ? ico('check', 12) : ''}</span><span class="ml">${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>${it.kbd ? `<span class="mk">${esc(it.kbd)}</span>` : ''}</button>`).join('');
+    m.innerHTML = items.map((it, i) => it === '-' ? '<div class="msep"></div>' : it.input ? `<form class="minput" data-mi="${i}"><input placeholder="${esc(it.placeholder || '')}" value="${esc(it.value || '')}" spellcheck="false" aria-label="${esc(it.placeholder || '')}"></form>` : it.head ? `<div class="mhead">${esc(it.head)}</div>` : `<button class="mi${it.on ? ' on' : ''}${it.danger ? ' danger' : ''}" data-mi="${i}" ${it.disabled ? 'disabled' : ''} role="menuitem"><span class="mchk${it.icon ? ' mic' : ''}">${it.on ? ico('check', 12) : it.icon ? ico(it.icon, 14) : ''}</span><span class="ml">${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>${it.kbd ? `<span class="mk">${esc(it.kbd)}</span>` : ''}</button>`).join('');
     m.hidden = false;
     const w = m.offsetWidth, h = m.offsetHeight;
     m.style.left = Math.max(8, Math.min(innerWidth - w - 8, at.x)) + 'px';
@@ -411,12 +892,81 @@
     openMenu([
       { head: p.repo || p.name || 'This project' },
       ...(p.branch ? [{ label: `Branch: ${p.branch}`, disabled: true }] : []),
-      { label: 'Open another project…', run: () => window.open('http://localhost:4100', '_blank') },
+      { label: 'All projects', run: () => window.open('http://localhost:4100/#projects', '_blank') },
+      { label: 'Help', run: () => window.open('http://localhost:4100/#help', '_blank') },
       '-',
       { label: S.direction ? `Design direction: ${dirName()}` : 'Set a design direction…', run: () => openDirection() },
       { label: S.minUI ? 'Show panels' : 'Hide panels', kbd: '⇧\\', run: () => toggleMinUI() },
+      { label: 'Settings…', kbd: '⌘,', run: () => openSettings() },
+      '-',
+      { label: S.agentsOn ? 'Hide Tovi at work' : 'Show Tovi at work', run: () => { S.agentsOn = !S.agentsOn; try { localStorage.setItem('kerf.agents', S.agentsOn ? 'on' : 'off'); } catch {} toast(S.agentsOn ? 'Tovi and its helpers show on the canvas while they work' : 'Changes apply without the helpers on the canvas'); } },
       { label: 'Keyboard shortcuts', kbd: '?', run: () => shortcuts() },
     ], at);
+  }
+  /* ---------- Settings ---------- */
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  let aiCfg = { provider: 'anthropic', model: '', defaults: {} }, aiPick = null;
+  // Load the saved AI settings first, so the window shows the right provider and key states.
+  function openSettings() {
+    aiPick = null;
+    api('/keys').then((k) => { aiCfg = k; showSettings(); }).catch(() => showSettings());
+  }
+  function showSettings() {
+    const m = $('modal'), p = S.project || {};
+    // The provider being set up: a picked "Other … model" waits for its name before it's saved.
+    const pv = aiPick?.provider || aiCfg.provider || 'anthropic';
+    const tog = (id, on, label, sub) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span><button class="switch${on ? ' on' : ''}" data-act="setTog" data-v="${id}" role="switch" aria-checked="${on}" aria-label="${label}"><i></i></button></div>`;
+    const row = (label, sub, ctl) => `<div class="setRow"><span class="setTx"><b>${label}</b><span class="note">${sub}</span></span>${ctl}</div>`;
+    const startPage = 'http://localhost:4100/#settings';
+    m.hidden = false;
+    m.innerHTML = `<section class="dialog settings" role="dialog" aria-modal="true" aria-labelledby="setT"><div class="dh"><h2 id="setT">Settings</h2><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
+      <div class="setBody">
+        <div class="setSec"><h3>Tovi</h3>
+          <form class="setRow" data-form="person" autocomplete="off"><span class="setTx"><b>Your name</b><span class="note">Shown on the versions and changes you make.</span></span><span class="setName"><input id="setPerson" value="" maxlength="60" placeholder="Your name" aria-label="Your name"><button class="outline sm">Save</button></span></form>
+          ${row('Appearance', 'Dark unless you choose otherwise. System follows your Mac.', `<div class="seg setSeg">${[['dark', 'Dark'], ['light', 'Light'], ['system', 'System']].map(([v, n]) => `<button data-act="setTheme" data-v="${v}" class="${theme === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
+          ${tog('agents', S.agentsOn, 'Show Tovi at work', 'See Tovi’s cursor select and change things as it works.')}
+          ${row('AI style', 'How far Tovi may go beyond your design system.', `<div class="seg setSeg">${[['system', 'On system'], ['improve', 'Improve'], ['explore', 'Explore']].map(([v, n]) => `<button data-act="setMode" data-v="${v}" class="${S.styleMode === v ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
+          ${row('Design direction', S.direction ? esc(dirName()) : 'Not set. Tovi follows your design system.', `<button class="outline sm" data-act="setDir">${S.direction ? 'Change' : 'Set'}</button>`)}
+        </div>
+        <div class="setSec"><h3>Editing</h3>
+          ${tog('sim', S.simScope === 'all', 'Look-alikes change together', 'When cards look the same, style changes go to all of them.')}
+          ${tog('scale', S.scaleArrows, 'Arrow keys follow your scale', 'Arrows step through your design system’s sizes. Shift+arrow nudges 1px.')}
+          ${tog('sound', S.sound, 'Sounds', 'Soft cues when you switch modes, undo, delete, and when Tovi finishes or your pull request is sent.')}
+          ${row('Panels', 'Put the side panels back to their usual widths.', '<button class="outline sm" data-act="setPanels">Reset</button>')}
+        </div>
+        <div class="setSec"><h3>AI</h3>
+          <div class="setRow"><span class="setTx"><b>Provider</b><span class="note">In use: ${esc(aiCfg.defaults?.[aiCfg.provider]?.label || '')} · ${esc(aiCfg.model || '')}</span></span><select id="setProvSel" class="setSel" aria-label="Provider">${Object.keys(aiCfg.defaults || {}).map((k) => `<option value="${k}"${k === pv ? ' selected' : ''}>${esc(aiCfg.defaults[k].label)}</option>`).join('')}</select></div>
+          ${[pv].map((k) => `<form class="setRow" data-form="aikey" data-p="${k}" autocomplete="off"><span class="setTx"><b>${aiCfg.defaults?.[k]?.label || k} key</b><span class="note">${aiCfg[k] ? 'Saved. Paste a new one to replace it.' : 'Not set yet.'}</span></span><span class="setName"><input type="password" placeholder="Paste key" aria-label="${k} key" autocomplete="new-password" spellcheck="false"><button class="outline sm">Save</button></span></form>`).join('')}
+          <div class="setRow"><span class="setTx"><b>Model</b><span class="note" id="setModelNote">Loading models…</span></span><select id="setModelSel" class="setSel" aria-label="Model" disabled></select></div>
+          <form class="setRow" data-form="aimodel" id="setModelForm" autocomplete="off" hidden><span class="setTx"><b>Model name</b><span class="note">Copy it from your provider’s docs.</span></span><span class="setName"><input id="setModel" maxlength="80" spellcheck="false" aria-label="Model name"><button class="outline sm">Use</button></span></form>
+          ${row('Unsplash photos', '<span id="setKeyU">Checking…</span>', `<a class="outline sm" href="${startPage}" target="_blank" rel="noopener">Change</a>`)}
+          <span class="note">Keys stay on this Mac in a git-ignored file. Tovi never shows them.</span>
+        </div>
+        <div class="setSec"><h3>This project</h3>
+          ${row(esc(p.name || 'Project'), `${esc(p.repo || 'Not connected to GitHub yet')}${p.branch ? ` · branch ${esc(p.branch)}` : ''}`, '<a class="outline sm" href="http://localhost:4100" target="_blank" rel="noopener">All projects</a>')}
+          ${row('Keyboard shortcuts', 'Every key Tovi listens for.', '<button class="outline sm" data-act="keys">Show</button>')}
+        </div>
+      </div></section>`;
+    api('/person').then((p) => { const i = $('setPerson'); if (i && !i.value) i.value = p.name; }).catch(() => {});
+    const u = $('setKeyU');
+    if (u) u.textContent = aiCfg.unsplash ? 'Saved. Photo search is on.' : 'Optional. Add a free key to search photos.';
+    fillModels(pv);
+  }
+  // The chosen provider's models, from the provider itself once its key is saved. Picking one switches Tovi over.
+  async function fillModels(pv) {
+    const sel = $('setModelSel'), note = $('setModelNote');
+    if (!sel) return;
+    const label = aiCfg.defaults?.[pv]?.label || pv, cur = pv === aiCfg.provider;
+    let list = { models: [], live: false };
+    try { list = await api(`/models?provider=${pv}`); } catch {}
+    if ($('setModelSel') !== sel) return;
+    const known = cur && list.models.some((x) => x.id === aiCfg.model);
+    sel.innerHTML = (cur ? '' : '<option value="" disabled selected>Choose a model</option>') + list.models.map((x) => `<option value="${esc(x.id)}">${esc(x.label)}</option>`).join('') + '<option value="__other">Other model…</option>';
+    if (cur) sel.value = known ? aiCfg.model : '__other';
+    if (cur && !known) { $('setModelForm').hidden = false; $('setModel').value = aiCfg.model || ''; }
+    sel.disabled = false;
+    const has = pv === 'anthropic' ? aiCfg.anthropic : aiCfg[pv];
+    note.textContent = (list.live ? `Every model your ${label} key can use.` : has ? `Couldn’t reach ${label}. Showing the usual models.` : `Add your ${label} key above to see every model.`) + (cur ? '' : ` Choosing one switches Tovi to ${label}.`);
   }
   function pagesMenu(at) {
     const seen = [...new Set([S.path, ...S.pages])].slice(0, 12);
@@ -438,6 +988,9 @@
     ], at);
   }
   // Right-click on the canvas: what a designer reaches for, on the element under the cursor.
+  // You, like Figma and Paper: your picture top right (your GitHub picture when signed in, else your initial).
+  function meAvatar() { const n = S.me?.name || 'You', ini = esc(n.trim()[0] || '?').toUpperCase(); return S.me?.avatar ? `<img src="${esc(S.me.avatar)}" alt="" data-i="${ini}" onerror="this.replaceWith(this.dataset.i)">` : ini; }
+  api('/person').then((p) => { S.me = p; renderTop(); }).catch(() => {});
   function contextMenu(at) {
     const s = S.sel, inf = info(), el = s?.el;
     if (!el) return;
@@ -445,23 +998,25 @@
     const plain = /^(div|section|span)$/.test(el.tagName.toLowerCase()) && !el.getAttribute('data-kerf-n');
     openMenu([
       { head: dName(el) },
-      ...(inf?.text?.editable ? [{ label: 'Edit text', kbd: '↵', run: () => beginText() }] : []),
-      { label: 'Ask Tovi about this…', kbd: '⌘K', run: () => toggleAI(true) },
-      { label: 'Select parent', kbd: '⇧↵', disabled: !pick(el.parentElement), run: () => { const p = pick(el.parentElement); if (p) select(p); } },
+      ...(inf?.text?.editable ? [{ label: 'Edit text', icon: 'text', kbd: '↵', run: () => beginText() }] : []),
+      { label: 'Ask Tovi about this…', icon: 'kerf', kbd: '⌘K', run: () => toggleAI(true) },
+      { label: 'Select parent', icon: 'parent', kbd: '⇧↵', disabled: !pick(el.parentElement), run: () => { const p = pick(el.parentElement); if (p) select(p); } },
       '-',
-      { label: 'Duplicate', kbd: '⌘D', run: () => structure({ type: 'duplicate' }, { keepSel: true }) },
-      { label: 'Group into a frame', kbd: '⌥⌘G', run: () => groupSelected() },
-      ...(plain ? [{ label: 'Ungroup', kbd: '⇧⌘G', run: () => structure({ type: 'ungroup' }) }] : []),
-      { label: 'Move up', kbd: '⌥↑', run: () => structure({ type: 'move', dir: 'up' }, { keepSel: true }) },
-      { label: 'Move down', kbd: '⌥↓', run: () => structure({ type: 'move', dir: 'down' }, { keepSel: true }) },
-      ...(document.querySelector('[data-act="sSwap"]') ? [{ label: 'Swap with…', run: act('sSwap') }] : []),
-      { label: 'Add next to it…', kbd: 'I', run: act('insertMenu') },
+      { label: 'Duplicate', icon: 'dup', kbd: '⌘D', run: () => structure({ type: 'duplicate' }, { keepSel: true }) },
+      { label: 'Group into a frame', icon: 'group', kbd: '⌥⌘G', run: () => groupSelected() },
+      ...(plain ? [{ label: 'Ungroup', icon: 'ungroup', kbd: '⇧⌘G', run: () => structure({ type: 'ungroup' }) }] : []),
+      { label: 'Move up', icon: 'up', kbd: '⌥↑', run: () => structure({ type: 'move', dir: 'up' }, { keepSel: true }) },
+      { label: 'Move down', icon: 'down', kbd: '⌥↓', run: () => structure({ type: 'move', dir: 'down' }, { keepSel: true }) },
+      ...(/^[A-Z]/.test(nameOf(el)) || el.tagName.toLowerCase() === 'svg' ? [{ label: 'Swap with…', icon: 'swap', run: () => { const t = document.createElement('button'); t.dataset.act = 'sSwap'; Object.assign(t.style, { position: 'fixed', left: (at?.x ?? 0) + 'px', top: (at?.y ?? 0) + 'px', width: '1px', height: '1px', opacity: 0 }); document.body.appendChild(t); t.click(); setTimeout(() => t.remove(), 0); } }] : []),
+      { label: 'Add next to it…', icon: 'addEl', kbd: 'I', run: act('insertMenu') },
+      { label: 'Copy code location', icon: 'code', run: () => { const l = activeLoc(); if (l) navigator.clipboard?.writeText(l).then(() => toast('Copied the code location')).catch(() => {}); } },
       '-',
-      { label: 'Delete', kbd: '⌫', danger: true, run: () => deleteSelected() },
+      // Destructive last, after a divider, so it's never a slip away from a safe row.
+      { label: 'Delete', icon: 'trash', kbd: '⌫', danger: true, run: () => deleteSelected() },
     ], at);
   }
   function shortcuts() {
-    const rows = [['Edit / Preview', 'E · P'], ['Annotate', 'A'], ['Ask Tovi', '⌘K'], ['Undo', '⌘Z'], ['Select parent', '⇧↵'], ['Duplicate', '⌘D'], ['Delete', '⌫'], ['Move up / down', '⌥↑ ⌥↓'], ['Group / ungroup', '⌥⌘G · ⇧⌘G'], ['Add element', 'I'], ['Measure spacing', 'hold ⌥'], ['Select several', '⇧ click'], ['Zoom in / out', '⌘+ · ⌘−'], ['Fit / 100%', '⇧1 · ⇧0'], ['Hide panels', '⇧\\']];
+    const rows = [['Select', 'V'], ['Interact with the app', 'P'], ['Click through while selecting', 'Hold ⌘'], ['Annotate', 'A'], ['Ask Tovi (chat)', '⌘K'], ['Undo', '⌘Z'], ['Select parent', '⇧↵'], ['Duplicate', '⌘D'], ['Delete', '⌫'], ['Move up / down', '⌥↑ ⌥↓'], ['Group / ungroup', '⌥⌘G · ⇧⌘G'], ['Add element', 'I'], ['Measure spacing', 'hold ⌥'], ['Select several', '⇧ click'], ['Zoom in / out', '⌘+ · ⌘−'], ['Fit / 100%', '⇧1 · ⇧0'], ['Hide panels', '⇧\\']];
     const m = $('modal');
     m.hidden = false;
     m.innerHTML = `<section class="dialog keys" role="dialog" aria-modal="true" aria-labelledby="kT"><div class="dh"><h2 id="kT">Keyboard shortcuts</h2><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div><div class="db"><div class="krows">${rows.map(([a, k]) => `<div class="kr"><span>${a}</span><span class="kk">${k}</span></div>`).join('')}</div></div></section>`;
@@ -478,8 +1033,11 @@
     const c = $('canvas'), fb = $('frameBox');
     if (!c) return;
     // Room for the frame's name above it and a margin below, like an artboard.
-    const aw = Math.max(80, c.clientWidth - 48), ah = Math.max(80, c.clientHeight - 64);
-    let zFit, w, z, h, left, top = 44;
+    // With the left panel hidden its header floats over the canvas's top-left, so the frame starts lower.
+    const floatL = $('layers').hidden || document.body.classList.contains('minUI'), top0 = floatL ? 84 : 44;
+    const aw = Math.max(80, c.clientWidth - 48), ah = Math.max(80, c.clientHeight - 20 - top0);
+    let zFit, w, z, h, left, top = top0;
+    $('devLabel').style.top = top0 - 24 + 'px';
     if (S.mode === 'preview' && S.device === 'desktop' && S.zoom === 'fit') {
       // Preview on desktop: full screen, edge to edge, like presenting the real product.
       zFit = Math.max(0.5, Math.min(1, c.clientWidth / 1024));
@@ -510,7 +1068,7 @@
     // Preview is a presentation: no artboard name, no dotted grid.
     c.classList.toggle('present', S.mode === 'preview');
     $('devLabel').hidden = S.mode === 'preview';
-    $('devLabel').innerHTML = `<b>${DEV_LABEL[S.device]}</b><span>${w}</span>`;
+    $('devLabel').innerHTML = `<button class="devBtn" data-act="deviceMenu" title="Screen size" aria-haspopup="menu">${ico(S.device, 12)}<b>${DEV_LABEL[S.device]}</b>${ico('chev', 10)}</button><span>${w}</span>`;
     const changed = S.z !== z;
     S.z = z;
     if (changed) { renderTop(); if (S.notes?.length) drawMarks(); }
@@ -525,9 +1083,16 @@
     renderTop();
   }
   new ResizeObserver(() => applyDevice()).observe(document.getElementById('canvas'));
+  // When the app's width changes (window, screen size, panels), refresh the measured sizes in the panel,
+  // unless the designer is typing in it.
+  let panelSizeT;
+  new ResizeObserver(() => {
+    clearTimeout(panelSizeT);
+    panelSizeT = setTimeout(() => { if (S.mode === 'edit' && !$('panel').contains(document.activeElement)) renderPanel(); }, 300);
+  }).observe(frame);
   // Side panels: drag their inner edge to resize, double-click to reset. Widths are remembered in this browser.
-  const SIDE = { l: { el: 'layers', def: 212, min: 168, max: 420 }, r: { el: 'panel', def: 284, min: 248, max: 520 } };
-  const setSide = (k, w) => { const c = SIDE[k]; w = Math.round(Math.max(c.min, Math.min(c.max, w))); document.getElementById(c.el).style.flexBasis = w + 'px'; return w; };
+  const SIDE = { l: { el: 'layers', def: 300, min: 260, max: 520 }, r: { el: 'panel', def: 284, min: 248, max: 520 } };
+  const setSide = (k, w) => { const c = SIDE[k]; w = Math.round(Math.max(c.min, Math.min(c.max, w))); document.getElementById(c.el).parentElement.style.flexBasis = w + 'px'; return w; };
   for (const k of Object.keys(SIDE)) { let w = null; try { w = +localStorage.getItem(`kerf.side.${k}`); } catch {} setSide(k, w || SIDE[k].def); }
   let sideDrag = null;
   document.addEventListener('pointerdown', (e) => {
@@ -566,23 +1131,24 @@
 
   /* ---------- toolbar ---------- */
   function renderBar() {
+    // Presenting: the app alone, with one way back.
+    if (S.mode === 'preview') { $('bar').innerHTML = `<button class="tb wide" data-act="mode" data-v="edit" aria-label="Stop presenting">${ico('x', 14)}<span>Stop presenting</span><span class="kbd">Esc</span></button>`; $('hint').hidden = true; return; }
+    const tool = (t, icon, name, key) => `<button class="tb${S.tool === t ? ' on' : ''}" data-act="tool" data-v="${t}" aria-label="${name}" aria-pressed="${S.tool === t}">${ico(icon, 24)}${tip(name, key)}</button>`;
     $('bar').innerHTML = `<div class="modes">
-        <button class="tb${S.mode === 'preview' ? ' on' : ''}" data-act="mode" data-v="preview" aria-label="Preview">${ico('play', 16)}${tip('Preview', 'P')}</button>
-        <button class="tb${S.mode === 'edit' ? ' on' : ''}" data-act="mode" data-v="edit" aria-label="Edit">${ico('edit', 16)}${tip('Edit', 'E')}</button>
+        ${tool('interact', 'tap', 'Interact with the app', 'P')}
+        ${tool('select', 'editFrame', 'Edit', 'V')}
       </div>
       <span class="div"></span>
-      ${S.mode === 'preview'
-        ? `<button class="tb${S.askOpen ? ' on' : ''}" data-act="ask" aria-label="Ask Tovi">${ico('spark', 16)}${tip('Ask Tovi', '⌘K')}</button>`
-        : `<button class="tb${S.tab === 'chat' ? ' on' : ''}" data-act="chatToggle" aria-label="Chat with Tovi">${ico('spark', 16)}${tip('Chat with Tovi', '⌘K')}</button>`}
-      ${S.mode === 'edit' ? `<button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 16)}${tip('Add element', 'I')}</button>` : ''}
-      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Annotate">${ico('pen', 16)}${tip('Annotate', 'A')}</button>
-      ${S.tool === 'annotate' ? `<div class="shapes">${['pin', 'box', 'circle', 'arrow'].map((k, i) => `<button class="tb sm${S.shape === k ? ' on' : ''}" data-act="shape" data-v="${k}" aria-label="${k}">${ico(k, 14)}${tip(k[0].toUpperCase() + k.slice(1), String(i + 1))}</button>`).join('')}</div>` : ''}
+      <button class="tb" data-act="insertMenu" aria-label="Add element">${ico('plus', 24)}${tip(S.tool === 'select' ? 'Add element' : 'Add element (switches to Select)', 'I')}</button>
+      <button class="tb${S.tool === 'annotate' ? ' on' : ''}" data-act="tool" data-v="annotate" aria-label="Mark for Tovi">${ico('markAI', 24)}${tip('Mark for Tovi', 'A')}</button>
+      <button class="tb${S.diagnosing ? ' busy' : ''}" data-act="diagnose" aria-label="Diagnose">${ico('diag', 24)}${S.notes.some((x) => x.by === 'tovi') ? '<i class="badgeDot tovi" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip(S.diagnosing ? 'Tovi is reviewing…' : 'Diagnose: find what to fix')}</button>
       <span class="div"></span>
-      <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 16)}${tip('Undo', '⌘Z')}</button>
-      <button class="tb" data-act="changes" aria-label="Changes">${ico('list', 16)}${S.count ? '<i class="badgeDot" style="box-shadow:0 0 0 2px var(--raised)"></i>' : ''}${tip('Changes this session')}</button>`;
+      <button class="tb" data-act="undo" ${S.count ? '' : 'disabled'} aria-label="Undo">${ico('undo', 24)}${tip('Undo', '⌘Z')}</button>
+      <span class="div"></span>
+      <button class="tb" data-act="present" aria-label="Present">${ico('play', 24)}${tip('Present the app')}</button>`;
     const h = $('hint');
     h.hidden = true;
-    if (!h.hidden) h.innerHTML = `Use your app normally. Press <span class="kbd">E</span> to edit a screen, <span class="kbd">A</span> to annotate, or <span class="kbd">⌘K</span> to ask Tovi.`;
+    if (!h.hidden) h.innerHTML = `Click anything to select it. Press <span class="kbd">P</span> to use your app, hold <span class="kbd">⌘</span> to click through, or <span class="kbd">⌘K</span> to ask Tovi.`;
   }
 
   /* ---------- layers ---------- */
@@ -603,19 +1169,39 @@
     };
     return walk(D.body);
   }
-  function renderLayers() {
+  // The left panel: Chat (the default) and Layers, as two tabs.
+  function renderLeft(focusChat) {
     const box = $('layers');
     box.hidden = S.mode !== 'edit' || !S.layersOpen;
     if (box.hidden) return;
+    if (!box.querySelector('.ltabs')) box.innerHTML = '<div class="ptabs ltabs"></div><div class="lbody" id="lbody"></div>';
+    box.querySelector('.ltabs').innerHTML = `<div class="seg ltg" role="tablist"><button data-act="left" data-v="chat" role="tab" aria-selected="${S.left === 'chat'}" class="${S.left === 'chat' ? 'on' : ''}">Chat <span class="kbd">⌘K</span></button><button data-act="left" data-v="layers" role="tab" aria-selected="${S.left === 'layers'}" class="${S.left === 'layers' ? 'on' : ''}">Layers</button></div>`;
+    box.dataset.left = S.left;
+    if (S.left === 'layers') renderLayers(); else renderChat(focusChat);
+  }
+  function renderChat(focusChat) {
+    const box = $('lbody');
+    if (!box || S.left !== 'chat' || $('layers').hidden) return;
+    const draft = $('chatIn')?.value || '';
+    const hadFocus = document.activeElement?.id === 'chatIn';
+    box.innerHTML = chatHTML();
+    const sc = $('chatScroll'); if (sc) sc.scrollTop = sc.scrollHeight;
+    const ci = $('chatIn'); if (ci) { ci.value = draft; syncKC('chatIn'); if (focusChat || hadFocus) ci.focus(); }
+  }
+  function renderLayers() {
+    const box = $('lbody');
+    if (!box || S.left !== 'layers' || $('layers').hidden) return;
     const rows = [];
     const add = (nodes, depth) => {
       for (const n of nodes) {
         const el = n.el, k = keyOf(el), open = !!S.open[k] || depth < 2;
         const on = S.sel?.el === el;
+        // Like Figma: what's inside the selected layer gets a lighter version of its highlight.
+        const sub = !on && !!S.sel?.el && S.sel.el !== el && S.sel.el.contains(el);
         const leafText = !n.kids.length && el.childElementCount === 0 ? (el.textContent || '').trim().slice(0, 40) : '';
         const icon = layerIcon(el);
         const comp = useOf(el) && /^[A-Z]/.test(el.getAttribute('data-kerf-n') || '');
-        rows.push(`<button class="layer${on ? ' on' : ''}${comp ? ' comp' : ''}" data-layer="${rows.length}" style="padding-left:6px"><span class="ind" style="width:${depth * 12}px"></span>
+        rows.push(`<button class="layer${on ? ' on' : ''}${sub ? ' sub' : ''}${comp ? ' comp' : ''}" data-layer="${rows.length}" style="padding-left:6px"><span class="ind" style="width:${depth * 12}px"></span>
           <span class="tw" data-twist="${esc(k)}">${n.kids.length ? ico(open ? 'chev' : 'chevR', 10) : ''}</span>${ico(icon, 12)}<span class="nm">${esc(kindOf(el))}</span>${(() => { const w = / icon$/.test(kindOf(el)) ? '' : leafText || (/^(img|input|textarea)$/i.test(el.tagName) ? wordsOf(el) : ''); return w ? `<span class="tx">${esc(w)}</span>` : ''; })()}</button>`);
         layerEls.push(el);
         if (n.kids.length && open) add(n.kids, depth + 1);
@@ -626,7 +1212,7 @@
     const tree = box.querySelector('.tree');
     const st = tree ? tree.scrollTop : 0;
     const changes = S.versions.draft;
-    box.innerHTML = `<div class="lhead"><span>Layers</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
+    box.innerHTML = `<div class="lhead"><span>Page</span><button class="lpage" data-act="pagesMenu" title="Pages">${esc(pageName(S.path))}${ico('chev', 10)}</button></div>
       <div class="tree">${rows.join('') || '<div class="empty">This page has no elements Tovi can edit yet.</div>'}</div>
       ${changes.length ? `<button class="lchanges" data-act="history" title="Open version history"><span class="dot"></span><span>${changes.length} unsaved change${changes.length === 1 ? '' : 's'}</span>${ico('chevR', 10)}</button>` : ''}`;
     box.querySelector('.tree').scrollTop = st;
@@ -639,41 +1225,115 @@
 
   /* ---------- design panel ---------- */
   const val = (p) => read(p, S.sel?.el);
-  const nf = (p, icon, title, unit) => `<label class="inp${info()?.sized?.includes(p) ? ' sized' : ''}" title="${title}${info()?.sized?.includes(p) ? ' · different on other screen sizes' : ''}"><span class="ic" data-scrub="${p}">${icon.startsWith('<') ? icon : ico(icon, 12)}</span><input type="text" inputmode="decimal" data-prop="${p}" value="${esc(val(p))}" aria-label="${title}">${unit ? `<span class="u">${unit}</span>` : ''}</label>`;
-  const sec = (title, body, act = '') => `<div class="sec"><div class="secH"><span>${title}</span>${act}</div>${body}</div>`;
+  const nf = (p, icon, title, unit) => { const st = ''; return `<label class="inp${info()?.sized?.includes(p) ? ' sized' : ''}" title="${title}${st ? ` · ${st === 'custom' ? 'off your design scale' : `scale step ${st}`}` : ''}${info()?.sized?.includes(p) ? ' · different on other screen sizes' : ''}"><span class="ic" data-scrub="${p}">${icon.startsWith('<') ? icon : ico(icon, 16)}</span><input type="text" inputmode="decimal" data-prop="${p}" value="${esc(/^(radius|r[TB][LR])$/.test(p) && +val(p) >= 999 ? 'Full' : val(p))}" aria-label="${title}">${st ? `<span class="u step${st === 'custom' ? ' off' : ''}">${st === 'custom' ? 'off' : esc(st)}</span>` : ''}${unit ? `<span class="u">${unit}</span>` : ''}</label>`; };
+  // A field with its name above it, like Figma's labelled fields.
+  const lf = (label, field) => `<div class="fl"><span class="flab">${label}</span>${field}</div>`;
+  // The design-system step behind a number (p-4 → "4", rounded-lg → "lg", text-xl → "xl"); "custom" when off the scale.
+  const STEP = { padX: ['px', 'p'], padY: ['py', 'p'], gap: ['gap'], mT: ['mt', 'my', 'm'], mB: ['mb', 'my', 'm'], mX: ['mx', 'm'], lineHeight: ['leading'], letterSpacing: ['tracking'], opacity: ['opacity'] };
+  function stepOf(p) {
+    const cls = (info()?.classes || []).filter((c) => !c.includes(':'));
+    const pick = (pre, ok = () => true) => { for (const x of pre) { const c = cls.find((k) => (k.startsWith(x + '-') || k.startsWith('-' + x + '-')) && ok(k.slice(k.indexOf(x + '-') + x.length + 1))); if (c) return c.slice(c.indexOf(x + '-') + x.length + 1); } return null; };
+    let v = null;
+    if (STEP[p]) v = pick(STEP[p]);
+    else if (p === 'radius') { const c = cls.find((k) => k === 'rounded' || /^rounded-(none|sm|md|lg|xl|2xl|3xl|full|\[.+\]|[\w-]+)$/.test(k) && !/^rounded-(t|b|l|r|s|e|tl|tr|bl|br|ss|se|es|ee)(-|$)/.test(k)); v = c ? (c === 'rounded' ? 'default' : c.slice(8)) : null; }
+    else if (p === 'fontSize') v = pick(['text'], (x) => (S.theme?.keys?.fontSize || []).includes(x) || /^\[[\d.]+(px|rem|em)\]$/.test(x));
+    else if (p === 'borderW') { const c = cls.find((k) => k === 'border' || /^border-(\d+|\[[\d.]+px\])$/.test(k)); v = c ? (c === 'border' ? 'default' : c.slice(7)) : null; }
+    if (!v) return '';
+    if (v.startsWith('[')) return 'custom';
+    // Components with variants list several classes: show the step only when it matches what's on screen.
+    const kind = { padX: 'spacing', padY: 'spacing', gap: 'spacing', mT: 'spacing', mB: 'spacing', mX: 'spacing', radius: 'radius', fontSize: 'fontSize', lineHeight: 'lineHeight', borderW: 'borderWidth' }[p];
+    const want = kind && S.theme?.byKey?.[kind]?.[v === 'default' ? 'DEFAULT' : v];
+    if (want != null && !isNaN(want) && Math.abs(want - Math.abs(Number(val(p)) || 0)) > 1) return '';
+    return v;
+  }
+  // An empty section (just a title and +) is a slim, quiet row, like Paper's; sections with content keep full size.
+  const sec = (title, body, act = '') => `<div class="sec${String(body || '').trim() ? '' : ' empty'}"><div class="secH"><span>${title}</span>${act}</div>${body}</div>`;
+  // A colour's own opacity (text-primary/50), as a percentage.
+  function alphaOf(p) {
+    const el = S.sel?.el;
+    if (!el?.isConnected) return 100;
+    const c = cs(el)[{ bg: 'backgroundColor', color: 'color', borderC: 'borderTopColor' }[p]] || '';
+    const m = c.match(/[\d.]+/g);
+    return m && m.length > 3 ? Math.round(+m[3] * 100) : 100;
+  }
+  document.addEventListener('change', (e) => {
+    const p = e.target.dataset?.calpha;
+    if (!p || !S.sel) return;
+    let a = Math.round(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) / 5) * 5;
+    const tok = tokenOf(p), hex = val(p);
+    const base = tok && !tok.startsWith('#') ? tok : (hex || '').slice(0, 7);
+    if (!base || base === 'transparent') return;
+    const value = a >= 100 ? base : base.startsWith('#') ? base + ('0' + Math.round(a * 2.55).toString(16)).slice(-2).toUpperCase() : `${base}/${a}`;
+    commit({ ops: [{ prop: p, value }] });
+  });
   function colorRow(p, title, removeAct) {
     const hex = val(p), tok = tokenOf(p), none = hex === 'transparent';
-    let h = `<div class="cr"><label class="inp" title="${title}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : hex}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"><span class="u">${esc(tok && !tok.startsWith('#') ? tok : '')}</span></label>${removeAct ? `<button class="ib" data-act="${removeAct}" title="Remove">${ico('minus')}</button>` : ''}</div>`;
-    if (S.cpick === p) {
-      h += `<div class="cpop"><div class="cpT">Project tokens</div><div class="toks">${tokens().map(([n, v]) => `<button data-act="token" data-p="${p}" data-v="${esc(n)}" title="${esc(n)}" class="${n === tok ? 'on' : ''}"><i style="background:${esc(swatch(v))}"></i><span>${esc(n)}</span></button>`).join('')}</div>
-        <label class="cust"><input type="color" data-colorinput="${p}" value="${/^#[0-9A-F]{6}$/.test(hex) ? hex : '#FFFFFF'}"><span>Custom color</span><span class="u">off scale</span></label></div>`;
-    }
+    // The design-system name (content, muted…) lives in the tooltip, not as a tag in the field.
+    const tokName = tok && !tok.startsWith('#') ? tok : '';
+    let h = `<div class="cr"><label class="inp" title="${title}${tokName ? ` · ${esc(tokName)} (from your design system)` : ''}"><button class="cchip${none ? ' none' : ''}" data-act="cpick" data-v="${p}" style="background:${none ? 'transparent' : chipBg(hex, alphaOf(p))}" aria-label="Choose ${title}"></button><input type="text" data-prop="${p}" data-color="1" value="${none ? '' : hex.replace('#', '')}" placeholder="None" spellcheck="false" aria-label="${title} hex"></label>${none ? '' : `<label class="inp ca" title="${title} opacity"><input type="text" inputmode="numeric" data-calpha="${p}" value="${alphaOf(p)}" aria-label="${title} opacity"><span class="u">%</span></label>`}</div>`;
     return h;
   }
+  // Clip content (Figma, Paper, Wonder): frames with something inside can cut off what spills past their edges.
+  function clipRow(el) {
+    if (!el || isTextOnly(el) || isMedia(el) || !el.childElementCount || el.tagName === 'BUTTON' || el.closest?.('button')) return '';
+    const on = val('clip') === 'on';
+    return `<button class="chkRow" data-act="set" data-p="clip" data-v="${on ? 'off' : 'on'}" role="checkbox" aria-checked="${on}"><i class="mk cbox${on ? ' on' : ''}">${on ? CHECK : ''}</i>Clip content</button>`;
+  }
+  // Underline, strikethrough and UPPERCASE: independent switches beside the alignment (Figma, Paper).
+  function textStyleToggles() {
+    const d = val('decor'), c = val('case');
+    const t = (p, on, offV, onV, icon, title) => `<button class="ib${on ? ' on' : ''}" data-act="set" data-p="${p}" data-v="${on ? offV : onV}" title="${title}" aria-pressed="${on}">${ico(icon)}</button>`;
+    return `<div class="ibs togs">${t('decor', d === 'underline', 'none', 'underline', 'tUnder', 'Underline')}${t('decor', d === 'strike', 'none', 'strike', 'tStrike', 'Strikethrough')}${t('case', c === 'upper', 'none', 'upper', 'tCase', 'UPPERCASE')}</div>`;
+  }
   const isText = (el) => el && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+  // Text with nothing but words in it (a paragraph, a heading, a link), not a button or a frame.
+  const isTextOnly = (el) => !!el && isText(el) && el.childElementCount === 0 && !/^(button|input|textarea|select)$/i.test(el.tagName) && !el.closest?.('button');
   const isLayout = (el) => el && el.isConnected && /flex|grid/.test(cs(el).display);
   /* fill: solid or gradient */
   const DIRS = [['r', '→ Right'], ['l', '← Left'], ['b', '↓ Down'], ['t', '↑ Up'], ['br', '↘ Down right'], ['bl', '↙ Down left'], ['tr', '↗ Up right'], ['tl', '↖ Up left']];
   const CSSDIR = { r: 'to right', l: 'to left', b: 'to bottom', t: 'to top', br: 'to bottom right', bl: 'to bottom left', tr: 'to top right', tl: 'to top left' };
+  // The gradient on the element: direction, up to three stops (from, via, to), each with a position.
+  const POS_RE = /^(from|via|to)-(?:(\d+(?:\.\d+)?)%|\[(\d+(?:\.\d+)?)%\])$/;
   function gradOf() {
     const cls = (info()?.classes || []).filter((c) => !c.includes(':'));
     const dir = cls.map((c) => c.match(/^bg-(?:gradient|linear)-to-(\w+)$/)).find(Boolean);
     if (!dir) return null;
-    const stop = (p) => (cls.find((c) => c.startsWith(p + '-')) || '').slice(p.length + 1).replace(/^\[|\]$/g, '') || null;
-    return { dir: dir[1], from: stop('from'), via: stop('via'), to: stop('to'), clip: cls.includes('bg-clip-text') };
+    const stop = (p) => (cls.find((c) => c.startsWith(p + '-') && !POS_RE.test(c)) || '').slice(p.length + 1).replace(/^\[|\]$/g, '') || null;
+    const pos = (p) => { const m = cls.map((c) => c.match(POS_RE)).find((x) => x && x[1] === p); return m ? Math.round(Number(m[2] ?? m[3])) : null; };
+    return { dir: dir[1], from: stop('from'), via: stop('via'), to: stop('to'), fromPos: pos('from'), viaPos: pos('via'), toPos: pos('to'), clip: cls.includes('bg-clip-text') };
   }
-  const gradValue = (g) => [g.dir, g.from, g.via, g.to].filter(Boolean).join(' ');
-  const tokenSwatch = (n) => { const t = tokens().find(([k]) => k === n); return t ? swatch(t[1]) : n?.startsWith('#') ? n : 'transparent'; };
+  const STOP_DEF = { from: 0, via: 50, to: 100 };
+  const posOf = (g, k) => g[k + 'Pos'] ?? STOP_DEF[k];
+  const stopsOf = (g) => ['from', g.via ? 'via' : null, 'to'].filter(Boolean).map((k) => ({ k, col: g[k], pos: posOf(g, k) }));
+  const gradValue = (g) => [g.dir, ...stopsOf(g).map((st) => st.pos === STOP_DEF[st.k] ? st.col : `${st.col}@${st.pos}`)].filter(Boolean).join(' ');
+  // Any gradient stop colour as CSS: a project token, any Tailwind colour (gray-900), one with an opacity
+  // (white/80, primary/40), transparent, or a raw hex.
+  function tokenSwatch(n) {
+    if (!n) return 'transparent';
+    if (/^(#|rgb|hsl)/.test(n)) return n;
+    const [base, op] = String(n).split('/');
+    const named = { transparent: 'transparent', black: '#000000', white: '#ffffff', current: 'currentColor' };
+    const raw = S.theme?.colors?.[base] ?? named[base];
+    if (raw == null) return 'transparent';
+    const css = raw === 'transparent' ? 'rgba(0,0,0,0)' : swatch(raw);
+    if (!op) return css;
+    const m = String(toCssRgb(css)).match(/[\d.]+/g) || [0, 0, 0, 1];
+    const a = (m.length > 3 ? +m[3] : 1) * (parseFloat(op) / 100);
+    return `rgba(${m[0]}, ${m[1]}, ${m[2]}, ${a})`;
+  }
+  const toCssRgb = (css) => { const doc = D || document, pr = doc.createElement('span'); pr.style.color = css; doc.body.appendChild(pr); const v = getComputedStyle(pr).color; pr.remove(); return v; };
   const stopSel = (key, cur, allowNone) => `<label class="inp"><i class="sw1" style="background:${esc(tokenSwatch(cur))}"></i><select data-gstop="${key}" aria-label="Gradient ${key}">${allowNone ? `<option value=""${cur ? '' : ' selected'}>No middle color</option>` : ''}${tokens().filter(([n]) => n !== 'transparent').map(([n]) => `<option${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
+  const gradCss = (g) => `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${stopsOf(g).filter((st) => st.col).map((st) => `${tokenSwatch(st.col)} ${st.pos}%`).join(', ')})`;
+  // A box's background photo (Figma's image fill): its own row in Fill, opening the image panel.
+  const bgImgOf = (el) => { const m = el && cs(el).backgroundImage.match(/url\(["']?([^"')]+)["']?\)/); return m ? m[1] : ''; };
+  const fileOf = (src) => decodeURIComponent((String(src).split('?')[0].split('/').pop() || '')).slice(0, 60);
+  function imgFillRow(el) {
+    const src = bgImgOf(el);
+    return `<div class="cr"><label class="inp imgF" title="Image fill: ${esc(fileOf(src))}"><button class="cchip img" data-act="cpick" data-v="bgimg" style="background-image:url('${esc(src)}')" aria-label="Edit image fill"></button><button class="imgFName" data-act="cpick" data-v="bgimg">${esc(fileOf(src) || 'Image')}</button></label><button class="ib" data-act="rmBgImg" title="Remove image fill" aria-label="Remove image fill">${ico('minus')}</button></div>`;
+  }
   function fillBody(g, el) {
-    const seg = `<div class="seg"><button data-act="fillType" data-v="solid" class="${g ? '' : 'on'}">Solid</button><button data-act="fillType" data-v="gradient" class="${g ? 'on' : ''}">Gradient</button></div>`;
-    if (!g) return seg + colorRow('bg', 'Fill', 'rmFill');
-    const prev = `linear-gradient(${CSSDIR[g.dir] || 'to right'}, ${[g.from, g.via, g.to].filter(Boolean).map(tokenSwatch).join(', ')})`;
-    return seg + `<div class="gprev" style="background:${esc(prev)}"></div>
-      <div class="cr"><label class="inp"><select data-gstop="dir" aria-label="Direction">${DIRS.map(([v, n]) => `<option value="${v}"${v === g.dir ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label><button class="ib" data-act="rmFill" title="Remove fill">${ico('minus')}</button></div>
-      <div class="kv"><span>From</span>${stopSel('from', g.from)}</div>
-      <div class="kv"><span>Middle</span>${stopSel('via', g.via, true)}</div>
-      <div class="kv"><span>To</span>${stopSel('to', g.to)}</div>
+    if (!g) return colorRow('bg', 'Fill', 'rmFill');
+    return `<div class="cr"><label class="inp" title="Fill"><button class="cchip" data-act="cpick" data-v="grad" style="background:${esc(gradCss(g))}" aria-label="Edit gradient"></button><span class="gName">Linear gradient</span></label></div>
       ${isText(el) ? `<div class="kv"><span>On text</span><div class="seg"><button data-act="clipText" data-v="off" class="${g.clip ? '' : 'on'}">Off</button><button data-act="clipText" data-v="on" class="${g.clip ? 'on' : ''}">On</button></div></div>` : ''}`;
   }
   document.addEventListener('change', (e) => {
@@ -683,6 +1343,34 @@
     g[k] = e.target.value || null;
     commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] });
   });
+  document.addEventListener('change', (e) => {
+    if (e.target.dataset?.fptype == null || !S.sel) return;
+    S.cpick = e.target.value === 'gradient' ? 'grad' : 'bg'; S.cp = null; S.gstop = 'from';
+    setFillType(e.target.value);
+  });
+  function setBgImg(src) {
+    if (!src) return;
+    const el = S.sel?.el, size = el && cs(el).backgroundSize === 'contain' ? 'contain' : 'cover';
+    commit({ ops: [{ prop: 'bgImg', value: src }, { prop: 'bgSize', value: size }, { prop: 'bgPos', value: 'center' }] });
+  }
+  document.addEventListener('submit', (e) => {
+    if (!e.target.matches?.('.ipLinkF')) return;
+    e.preventDefault();
+    const u = $('ipLinkIn')?.value.trim() || '';
+    if (!/^https?:\/\//.test(u)) { toast('That isn’t a web link. It should start with https://', '', true); return; }
+    S.ipLink = false;
+    if (S.cpick === 'bgimg') setBgImg(u); else structure({ type: 'image', src: u }, { keepSel: true });
+  });
+  function setFillType(v) {
+    const g = gradOf();
+    const names = tokens().map(([n]) => n).filter((n) => !['transparent', 'black', 'white'].includes(n));
+    if (v === 'gradient' && !g) {
+      const from = tokenOf('bg') && !tokenOf('bg').startsWith('#') ? tokenOf('bg') : names.includes('primary') ? 'primary' : names[0];
+      const to = names.find((n) => n !== from && /positive|accent|secondary|primary/.test(n)) || names.find((n) => n !== from);
+      commit({ ops: [{ prop: 'gradient', value: `r ${from} ${to}` }] });
+    } else if (v === 'solid' && g) commit({ ops: [{ prop: 'bg', value: g.from || 'transparent' }, { prop: 'clipText', value: 'off' }] });
+    else renderPanel();
+  }
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-act="fillType"],[data-act="clipText"]');
     if (!a || !S.sel) return;
@@ -696,16 +1384,30 @@
     } else if (a.dataset.v === 'solid' && g) commit({ ops: [{ prop: 'bg', value: g.from || 'transparent' }, { prop: 'clipText', value: 'off' }] });
   });
 
-  function propsSection(inf) {
-    if (!inf?.component || !inf.props?.length) return '';
-    const rows = inf.props.map((p) => {
+  // Component properties, like Figma's: they belong to this use of the component, whatever the scope.
+  const ICON_DEFAULTS = { 'lucide-react': { size: 24, strokeWidth: 2 }, '@phosphor-icons/react': { weight: 'regular', size: '1em' } };
+  const humanize = (n) => String(n).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+  function propsSection(inf0) {
+    const inf = S.sel?.useInfo?.component ? S.sel.useInfo : inf0;
+    if (!inf?.component) return '';
+    // Variants the component offers (from its cva), even ones this use doesn't set yet.
+    const c = S.sel?.defInfo?.cva, props = (inf.props || []).slice();
+    if (c?.groups) for (const [g, opts] of Object.entries(c.groups)) {
+      const i = props.findIndex((p) => p.name === g), cur = i > -1 ? props[i] : null;
+      if (cur && !cur.editable) continue;
+      const row = { name: g, kind: 'option', options: opts, value: cur?.value ?? null, def: c.defaults?.[g], editable: true, cva: true };
+      if (i > -1) props[i] = row; else props.unshift(row);
+    }
+    if (!props.length) return '';
+    const dflt = ICON_DEFAULTS[inf.lib] || {};
+    const rows = props.map((p) => {
       let ctl;
       if (!p.editable) ctl = `<label class="inp lock" title="${esc(p.reason)}"><input value="set by code" disabled></label>`;
-      else if (p.kind === 'option') ctl = `<label class="inp"><select data-propsel="${esc(p.name)}">${p.value == null ? '<option value="" selected>Default</option>' : ''}${p.options.map((o) => `<option${o === p.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
+      else if (p.kind === 'option') ctl = `<label class="inp"><select data-propsel="${esc(p.name)}"${p.cva ? ` data-options="${esc(p.options.join('|'))}"` : ''}${p.value == null && (p.def ?? dflt[p.name]) != null ? ` data-def="${esc(p.def ?? dflt[p.name])}"` : ''} aria-label="${esc(humanize(p.name))}">${p.value == null ? `<option value="" selected>${p.def != null ? `${esc(p.def)} (default)` : dflt[p.name] != null ? `${esc(dflt[p.name])} (default)` : 'Default'}</option>` : ''}${p.options.filter((o) => !(p.value == null && o === (p.def ?? dflt[p.name]))).map((o) => `<option${o === p.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
       else if (p.kind === 'boolean') ctl = `<div class="seg"><button data-act="setProp" data-p="${esc(p.name)}" data-v="false" class="${p.value !== true ? 'on' : ''}">Off</button><button data-act="setProp" data-p="${esc(p.name)}" data-v="true" class="${p.value === true ? 'on' : ''}">On</button></div>`;
-      else if (p.kind === 'number') ctl = `<label class="inp"><input type="text" inputmode="decimal" data-propnum="${esc(p.name)}" value="${p.value ?? ''}" placeholder="Default"></label>`;
+      else if (p.kind === 'number') ctl = `<label class="inp"><input type="text" inputmode="decimal" data-propnum="${esc(p.name)}" value="${p.value ?? ''}" placeholder="${dflt[p.name] != null ? `${esc(dflt[p.name])} (default)` : 'Default'}" aria-label="${esc(humanize(p.name))}"></label>`;
       else ctl = `<label class="inp"><input type="text" data-proptext="${esc(p.name)}" value="${esc(p.value)}"></label>`;
-      return `<div class="kv"><span>${esc(p.name)}</span>${ctl}</div>`;
+      return `<div class="kv"><span>${esc(humanize(p.name))}</span>${ctl}</div>`;
     }).join('');
     return sec(`Properties${inf.lib ? ` <span class="note" style="font-weight:400">${esc(inf.lib.replace(/^@/, '').split('/')[0])}</span>` : ''}`, rows);
   }
@@ -717,6 +1419,14 @@
     const find = (name, min) => (sc.find((x) => x.name === name) || sc.find((x) => x.min >= min))?.name || null;
     const tab = find('md', 700), desk = find('lg', 1000);
     return { desktop: [desk, null], tablet: [tab, desk], mobile: [null, tab] }[S.device];
+  }
+  // Grid columns on a grid that already changes by screen size (md:grid-cols-2): with "every screen" picked, change
+  // it from the size being viewed upward, so the phone layout isn't squeezed into the new column count.
+  function colsBp(change) {
+    if (!change?.ops?.some((o) => o.prop === 'cols') || S.sizeOnly[S.device]) return null;
+    const r = sizeRange();
+    if (!r || !(info()?.classes || []).some((c) => /:grid-cols-/.test(c))) return null;
+    return { mode: 'only', start: r[0], end: null, label: `${DEV_LABEL[S.device]} and up` };
   }
   function bpParam() {
     const r = sizeRange();
@@ -741,70 +1451,193 @@
   function paletteHTML() {
     if (S.tokens == null) { loadTokens(); return ''; }
     if (!S.tokens.length) return '';
-    const themes = [...new Set(S.tokens.flatMap((t) => t.values.map((v) => v.theme)))].slice(0, 3);
-    return `<div class="sec palette"><div class="secH"><span>Colours</span><span class="note">${themes.map((x) => esc(x[0].toUpperCase() + x.slice(1))).join(' · ')}</span></div><span class="note">Your design system. Changing one updates every screen that uses it.</span>
-      ${S.tokens.map((t) => `<div class="tok"><span class="tn">${esc(t.name)}</span><span class="sw">${themes.map((th) => { const v = t.values.find((x) => x.theme === th) || (th !== 'all' && t.values.find((x) => x.theme === 'all')); return v ? `<label class="swatch" style="background:${esc(v.hex)}" title="${esc(t.name)} · ${esc(th)} · ${esc(v.hex)}"><input type="color" value="${esc(v.hex.slice(0, 7))}" data-token="${esc(t.name)}" data-theme="${esc(v.theme)}" aria-label="${esc(t.name)} ${esc(th)}"></label>` : '<span class="swatch none"></span>'; }).join('')}</span></div>`).join('')}</div>`;
+    const themes = [...new Set(S.tokens.flatMap((t) => t.values.map((v) => v.theme)))].slice(0, 2);
+    // Compact rows like Figma's colour styles, grouped the way designers think. One swatch per colour: with light
+    // and dark values it splits in half (left light, right dark), and each half opens its own value.
+    const group = (n) => /primary|secondary|accent|brand|success|warning|danger|destructive|error|info/i.test(n) ? 'Brand'
+      : /foreground|(^|-)fg$|content|text|ink|muted|heading|body/i.test(n) ? 'Text'
+      : /bg|background|surface|card|panel|popover|border|ring|input|line|divider|canvas/i.test(n) ? 'Backgrounds' : 'Other';
+    const half = (t, th, cls) => { const v = t.values.find((x) => x.theme === th) || (th !== 'all' && t.values.find((x) => x.theme === 'all')); return v ? `<button type="button" class="swatch ${cls}${S.tp?.name === t.name && S.tp?.theme === v.theme ? ' on' : ''}" style="background:${esc(v.hex)}" title="${esc(t.name)}${themes.length > 1 ? ` · ${esc(th)}` : ''} · ${esc(v.hex)}" data-token="${esc(t.name)}" data-theme="${esc(v.theme)}" data-hex="${esc(v.hex.slice(0, 7))}" aria-label="Edit ${esc(t.name)}${themes.length > 1 ? ` ${esc(th)}` : ''}"></button>` : `<span class="swatch ${cls} none"></span>`; };
+    const row = (t) => `<div class="tok"><span class="sw${themes.length > 1 ? ' split' : ''}">${themes.length > 1 ? half(t, themes[0], 'l') + half(t, themes[1], 'r') : half(t, themes[0], 'one')}</span><span class="tn">${esc(t.name)}</span></div>`;
+    const groups = ['Backgrounds', 'Text', 'Brand', 'Other'].map((g) => [g, S.tokens.filter((t) => group(t.name) === g)]).filter(([, l]) => l.length);
+    return `<div class="sec palette"><div class="secH"><span>Colours</span></div>
+      ${groups.map(([g, l]) => `<div class="tgrp"><span class="tgH">${g}</span>${l.map(row).join('')}</div>`).join('')}
+      <span class="note">Your design system: change one and every screen that uses it follows.${themes.length > 1 ? ` Left half ${esc(themes[0])}, right half ${esc(themes[1])}.` : ''}</span></div>`;
   }
-  document.addEventListener('change', async (e) => {
-    const i = e.target.closest?.('[data-token]');
-    if (!i) return;
+  // Design-system colours open Tovi's own picker beside the swatch (never the browser's): drag the square or the
+  // hue, or type a hex. Each release writes the token once, and every screen that uses it follows.
+  S.tp = null;
+  function tokPick(btn) {
+    const same = S.tp && S.tp.name === btn.dataset.token && S.tp.theme === btn.dataset.theme;
+    S.tp = same ? null : { name: btn.dataset.token, theme: btn.dataset.theme, hex: btn.dataset.hex.replace('#', '').toUpperCase(), ...hexToHsv(btn.dataset.hex.replace('#', '')) };
+    renderTokPop();
+    document.querySelectorAll('.swatch[data-token]').forEach((x) => x.classList.toggle('on', !!S.tp && x.dataset.token === S.tp.name && x.dataset.theme === S.tp.theme));
+  }
+  function renderTokPop() {
+    let f = $('tokPop');
+    if (!S.tp) { if (f) f.hidden = true; return; }
+    if (!f) { f = document.createElement('div'); f.id = 'tokPop'; f.className = 'fpop'; f.setAttribute('role', 'dialog'); document.body.appendChild(f); }
+    const c = S.tp, hx = hsvToHex(c.h, c.s, c.v);
+    f.setAttribute('aria-label', `${c.name} colour`);
+    f.innerHTML = `<div class="fpH"><span class="fpT">${esc(c.name)}</span>${c.theme !== 'all' ? `<span class="note">${esc(c.theme[0].toUpperCase() + c.theme.slice(1))}</span>` : ''}<button class="ib fpX" data-tpclose aria-label="Close" title="Close · Esc">${ico('x')}</button></div>
+      <div class="cpop"><div class="cpSV" data-tpdrag="sv" style="--hue:hsl(${c.h} 100% 50%)"><i class="cpK" style="left:${c.s * 100}%;top:${(1 - c.v) * 100}%"></i></div>
+      <div class="cpBar cpHue" data-tpdrag="hue"><i class="cpK" style="left:${c.h / 3.6}%;background:hsl(${c.h} 100% 50%)"></i></div>
+      <div class="cpRow"><i class="cpSw" style="background:#${hx}"></i><span class="cpMode">Hex</span><label class="cpVal"><input data-tphex value="${hx}" maxlength="7" spellcheck="false" aria-label="Hex colour"></label></div>
+      <span class="note">Changes every screen that uses ${esc(c.name)}.</span></div>`;
+    f.hidden = false;
+    const sw = document.querySelector(`.swatch[data-token="${CSS.escape(c.name)}"][data-theme="${CSS.escape(c.theme)}"]`), r = sw?.getBoundingClientRect();
+    const h = f.offsetHeight, panel = $('panel')?.getBoundingClientRect();
+    f.style.left = Math.max(8, (panel ? panel.left : r?.left || innerWidth) - f.offsetWidth - 10) + 'px';
+    f.style.top = Math.max(8, Math.min(innerHeight - h - 8, (r?.top ?? 80) - 40)) + 'px';
+  }
+  async function tokCommit() {
+    const c = S.tp, hx = hsvToHex(c.h, c.s, c.v);
+    if (hx === c.hex) return;
+    c.hex = hx;
     try {
-      const r = await api('/token', { name: i.dataset.token, hex: i.value.toUpperCase(), which: i.dataset.theme === 'all' ? 'both' : i.dataset.theme });
+      const r = await api('/token', { name: c.name, hex: '#' + hx, which: c.theme === 'all' ? 'both' : c.theme });
       if (r.changed) { S.count = r.n; toast(r.summary.labels?.[0] || 'Colour changed', 'Every screen using it updates', false, true); }
       S.tokens = null;
       afterEdit();
       renderPanel();
     } catch (err) { toast(err.message, '', true); }
+  }
+  document.addEventListener('click', (e) => {
+    const sw = e.target.closest?.('.swatch[data-token]');
+    if (sw) { e.preventDefault(); tokPick(sw); return; }
+    if (e.target.closest?.('[data-tpclose]')) { S.tp = null; renderTokPop(); renderPanel(); }
   });
+  document.addEventListener('pointerdown', (e) => {
+    if (S.tp && !e.target.closest?.('#tokPop,.swatch[data-token]')) { S.tp = null; renderTokPop(); document.querySelectorAll('.swatch.on').forEach((x) => x.classList.remove('on')); }
+    const area = e.target.closest?.('[data-tpdrag]');
+    if (!area || !S.tp) return;
+    e.preventDefault();
+    const kind = area.dataset.tpdrag, c = S.tp, pop = $('tokPop');
+    const paint = () => {
+      const hx = hsvToHex(c.h, c.s, c.v);
+      pop.querySelector('.cpSV').style.setProperty('--hue', `hsl(${c.h} 100% 50%)`);
+      const [sv, hue] = pop.querySelectorAll('.cpK');
+      sv.style.left = c.s * 100 + '%'; sv.style.top = (1 - c.v) * 100 + '%';
+      hue.style.left = c.h / 3.6 + '%'; hue.style.background = `hsl(${c.h} 100% 50%)`;
+      pop.querySelector('[data-tphex]').value = hx;
+      pop.querySelector('.cpSw').style.background = '#' + hx;
+      document.querySelectorAll(`.swatch[data-token="${CSS.escape(c.name)}"][data-theme="${CSS.escape(c.theme)}"]`).forEach((x) => { x.style.background = '#' + hx; });
+    };
+    const at = (ev) => {
+      const r = area.getBoundingClientRect(), x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+      if (kind === 'sv') { c.s = x; c.v = 1 - y; } else c.h = Math.min(359.9, x * 360);
+      paint();
+    };
+    at(e);
+    area.setPointerCapture(e.pointerId);
+    const up = () => { area.removeEventListener('pointermove', at); area.removeEventListener('pointerup', up); area.removeEventListener('pointercancel', up); tokCommit(); };
+    area.addEventListener('pointermove', at); area.addEventListener('pointerup', up); area.addEventListener('pointercancel', up);
+  }, true);
+  document.addEventListener('change', (e) => {
+    if (!e.target.matches?.('[data-tphex]') || !S.tp) return;
+    const hx = e.target.value.trim().replace(/^#/, '').toUpperCase();
+    if (!/^[0-9A-F]{6}$/.test(hx)) { renderTokPop(); return; }
+    Object.assign(S.tp, hexToHsv(hx));
+    renderTokPop();
+    tokCommit();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.tp) { e.stopPropagation(); S.tp = null; renderTokPop(); renderPanel(); } }, true);
   function sizeHTML(inf) {
     if (!sizeRange() || inf?.classKind === 'cva') return '';
     const dev = S.device, only = S.sizeOnly[dev];
     const differs = (inf?.classes || []).some((c) => /^(sm|md|lg|xl|2xl):[^:]+$/.test(c));
     return `<div class="sizeRow"><div class="seg">${[[false, 'All sizes'], [true, `${DEV_LABEL[dev]} only`]].map(([v, n]) => `<button data-act="sizeOnly" data-v="${v}" class="${only === v ? 'on' : ''}" title="${v ? `Change it only on ${DEV_LABEL[dev].toLowerCase()} (${devRange(dev)}); other screen sizes keep how they look now` : 'Make it the same on every screen size'}">${ico(v ? dev : 'corners', 12)}${n}</button>`).join('')}</div>${differs ? '<span class="note" title="This element is styled differently on other screen sizes">Differs by size</span>' : ''}</div>`;
   }
+  // What a change will reach, as one sentence: "Changes apply to [all 3 cards ▾] on [every screen ▾]".
+  // Each bold part opens a small menu. The canvas outlines the other elements it will reach (dashed).
+  function scopeWho(s, name) {
+    const kind = kindOf(s.el).toLowerCase();
+    const plural = (n) => `${n} ${/s$/.test(kind) ? kind : kind + 's'}`;
+    const c = s.defInfo?.cva;
+    if (c) {
+      scopeHTML(s, name); // settles the default scope
+      const vname = activeVariant()?.variant, comp = (s.use ? (s.useInfo?.tag || name) : name).replace(/[“"].*$/, '').trim() || kind;
+      const opts = [...(s.use ? [['here', 'this one only']] : []), ...(vname ? [['variant', `every “${vname}” ${comp.toLowerCase()}`]] : []), ['all', `every ${comp.toLowerCase()}`]];
+      return { opts, cur: S.scope, act: 'scope' };
+    }
+    if (s.def && s.use && s.defInfo) { scopeHTML(s, name); return { opts: [['all', `every ${(s.useInfo?.tag || kind).toLowerCase()}`], ['here', 'only here']], cur: S.scope, act: 'scope' }; }
+    if (s.similar?.length && !S.multi.length) return { opts: [['all', `all ${plural(s.similar.length + 1)}`], ['one', 'this one only']], cur: S.simScope, act: 'simScope' };
+    if (S.multi.length) return { fixed: `${plural(S.multi.length + 1)}` };
+    if (s.repeat > 1) return { fixed: `all ${plural(s.repeat)}` };
+    return null;
+  }
+  function scopeSentence(s, name, inf) {
+    const who = scopeWho(s, name);
+    const sizes = sizeRange() && inf?.classKind !== 'cva';
+    const w = (key, label) => `<button class="scW" data-act="scopeMenu" data-v="${key}">${esc(label)}${ico('chev', 10)}</button>`;
+    const whoTxt = who?.opts ? w('who', (who.opts.find(([v]) => v === who.cur) || who.opts[0])[1]) : who?.fixed ? `<b>${esc(who.fixed)}</b>` : '';
+    const dev = S.device, only = S.sizeOnly[dev];
+    const differs = (inf?.classes || []).some((c) => /^(sm|md|lg|xl|2xl):[^:]+$/.test(c));
+    // The screen-size choice only shows when it matters: on Tablet or Phone, or when this element already
+    // differs by size. On desktop, for something that looks the same everywhere, changes simply apply everywhere.
+    const whereTxt = sizes && (dev !== 'desktop' || differs || only) ? w('where', only ? `${DEV_LABEL[dev].toLowerCase()} only` : 'every screen') : '';
+    if (!who?.opts && !whereTxt) return '';
+    return `<p class="scLine">Changes apply to ${whoTxt || `this ${esc(kindOf(s.el).toLowerCase())}`}${whereTxt ? ` on ${whereTxt}` : ''}${differs ? '<span class="note" title="This element is styled differently on other screen sizes">Differs by size</span>' : ''}</p>`;
+  }
+  function scopeMenu(key, btn) {
+    const s = S.sel; if (!s) return;
+    const r = btn.getBoundingClientRect(), at = { x: r.left, y: r.bottom + 4 };
+    if (key === 'who') {
+      const who = scopeWho(s, (activeLoc() === s.use ? s.useInfo?.tag : s.defInfo?.tag) || nameOf(s.el));
+      if (!who?.opts) return;
+      openMenu(who.opts.map(([v, label]) => ({ label: label.charAt(0).toUpperCase() + label.slice(1), on: v === who.cur, run: () => { if (who.act === 'scope') { S.scope = v; S.cpick = S.cp = null; } else S.simScope = v; renderPanel(); } })), at);
+    } else {
+      const dev = S.device;
+      openMenu([{ label: 'Every screen', on: !S.sizeOnly[dev], run: () => { S.sizeOnly[dev] = false; renderPanel(); } }, { label: `${DEV_LABEL[dev]} only`, on: !!S.sizeOnly[dev], run: () => { S.sizeOnly[dev] = true; renderPanel(); } }], at);
+    }
+  }
   function scopeHTML(s, name) {
     const c = s.defInfo?.cva;
     if (c) {
       const av = activeVariant(), vname = av?.variant;
-      const opts = [...(s.use ? [['here', 'Only this one']] : []), ...(vname ? [['variant', `All “${vname}”`]] : []), ['all', `Every ${s.use ? (s.useInfo?.tag || name) : name}`]];
+      // Short labels that fit the panel; the full meaning is in each button's tooltip.
+      const comp = s.use ? (s.useInfo?.tag || name) : name;
+      const opts = [...(s.use ? [['here', 'This one', 'Only this one']] : []), ...(vname ? [['variant', `All “${vname}”`, `Every ${comp} with variant “${vname}”`]] : []), ['all', 'All', `Every ${comp}`]];
       if (!opts.some(([v]) => v === S.scope)) S.scope = vname ? 'variant' : 'all';
-      return `<div class="seg">${opts.map(([v, n]) => `<button data-act="scope" data-v="${v}" class="${S.scope === v ? 'on' : ''}">${esc(n)}</button>`).join('')}</div>`;
+      return `<div class="seg">${opts.map(([v, n, t]) => `<button data-act="scope" data-v="${v}" class="${S.scope === v ? 'on' : ''}" title="${esc(t)}">${esc(n)}</button>`).join('')}</div>`;
     }
+    if (s.def && s.use && S.scope === 'auto' && s.defInfo) S.scope = 'all';
     if (s.def && s.use) return `<div class="seg"><button data-act="scope" data-v="all" class="${S.scope === 'all' ? 'on' : ''}" title="Change the component itself, everywhere it's used">Everywhere</button><button data-act="scope" data-v="here" class="${S.scope === 'here' ? 'on' : ''}" title="Change only this use of the component">Only here</button></div>`;
     return '';
   }
-  function tabsHTML() {
-    return `<div class="ptabs"><button data-act="tab" data-v="design" class="${S.tab === 'design' ? 'on' : ''}">Design</button><button data-act="tab" data-v="chat" class="${S.tab === 'chat' ? 'on' : ''}">Chat <span class="kbd">⌘K</span></button></div>`;
-  }
+  const tabsHTML = () => '';
   function renderPanel(focusChat) {
     const p = $('panel');
-    p.hidden = !(S.mode === 'edit' || S.side === 'history');
+    // While interacting, the panel goes away and the app takes its space.
+    const was = p.hidden;
+    p.hidden = !(S.mode === 'edit' || S.side === 'history') || (S.tool === 'interact' && S.side !== 'history');
+    if (p.hidden !== was) setTimeout(applyDevice, 0);
+    $('devLabel')?.classList.toggle('on', !!S.pageSel && !S.sel);
     if (p.hidden) return;
     if (S.side === 'history') { p.innerHTML = historyHTML(); return; }
-    if (S.tab === 'chat') {
-      const draft = $('chatIn')?.value || '';
-      const hadFocus = document.activeElement?.id === 'chatIn';
-      p.innerHTML = tabsHTML() + chatHTML();
-      const sc = $('chatScroll'); if (sc) sc.scrollTop = sc.scrollHeight;
-      const ci = $('chatIn'); if (ci) { ci.value = draft; syncKC('chatIn'); if (focusChat || hadFocus) ci.focus(); }
-      return;
-    }
     const s = S.sel;
     if (!s) {
-      p.innerHTML = tabsHTML() + `<div class="scroll"><div class="empty"><b>Nothing selected</b><span>Click anything in your app, or pick a layer on the left. Double-click text to retype it. Every change here is written to your code.</span></div>${paletteHTML()}</div>`;
+      // Nothing selected: say how to start, then the app's design system. Page, screen size and shortcuts already
+      // live in the left header, the canvas label and the ? button, so they aren't repeated here.
+      const drafts = S.versions.draft.length;
+      p.innerHTML = tabsHTML() + `<div class="scroll">
+        ${S.pageSel ? '' : `<div class="selHint"><span class="shIc">${ico('editFrame', 16)}</span><b>Select something to edit it</b><span>Click any element in your app, or pick it in Layers. Double-click text to retype it.</span>${drafts ? `<button class="linkBtn" data-act="history">${drafts} change${drafts === 1 ? '' : 's'} not saved as a version yet</button>` : ''}</div>`}
+        ${paletteHTML()}
+      </div>`;
       return;
     }
     const el = s.el, inf = info();
     const name = (activeLoc() === s.use ? s.useInfo?.tag : s.defInfo?.tag) || nameOf(el);
     const loc = activeLoc();
-    let h = `<div class="sec head"><div class="secH"><span class="nm">${ico(layerIcon(el))}${esc(dName(el))}</span><span class="hbs">${hb('copyLoc', 'code', `Code: ${loc.replace(/:(\d+):\d+$/, ':$1')} (click to copy)`)}${hb('parent', 'up', 'Select parent')}</span></div>
-      ${scopeHTML(s, name)}
+    // No name row: the selection is named in Layers and on the canvas. Select parent is ⇧↵ or the right-click menu.
+    const headIn = `      ${scopeSentence(s, name, inf)}
       ${sourceHTML(inf)}
-      ${sizeHTML(inf)}
       ${S.multi.length ? `<span class="note">+${S.multi.length} more selected: changes apply to all ${S.multi.length + 1}.</span>` : ''}
-      ${s.repeat > 1 ? `<span class="note">Repeated ×${s.repeat} by the same code: edits apply to all of them.</span>` : ''}
-      ${actionsHTML()}</div>`;
+      ${s.repeat > 1 && S.scope !== 'here' && !s.defInfo?.cva ? `<span class="note">Repeated ×${s.repeat} by the same code: edits apply to all of them.</span>` : ''}
+`;
+    let h = headIn.trim() ? `<div class="sec head">${headIn}</div>` : '';
     if (!inf) h += `<div class="sec"><span class="note">Reading code…</span></div>`;
+    else if (inf.offline) { h += `<div class="sec"><span class="note">Reconnecting to your app…</span></div>`; clearTimeout(S.infoRetry); S.infoRetry = setTimeout(() => { if (S.sel) loadInfo(); }, 2000); }
     else if (inf.error) h += `<div class="sec"><span class="note warn">${esc(inf.error)}</span></div>`;
     else if (!el.isConnected) h += `<div class="sec"><span class="note">This element isn’t on screen right now.</span></div>`;
     else {
@@ -812,42 +1645,75 @@
       if (el.tagName.toLowerCase() === 'svg') h += iconSection(el);
       else h += propsSection(inf);
       if (inf.classKind === 'dynamic') h += `<div class="sec"><span class="note warn">${esc(inf.classReason)}</span></div>`;
-      if (inf.text?.editable) h += sec('Content', `<label class="inp"><input type="text" data-text="1" value="${esc(inf.text.value)}" aria-label="Text"></label>`);
+      if (inf.text?.editable) h += sec('Content', `<label class="inp area"><textarea data-text="1" rows="1" aria-label="Text">${esc(inf.text.value)}</textarea></label>`);
       else if (isText(el)) h += sec('Content', `<span class="note">${esc(inf.text?.reason || '')}</span>`);
       if (isText(el) || inf.text?.editable) {
         // next/font names fonts like "__geistSans_1e4310": show "Geist Sans".
         const fam = camelWords(cs(el).fontFamily.split(',')[0].replace(/["']/g, '').replace(/^_+/, '').replace(/_[0-9a-f]{4,}$/i, '').replace(/_Fallback.*$/, '')).replace(/^./, (c) => c.toUpperCase());
         const fw = val('fontWeight');
-        h += sec('Typography', `<label class="inp lock"><input type="text" value="${esc(fam)}" disabled aria-label="Font"></label>
-          <div class="r2"><label class="inp"><select data-sel="fontWeight" aria-label="Weight">${[[100, 'Thin'], [200, 'Extra light'], [300, 'Light'], [400, 'Regular'], [500, 'Medium'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold'], [900, 'Black']].map(([v, n]) => `<option value="${v}"${v === fw ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label>${nf('fontSize', '<b class="tg">T</b>', 'Font size')}</div>
-          <div class="r2">${nf('lineHeight', 'lh', 'Line height')}${nf('letterSpacing', 'ls', 'Letter spacing', '%')}</div>
-          <div class="r2"><div class="ibs">${[['left', 'alL'], ['center', 'alC'], ['right', 'alR']].map(([v, i]) => `<button class="ib${val('align') === v ? ' on' : ''}" data-act="set" data-p="align" data-v="${v}" title="Align ${v}">${ico(i)}</button>`).join('')}</div><span></span></div>`);
+        const c0 = (k) => (S.theme?.keys?.fontFamily || []).includes(k);
+        // The project's own fonts (Tailwind's ui-* fallbacks are left out); with no font class, the one in use.
+        const fams = Object.entries(S.theme?.fonts || {}).filter(([, f]) => !/^ui-/.test(f));
+        const famKey = (info()?.classes || []).filter((c) => !c.includes(':')).map((c) => c.slice(5)).find((k) => c0(k)) || (fams.find(([, f]) => f.toLowerCase() === fam.toLowerCase()) || [''])[0];
+        const famName = famKey ? (S.theme?.fonts?.[famKey] || famKey) : fam;
+        h += sec('Typography', `<button class="inp fontBtn${S.cpick === 'font' ? ' on' : ''}" data-act="cpick" data-v="font" title="Font" aria-label="Font: ${esc(famName)}"><span style="font-family:'${esc(famName)}',system-ui">${esc(famName)}</span>${ico('chev', 12)}</button>
+          <div class="r2"><div class="fl"><span class="flab">Weight</span><label class="inp"><select data-sel="fontWeight" aria-label="Weight">${[[100, 'Thin'], [200, 'Extra light'], [300, 'Light'], [400, 'Regular'], [500, 'Medium'], [600, 'Semibold'], [700, 'Bold'], [800, 'Extra bold'], [900, 'Black']].map(([v, n]) => `<option value="${v}"${v === fw ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label></div>${lf('Size', nf('fontSize', '<b class="tg">T</b>', 'Font size'))}</div>
+          <div class="r2">${lf('Line height', nf('lineHeight', 'lh', 'Line height'))}${lf('Letter spacing', nf('letterSpacing', 'ls', 'Letter spacing', '%'))}</div>
+          <div class="r2"><div class="ibs">${[['left', 'alL'], ['center', 'alC'], ['right', 'alR']].map(([v, i]) => `<button class="ib${val('align') === v ? ' on' : ''}" data-act="set" data-p="align" data-v="${v}" title="Align ${v}">${ico(i)}</button>`).join('')}</div>${textStyleToggles()}</div>`);
         h += sec('Text color', colorRow('color', 'Text color'));
       }
       h += layoutSections(el);
       if (el.tagName.toLowerCase() === 'svg') {
         h += sec('Icon color', colorRow('color', 'Icon color'));
-        h += sec('Appearance', `<div class="r2">${nf('opacity', 'opa', 'Opacity', '%')}<span></span></div>`);
+        h += sec('Appearance', `<div class="r2">${lf('Opacity', nf('opacity', 'opaSq', 'Opacity', '%'))}<span></span></div>`);
         const st0 = p.querySelector('.scroll')?.scrollTop || 0;
         p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
         p.querySelector('.scroll').scrollTop = st0;
         return;
       }
       const indep = S.corners;
-      h += sec('Appearance', `<div class="r2c">${nf('opacity', 'opa', 'Opacity', '%')}${nf('radius', 'rad', 'Corner radius')}<button class="ib${indep ? ' on' : ''}" data-act="corners" title="Independent corners">${ico('corners')}</button></div>
-        ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}`);
       const g = gradOf();
       const hasFill = g || (val('bg') && val('bg') !== 'transparent');
-      h += sec('Fill', hasFill ? fillBody(g, el) : '', hasFill ? '' : hb('addFill', 'plus', 'Add fill'));
+      // Rounding does nothing on bare text (no fill, stroke or radius yet), so the field only shows where it can be seen.
+      const showRadius = !isTextOnly(el) || hasFill || val('borderW') > 0 || (+val('radius') || 0) > 0;
+      // Appearance in one compact row (no sliders: dragging a field's icon already changes it by eye). The "corners
+      // separately" toggle sits in the section header, like Paper's.
+      const opaF = lf('Opacity', nf('opacity', 'opaSq', 'Opacity', '%'));
+      const cornersBtn = showRadius ? `<button class="ib hbtn${indep ? ' on' : ''}" data-act="corners" title="Set each corner separately" aria-pressed="${!!indep}">${ico('corners')}</button>` : '';
+      h += sec('Appearance', showRadius ? `<div class="r2">${opaF}${lf('Corner radius', nf('radius', 'radAll', 'Corner radius'))}</div>
+        ${indep ? `<div class="r4">${nf('rTL', cornerIco(0), 'Top left')}${nf('rTR', cornerIco(90), 'Top right')}${nf('rBR', cornerIco(180), 'Bottom right')}${nf('rBL', cornerIco(270), 'Bottom left')}</div>` : ''}${clipRow(el)}` : `<div class="r2">${opaF}<span></span></div>`, cornersBtn);
+      // On text, "Fill" sits right under "Text color" and means the box behind it: call it Background there.
+      const fillName = isTextOnly(el) ? 'Background' : 'Fill';
+      const hasImgFill = !!bgImgOf(el) && el.tagName.toLowerCase() !== 'img';
+      const fillAct = hasFill ? hb('rmFill', 'minus', `Remove ${fillName.toLowerCase()}`) : hb(el.tagName.toLowerCase() === 'img' ? 'imgFillMenu' : 'addFill', 'plus', `Add ${fillName.toLowerCase()}`);
+      h += sec(fillName, (hasImgFill ? imgFillRow(el) : '') + (hasFill ? fillBody(g, el) : ''), fillAct);
       const hasStroke = val('borderW') > 0;
-      h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${nf('borderW', 'sw', 'Stroke width')}<span></span></div>` : '', hasStroke ? '' : hb('addStroke', 'plus', 'Add stroke'));
-      const sh = shadowOf(), keys = (S.theme?.shadow || []).filter((k) => k !== 'none' && k !== 'inner');
-      h += sec('Effects', sh !== 'none' ? `<div class="cr"><label class="inp"><select data-sel="shadow" aria-label="Shadow">${keys.map((k) => `<option value="${esc(k)}"${k === sh ? ' selected' : ''}>Shadow · ${k === 'DEFAULT' ? 'default' : esc(k)}</option>`).join('')}</select>${ico('chev', 12)}</label><button class="ib" data-act="set" data-p="shadow" data-v="none" title="Remove">${ico('minus')}</button></div>` : '', sh !== 'none' ? '' : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
+      h += sec('Stroke', hasStroke ? colorRow('borderC', 'Stroke color', 'rmStroke') + `<div class="r2">${lf('Width', nf('borderW', 'sw', 'Stroke width'))}<span></span></div>` : '', hasStroke ? hb('rmStroke', 'minus', 'Remove stroke') : hb('addStroke', 'plus', 'Add stroke'));
+      const sh = shadowOf();
+      h += sec('Effects', sh !== 'none' ? shadowBody() : '', sh !== 'none' ? hb('rmShadow', 'minus', 'Remove shadow') : hb('set', 'plus', 'Add shadow', 'sm', 'data-p="shadow"'));
     }
     const st = p.querySelector('.scroll')?.scrollTop || 0;
+    // Redraws must never steal the field you're in: keep its focus, caret and what you've typed.
+    const f = document.activeElement, keep = f && p.contains(f) && f.matches('input[data-prop],input[data-calpha],input[data-color]') ? { sel: f.dataset.prop ? `input[data-prop="${f.dataset.prop}"]` : `input[data-calpha="${f.dataset.calpha}"]`, v: f.value, a: f.selectionStart, b: f.selectionEnd } : null;
     p.innerHTML = tabsHTML() + `<div class="scroll">${h}</div>`;
+    if (keep) { const n = p.querySelector(keep.sel); if (n) { n.value = keep.v; n.focus({ preventScroll: true }); try { n.setSelectionRange(keep.a, keep.b); } catch {} } }
+    p.querySelectorAll('textarea[data-text]').forEach(growText);
     p.querySelector('.scroll').scrollTop = st;
+    renderFpop();
   }
+  // The Content box grows with its text, up to three lines, then scrolls.
+  function growText(t) {
+    t.style.height = 'auto';
+    t.style.height = Math.min(t.scrollHeight, 3 * 18) + 'px';
+  }
+  document.addEventListener('input', (e) => { if (e.target.matches?.('textarea[data-text]')) growText(e.target); });
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (!t.matches?.('textarea[data-text]') || e.isComposing) return;
+    // Enter saves (line breaks aren't written to code yet); Esc puts the text back.
+    if (e.key === 'Enter') { e.preventDefault(); if (!e.shiftKey) t.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); t.value = t.defaultValue; growText(t); t.blur(); }
+  }, true);
 
   /* ---------- history ---------- */
   async function refreshVersions() {
@@ -859,16 +1725,55 @@
   }
   const time = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const chLabel = (c) => `${c.name ? `<b>${esc(c.name)}</b> · ` : ''}${esc(c.label)}`;
+  // Version history like Figma's: a timeline with the current version at the top, named versions as
+  // milestones, and runs of autosaves folded into one "N autosave versions" row.
+  S.vGroups = new Set(); S.vSel = null; S.vOpen = null; S.vNaming = null;
+  const when = (t) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const initials = (n) => String(n || 'You').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  const who = (n) => `<span class="vWho"><i class="vAv">${esc(initials(n))}</i>${esc(n || 'You')}</span>`;
+  const RING = '<i class="vRing"></i>';
   function historyHTML() {
-    const { versions, draft, peeking } = S.versions;
+    const { versions, draft, peeking, by } = S.versions;
     const v = versions.slice().reverse();
+    // Fold runs of autosaves; named versions stand on their own.
+    const groups = [];
+    for (const x of v) {
+      const last = groups[groups.length - 1];
+      if (x.kind !== 'named' && last?.auto) last.items.push(x);
+      else groups.push({ auto: x.kind !== 'named', items: [x] });
+    }
+    const changesList = (list) => `<div class="vChanges">${list.slice(0, 8).map((c) => `<span class="ch">${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${chLabel(c)}</span>`).join('')}${list.length > 8 ? `<span class="note">and ${list.length - 8} more</span>` : ''}</div>`;
+    const item = (x, node) => {
+      const sel = S.vSel === x.n || peeking === x.n;
+      const naming = S.vNaming === x.n;
+      return `<div class="vRow">${node ? `<span class="vNode">${RING}</span>` : ''}
+        <div class="vItem${sel ? ' sel' : ''}" data-act="vSel" data-v="${x.n}">
+          ${naming ? `<form class="vName" data-form="vname" data-n="${x.n}"><input value="${esc(x.name || '')}" placeholder="Name this version" aria-label="Version name" maxlength="80"></form>` : `<div class="vTitle">${x.name ? esc(x.name) : when(x.at)}</div>`}
+          ${x.name && !naming ? `<span class="vSub">${when(x.at)}</span>` : ''}
+          ${who(x.by || by)}
+          ${peeking === x.n ? '<span class="vPeek">Showing the screen before this</span>' : ''}
+          ${S.vOpen === x.n ? changesList(x.changes) : ''}
+          <button class="vMore" data-act="vMenu" data-v="${x.n}" aria-label="Version actions" title="Actions">${ico('dots', 16)}</button>
+        </div></div>`;
+    };
+    const body = groups.map((g) => {
+      if (!g.auto || g.items.length === 1) return g.items.map((x) => item(x, x.kind === 'named')).join('');
+      const key = g.items[0].n, open = S.vGroups.has(key) || g.items.some((x) => x.n === S.vSel || x.n === peeking);
+      return `<div class="vRow"><span class="vNode sm">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="vGroup" data-act="vGroup" data-v="${key}">${g.items.length} autosave versions</button></div>${open ? g.items.map((x) => item(x, false)).join('') : ''}`;
+    }).join('');
     return `<div class="ptabs"><button class="on">Version history</button><button class="x" data-act="history" aria-label="Close">${ico('x')}</button></div>
-      <div class="scroll" style="padding:8px;display:flex;flex-direction:column;gap:4px">
-      ${draft.length ? `<div class="ver"><div class="vh"><span>Current</span><span>${draft.length} unsaved change${draft.length === 1 ? '' : 's'}</span></div>${draft.slice(-4).reverse().map((c) => `<span class="ch">${chLabel(c)}</span>`).join('')}${draft.length > 4 ? `<span class="note">and ${draft.length - 4} more</span>` : ''}<div class="acts"><button class="outline" data-act="saveVersion">Save as a version</button><span class="note">Also saved when you go back to Preview.</span></div></div>` : ''}
-      ${v.map((x) => `<div class="ver${peeking === x.n ? ' on' : ''}"><div class="vh"><span>Version ${x.n}</span><span>${time(x.at)}</span></div>
-        ${x.changes.slice(0, 5).map((c) => `<span class="ch">${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${chLabel(c)}</span>`).join('')}${x.changes.length > 5 ? `<span class="note">and ${x.changes.length - 5} more</span>` : ''}
-        <div class="acts"><button class="outline" data-act="peek" data-v="${x.n}">${peeking === x.n ? 'Back to now' : 'Show before'}</button><button class="ghostBtn" data-act="restore" data-v="${x.n - 1}" title="Undo this version and everything after it">Undo from here</button></div></div>`).join('')}
-      ${!v.length && !draft.length ? `<div class="empty"><b>No versions yet</b><span>Each time you go from Edit back to Preview, Tovi saves your changes as a version. Here you can see the screen before a version or undo back to it.</span></div>` : ''}
+      <div class="scroll vScroll">
+        <p class="vIntro">Tovi saves a version every few minutes, when you change page and when you present. Name a version to keep it as a milestone.</p>
+        <div class="vTimeline">
+          <div class="vRow"><span class="vNode">${RING}</span><div class="vItem cur${S.vSel == null && peeking == null ? ' sel' : ''}">
+            <div class="vTitle">Current version</div>
+            ${draft.length ? `<span class="vSub">${draft.length} change${draft.length === 1 ? '' : 's'} not in a version yet</span>${changesList(draft.slice().reverse())}
+              <form class="vSave" data-form="vsave"><input placeholder="Name it (optional)" aria-label="Version name" maxlength="80"><button class="primary sm">Save version</button></form>` : `<span class="vSub">Everything is saved</span>`}
+            ${who(by)}
+          </div></div>
+          ${body}
+          ${v.length ? '' : '<div class="vRow"><div class="vItem empty"><span class="vSub">No versions yet. They appear here as you work.</span></div></div>'}
+        </div>
       </div>`;
   }
   function renderPeek() {
@@ -884,18 +1789,56 @@
     if (c.hidden) return;
     let list = [];
     try { list = await api('/changes'); } catch {}
-    c.innerHTML = `<div class="secH"><span>Changes this session</span>${hb('changes', 'x', 'Close')}</div>` + (list.length
+    c.innerHTML = `<div class="secH"><span>Changes this session</span><span class="sp"></span><button class="linkBtn" data-act="history">Version history</button>${hb('changes', 'x', 'Close')}</div>` + (list.length
       ? list.slice().reverse().map((x) => `<div class="chg"><span>${esc((x.summary.labels || []).join(' · '))}</span><span class="mono">${esc(x.file)}${x.summary.added?.length || x.summary.removed?.length ? ` · ${esc([x.summary.removed.join(' ') || '—', x.summary.added.join(' ')].join(' → '))}` : ''}</span></div>`).join('')
       : '<span class="note">No changes yet.</span>');
   }
   let toastT;
+  /* ---------- sound: a few soft cues for meaningful moments (never hovers or routine edits) ---------- */
+  // Generated with the Web Audio API, so there are no sound files. Quiet by design; off in Settings → Sounds.
+  S.sound = (() => { try { return localStorage.getItem('kerf.sound') !== 'off'; } catch { return true; } })();
+  let actx = null;
+  function tone(freq, at, dur, { type = 'sine', gain = 0.05, to = null } = {}) {
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + at;
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  // A pop: a soft, round sine that drops in pitch over ~45ms (like macOS). Higher pops go up, lower go down.
+  const pop = (at, hi = 900, lo = 380, gain = 0.06) => tone(hi, at, 0.045, { gain, to: lo });
+  const SOUNDS = {
+    edit: () => { pop(0, 750, 320); pop(0.075, 900, 380); },
+    interact: () => { pop(0, 900, 380); pop(0.075, 750, 320); },
+    undo: () => pop(0, 820, 340),
+    remove: () => pop(0, 520, 200, 0.07),
+    done: () => { pop(0, 750, 320, 0.05); pop(0.07, 900, 380, 0.05); pop(0.14, 1080, 450, 0.05); },
+    sent: () => { pop(0, 800, 340); pop(0.08, 1050, 440); },
+    error: () => { pop(0, 480, 200, 0.07); pop(0.09, 420, 180, 0.07); },
+  };
+  function cue(name) {
+    if (!S.sound || !SOUNDS[name]) return;
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); SOUNDS[name](); } catch {}
+  }
+
   function toast(msg, sub, err, withUndo, code) {
+    if (err) cue('error');
     const t = $('toast');
+    // A message already showing tucks behind the new one and fades, instead of vanishing mid-read.
+    if (!t.hidden && t.innerHTML) {
+      const old = t.cloneNode(true);
+      old.removeAttribute('id'); old.classList.add('tucked'); old.setAttribute('aria-hidden', 'true');
+      t.parentNode.insertBefore(old, t);
+      setTimeout(() => old.remove(), 700);
+    }
+    const ms = err ? 6000 : withUndo ? 6000 : 4000;
     t.hidden = false;
     t.className = 'toast' + (err ? ' err' : '');
-    t.innerHTML = `<div class="tx"><span>${esc(msg)}</span>${sub ? `<span class="sub">${esc(sub)}</span>` : ''}${code ? `<details class="code"><summary>Code</summary><span class="mono">${esc(code)}</span></details>` : ''}</div>${withUndo ? '<button class="outline" data-act="undo">Undo</button>' : ''}<button class="ib" data-act="toastClose" aria-label="Dismiss">${ico('x')}</button>`;
+    // The thin line drains while the message (and its Undo) lasts; hovering pauses it.
+    t.innerHTML = `<div class="tx"><span>${esc(msg)}</span>${sub ? `<span class="sub">${esc(sub)}</span>` : ''}${code ? `<span class="mono codeLine">${esc(code)}</span>` : ''}</div>${withUndo ? '<button class="outline" data-act="undo">Undo</button>' : ''}<button class="ib" data-act="toastClose" aria-label="Dismiss">${ico('x')}</button><i class="tLine" style="animation-duration:${ms}ms"></i>`;
     clearTimeout(toastT);
-    toastT = setTimeout(() => (t.hidden = true), err ? 6000 : 4000);
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) toastT = setTimeout(() => (t.hidden = true), ms);
+    else t.querySelector('.tLine').addEventListener('animationend', () => { if (t.querySelector('.tLine')) t.hidden = true; }, { once: true });
   }
 
   /* ---------- modes ---------- */
@@ -904,17 +1847,37 @@
     S.mode = m;
     S.hintSeen = true;
     if (m === 'preview') {
-      S.sel = null; S.hover = null; S.changesOpen = false; S.tab = 'design';
+      S.hover = null; S.changesOpen = false; S.noteDraft = null; S.tool = S.tool === 'annotate' ? 'select' : S.tool;
       if (S.editing) S.editing.blur();
-      api('/version', {}).then((v) => { S.versions = v; renderTop(); }).catch(() => {});
+      saveVersion();
       renderChanges();
     } else { S.askOpen = false; if (S.side === 'history') S.side = 'design'; }
+    syncTool();
     renderAll();
     // Panels open or close with the mode, so the presentation re-fits.
     setTimeout(applyDevice, 0);
   }
+  // Versions save themselves: after a few minutes of edits, when you move to another page, or when you present.
+  S.verAt = 0;
+  // The project's card on the start page shows the app as it looks now: a small picture a few seconds after it
+  // opens, and again with each saved version.
+  let thumbT;
+  const saveThumb = (ms = 0) => { clearTimeout(thumbT); thumbT = setTimeout(() => captureScreen().then((x) => x && api('/thumb', { data: x.data })).catch(() => {}), ms); };
+  frame.addEventListener('load', () => saveThumb(6000));
+  function saveVersion() {
+    if (!S.count || S.count === S.verAt || S.versions.peeking) return;
+    S.verAt = S.count;
+    saveThumb(1500);
+    api('/version', { kind: 'auto' }).then((v) => { S.versions = v; renderTop(); if (S.side === 'history') renderPanel(); }).catch(() => {});
+  }
+  setInterval(saveVersion, 3 * 60 * 1000);
+  // Cursors and capture layers follow the tool: arrow to select, the app's own cursors to interact, a hand to move.
+  function syncTool() {
+    document.body.dataset.tool = S.mode === 'preview' ? 'present' : S.tool;
+    D?.documentElement?.classList.toggle('kerf-pick', picking() || (S.mode === 'edit' && S.tool === 'annotate'));
+  }
   function renderAll() {
-    renderTop(); renderBar(); renderLayers(); renderPanel(); renderAsk(); renderMarks();
+    renderTop(); renderBar(); renderLeft(); renderPanel(); renderAsk(); renderMarks();
   }
 
   /* ---------- outlines follow the page ---------- */
@@ -927,9 +1890,53 @@
     box.style.width = r.width + 'px';
     box.style.height = r.height + 'px';
     const t = box.querySelector('.tag');
-    if (label != null && t) { t.textContent = label; t.classList.toggle('in', r.top < 22); }
+    if (label != null && t) {
+      const tt = t.querySelector('.tagT');
+      if (tt) { if (tt.textContent !== label) tt.textContent = label; t.classList.toggle('canDrag', canReorder(el)); } else t.textContent = label;
+      t.classList.toggle('in', r.top < 22);
+    }
   }
-  const labelOf = (el) => dName(el);
+  // The label on the canvas names the kind of element only (Heading, Button, Card); the panel has the rest.
+  const labelOf = (el) => kindOf(el);
+  // What Tovi is working on, shown like a selection in Tovi's pink: an outline per element (a card, a heading, a
+  // section) with a tag naming it and what Tovi is doing ("Pricing · Reviewing"). States: scan (Diagnose reviewing
+  // it, a slow light sweep), look (thinking about it, outline only), edit (changing it now, a pulse), done (a check).
+  S.working = [];
+  const locOfEl = (el) => el?.getAttribute?.('data-kerf-use') || el?.getAttribute?.('data-kerf') || null;
+  function workOn(locs, label, state = 'look') {
+    const now = Date.now();
+    for (const loc of locs.filter(Boolean)) {
+      const w = S.working.find((x) => x.loc === loc);
+      if (w) Object.assign(w, { label, state, t: now }); else S.working.push({ loc, label, state, t: now });
+    }
+    S.working = S.working.slice(-16);
+  }
+  const workClear = () => { S.working = S.working.filter((w) => w.state !== 'look' && w.state !== 'scan'); };
+  function workDone(locs) { const now = Date.now(); for (const w of S.working) if (!locs || locs.includes(w.loc)) { w.state = 'done'; w.t = now; } }
+  // Elements in scope for a request: the selection (and anything selected with it), or the visible sections.
+  const scopeLocs = () => (S.sel ? uniq([S.sel.el, ...(S.multi || []).map((x) => x.el || x)].map(locOfEl)) : pageBlocks().filter(onScreen).map(locOfEl)).filter(Boolean).slice(0, 12);
+  function drawWork() {
+    let host = $('work');
+    if (!host) { host = document.createElement('div'); host.id = 'work'; $('ov').appendChild(host); }
+    const now = Date.now();
+    S.working = S.working.filter((w) => w.state !== 'done' || now - w.t < 4000);
+    // Every area Tovi works on gets a pink outline and tag. Only Diagnose's sections (scan) add a fill and a sweep.
+    const items = S.agentsOn && D ? S.working.map((w) => ({ w, el: elOf(w.loc) })).filter((x) => x.el?.isConnected) : [];
+    while (host.children.length < items.length) { const d = document.createElement('div'); d.className = 'box work'; d.innerHTML = `<span class="tag"><img class="wAv" src="${TOVI_PIC}" alt=""><span class="tagT"></span></span><i class="wCheck"></i>`; host.appendChild(d); }
+    [...host.children].forEach((b, i) => {
+      const x = items[i];
+      const nm = x && /^(section|header|footer|nav)$/i.test(x.el.tagName) ? blockName(x.el) : x ? kindOf(x.el) : '';
+      place(b, x?.el || null, x ? `${nm}${x.w.label ? ` · ${x.w.label}` : ''}` : null);
+      if (x && b.dataset.state !== x.w.state) b.dataset.state = x.w.state;
+      if (x) b.classList.toggle('fading', x.w.state === 'done' && now - x.w.t > 3300);
+    });
+  }
+  // The grip on the selection tag shows only when the element has siblings it can trade places with.
+  const reorderSibs = (el) => [...(el.parentElement?.children || [])].filter((c) => c.matches('[data-kerf],[data-kerf-use]'));
+  // Items repeated from one template (a list of products) can't trade places in code, so they get no grip.
+  const domLoc = (el) => el.getAttribute('data-kerf-use') || el.getAttribute('data-kerf');
+  const repeated = (el) => reorderSibs(el).filter((c) => domLoc(c) === domLoc(el)).length > 1;
+  const canReorder = (el) => picking() && !S.editing && reorderSibs(el).length > 1 && !repeated(el);
   function pool(container, n, cls) {
     while (container.children.length < n) { const d = document.createElement('div'); d.className = 'box ' + cls; d.innerHTML = '<span class="tag"></span>'; container.appendChild(d); }
     return [...container.children];
@@ -941,7 +1948,7 @@
   function frameStep() {
     refind();
     const edit = S.mode === 'edit';
-    place($('hov'), edit && S.tool !== 'annotate' && S.hover !== S.sel?.el ? S.hover : null, S.hover ? labelOf(S.hover) : '');
+    place($('hov'), picking() && S.hover !== S.sel?.el ? S.hover : null, S.hover ? labelOf(S.hover) : '');
     place($('sel'), edit ? S.sel?.el : null, S.sel ? labelOf(S.sel.el) : '');
     if (edit && S.sel?.el?.isConnected) {
       const r = S.sel.el.getBoundingClientRect(), dim = $('sel').querySelector('.dim');
@@ -949,15 +1956,25 @@
       if (dim.textContent !== t) dim.textContent = t;
       $('sel').classList.toggle('comp', !!(useOf(S.sel.el) && /^[A-Z]/.test(S.sel.el.getAttribute('data-kerf-n') || '')));
     }
-    const sib = edit && S.sel && S.sel.repeat > 1 ? [...sameLoc(S.sel.el)].filter((x) => x !== S.sel.el).slice(0, 60) : [];
+    const sib = edit && S.sel && S.scope !== 'here' ? [...(S.sel.repeat > 1 ? [...sameLoc(S.sel.el)].filter((x) => x !== S.sel.el && (S.scope !== 'variant' || x.className === S.sel.el.className)) : []), ...(S.simScope === 'all' && picking() ? (S.sel.similar || []) : [])].slice(0, 60) : [];
     pool($('sibs'), sib.length, 'sib').forEach((b, i) => place(b, sib[i] || null, null));
     const aEls = D ? (S.amber || []).flatMap((loc) => [...D.querySelectorAll(q(loc))]).slice(0, 60) : [];
     pool($('amb'), aEls.length, 'amber').forEach((b, i) => place(b, aEls[i] || null, null));
+    drawWork();
     if (W) $('marksG').setAttribute('transform', `translate(${-W.scrollX} ${-W.scrollY})`);
     placeHandles(); placeMulti(); measureLines();
     if (W && W.location.pathname + W.location.search !== S.path) {
-      S.path = W.location.pathname + W.location.search;
+      // Notes are drawn on a page's own layout, so each page keeps its own: stash the old page's, bring back the new one's.
+      const next = W.location.pathname + W.location.search;
+      S.pageNotes ||= {};
+      if (S.path != null) { if (S.notes.length) S.pageNotes[S.path] = S.notes; else delete S.pageNotes[S.path]; }
+      S.notes = S.pageNotes[next] || [];
+      delete S.pageNotes[next];
+      S.openTask = [];
+      if (S.path != null) setTimeout(() => { refreshTasks(); renderBar(); }, 0);
+      S.path = next;
       S.pages = [S.path, ...S.pages.filter((x) => x !== S.path)].slice(0, 20);
+      saveVersion();
       if (document.activeElement?.id !== 'pathIn') { const pi = $('pathIn'); if (pi) pi.value = S.path; }
       layersSoon();
     }
@@ -972,8 +1989,20 @@
     let touched = false;
     W.addEventListener('pointerdown', () => { touched = true; }, true);
     [0, 300, 1200].forEach((ms) => setTimeout(() => { const a = D.activeElement; if (!touched && a && a !== D.body && /^(input|textarea|select)$/i.test(a.tagName)) a.blur(); }, ms));
+    // Selecting shows a plain arrow over the app; interacting keeps the app's own cursors.
+    const st = D.createElement('style');
+    st.textContent = 'html.kerf-pick, html.kerf-pick *{cursor:default!important}';
+    (D.head || D.documentElement).appendChild(st);
+    syncTool();
+    // ⌘-clicking a link would open a new browser tab: follow it in place instead.
+    let passing = false;
+    W.addEventListener('click', (e) => {
+      if (!thru(e) || !e.isTrusted) return;
+      const a = e.target.closest?.('a[href]');
+      if (a) { e.preventDefault(); e.stopImmediatePropagation(); passing = true; try { a.click(); } finally { passing = false; } }
+    }, true);
     const block = (e) => {
-      if (S.mode !== 'edit' && S.tool !== 'annotate') return;
+      if (passing || appClicks() || thru(e)) return;
       if (S.editing && S.editing.contains(e.target)) return;
       e.preventDefault(); e.stopPropagation();
     };
@@ -981,19 +2010,20 @@
     W.addEventListener('pointerdown', () => { closeMenu(); closeIconPop(); }, true);
     W.addEventListener('scroll', () => closeMenu(), true);
     W.addEventListener('contextmenu', (e) => {
-      if (S.mode !== 'edit' || S.tool === 'annotate' || S.editing) return;
+      if (!picking() || S.editing) return;
       const hit = pick(e.target);
       if (!hit) return;
-      if (S.sel?.el !== hit) { S.multi = []; select(hit); }
-      const fr = frame.getBoundingClientRect();
-      setTimeout(() => contextMenu({ x: fr.left + e.clientX * S.z, y: fr.top + e.clientY * S.z }), 0);
+      // Wait for the element's code to be read, so the menu offers everything it can do (like Edit text).
+      const ready = S.sel?.el !== hit ? (S.multi = [], select(hit)) : null;
+      const fr = frame.getBoundingClientRect(), at = { x: fr.left + e.clientX * S.z, y: fr.top + e.clientY * S.z };
+      Promise.resolve(ready).catch(() => {}).then(() => { if (S.sel?.el === hit) contextMenu(at); });
     }, true);
     let lastClick = null;
     // Browsers send no click to a disabled button or input, only pointer events: select those on release.
-    W.addEventListener('pointerup', (e) => { if (S.mode === 'edit' && e.button === 0 && e.target.closest?.(':disabled')) onCanvasClick(e); }, true);
+    W.addEventListener('pointerup', (e) => { if (picking() && !thru(e) && e.button === 0 && e.target.closest?.(':disabled')) onCanvasClick(e); }, true);
     W.addEventListener('click', onCanvasClick, true);
     function onCanvasClick(e) {
-      if (S.mode !== 'edit') { closeFloating(); return; }
+      if (passing || !picking() || thru(e)) { closeFloating(); return; }
       if (S.editing && S.editing.contains(e.target)) return;
       block(e);
       closeFloating();
@@ -1010,24 +2040,27 @@
         renderPanel();
         return;
       }
+      if (hit && S.sel?.el === hit && !S.multi.length) return;
       S.multi = [];
       select(hit);
     }
     W.addEventListener('dblclick', (e) => {
-      if (S.mode !== 'edit') return;
+      if (!picking() || thru(e)) return;
       block(e);
       if (S.sel && S.sel.el.contains(e.target)) beginText();
     }, true);
-    W.addEventListener('pointermove', (e) => { S.hover = S.mode === 'edit' ? pick(e.target) : null; }, true);
+    W.addEventListener('pointermove', (e) => { S.hover = picking() && !thru(e) ? pick(e.target) : null; }, true);
     W.addEventListener('pointerleave', () => { S.hover = null; });
     W.addEventListener('keydown', onKey, true);
+    ['keydown', 'keyup'].forEach((k) => W.addEventListener(k, holdKeys, true));
     W.addEventListener('wheel', pinch, { passive: false });
     // Re-read layers when the app's DOM changes (navigation, data loading, hot reload).
     new W.MutationObserver(() => layersSoon()).observe(D.body, { childList: true, subtree: true });
     renderAll();
   }
   frame.addEventListener('load', bindApp);
-  addEventListener('resize', () => { if (innerWidth < 1000 && S.layersOpen) { S.layersOpen = false; renderLayers(); renderTop(); } });
+  $('devLabel').addEventListener('click', () => { if (S.mode !== 'edit') return; if (S.tool !== 'select') setTool('select'); S.multi = []; select(null); S.pageSel = true; renderPanel(); });
+  addEventListener('resize', () => { if (innerWidth < 900 && S.layersOpen) { S.layersOpen = false; renderLeft(); renderTop(); } });
 
   // Clicking outside a floating card closes it.
   function closeFloating() {
@@ -1035,7 +2068,7 @@
     if (S.askOpen && !S.card?.busy) { S.askOpen = false; changed = true; }
     if (S.card && !S.card.busy && S.card.where === 'notes') { S.card = null; changed = true; }
     if (S.changesOpen) { S.changesOpen = false; renderChanges(); }
-    if (S.cpick) { S.cpick = null; renderPanel(); }
+    if (S.cpick) { S.cpick = S.cp = null; renderPanel(); }
     if (changed) { S.amber = []; renderAsk(); renderMarks(); renderBar(); }
   }
 
@@ -1045,6 +2078,7 @@
     const typing = t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleAI(true); return; }
+    if (mod && e.key === ',') { e.preventDefault(); openSettings(); return; }
     if (!typing && !mod && e.key === '?') { e.preventDefault(); shortcuts(); return; }
     if (!typing && !mod && e.shiftKey && (e.key === '|' || e.code === 'Backslash')) { e.preventDefault(); toggleMinUI(); return; }
     if (e.key === 'Escape' && !$('menu').hidden) { closeMenu(); return; }
@@ -1052,39 +2086,51 @@
     if (mod && (e.key === '-' || e.key === '_')) { e.preventDefault(); setZoom('out'); return; }
     if (e.shiftKey && !mod && !typing && (e.code === 'Digit1' || e.code === 'Digit0')) { e.preventDefault(); setZoom(e.code === 'Digit1' ? 'fit' : 1); return; }
     if (e.key === 'Escape') {
-      if (S.editing) return;
+      if (S.editing || t?.matches?.('textarea[data-text]')) return;
+      // While interacting, Escape belongs to the app (closing its menus and dialogs).
+      if (S.mode === 'edit' && S.tool === 'interact' && t?.ownerDocument === D) return;
       e.preventDefault();
       if (!$('modal').hidden) { $('modal').hidden = true; }
-      else if (S.cpick) { S.cpick = null; renderPanel(); }
+      else if (S.cpick) { S.cpick = S.cp = null; renderPanel(); }
       else if (S.noteDraft) { S.noteDraft = null; renderMarks(); }
+      else if (S.pendingInsert) { S.pendingInsert = false; pickHint(false); }
       else if (S.card && !S.card.busy && S.card.where !== 'chat') { S.card = null; S.amber = []; renderAll(); }
       else if (S.askOpen) { S.askOpen = false; S.amber = []; renderAsk(); renderBar(); }
       else if (S.changesOpen) { S.changesOpen = false; renderChanges(); }
       else if (S.tool === 'annotate') setTool('select');
-      else if (S.mode === 'edit' && S.tab === 'chat') { S.tab = 'design'; renderPanel(); renderBar(); }
       else if (S.side === 'history') { S.side = 'design'; renderAll(); }
       else if (S.mode === 'edit' && S.multi.length) { S.multi = []; renderPanel(); }
       else if (S.mode === 'edit' && S.sel) select(null);
-      else if (S.mode === 'edit') setMode('preview');
+      else if (S.pageSel) { S.pageSel = false; renderPanel(); }
+      else if (S.mode === 'preview') setMode('edit');
+      else if (S.tool !== 'select') setTool('select');
       return;
     }
     if (typing) return;
     if (mod && e.key.toLowerCase() === 'z' && S.mode === 'edit') { e.preventDefault(); undo(); return; }
     if (mod || e.altKey) return;
     const k = e.key.toLowerCase();
-    if (k === 'e') setMode('edit');
-    else if (k === 'p') setMode('preview');
-    else if (k === 'a') setTool(S.tool === 'annotate' ? 'select' : 'annotate');
-    else if (S.tool === 'annotate' && ['1', '2', '3', '4'].includes(k)) { S.shape = ['pin', 'box', 'circle', 'arrow'][+k - 1]; renderBar(); }
+    if (k === 'v' || k === 'e') { if (S.mode === 'preview') setMode('edit'); setTool('select'); }
+    else if (k === 'p') { if (S.mode === 'preview') setMode('edit'); setTool('interact'); }
+    else if (k === 'i' && (!picking() || !S.sel)) startInsert();
+    else if (k === 'a' && S.mode === 'edit') setTool(S.tool === 'annotate' ? 'select' : 'annotate');
     else if (S.mode === 'edit' && k === 'enter' && S.sel) beginText();
     else return;
     e.preventDefault();
   }
   window.addEventListener('keydown', onKey, true);
-  function toggleAI(fromKey) {
-    if (S.mode === 'edit') { S.tab = fromKey ? 'chat' : S.tab === 'chat' ? 'design' : 'chat'; renderPanel(S.tab === 'chat'); }
-    else { S.askOpen = fromKey ? true : !S.askOpen; if (!S.askOpen) S.amber = []; renderAsk(); }
-    renderBar();
+  function holdKeys(e) {
+    const through = (e.metaKey || e.ctrlKey) && e.type === 'keydown';
+    if (through !== S.through && (e.key === 'Meta' || e.key === 'Control' || !through)) { S.through = through; S.hover = null; syncTool(); }
+  }
+  ['keydown', 'keyup'].forEach((k) => window.addEventListener(k, holdKeys, true));
+  window.addEventListener('blur', () => { if (S.through) { S.through = false; syncTool(); } });
+  function toggleAI() {
+    if (S.mode === 'preview') setMode('edit');
+    S.left = 'chat';
+    if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); }
+    renderLeft(true);
+    $('chatIn')?.focus();
   }
 
   /* ---------- editor clicks ---------- */
@@ -1099,38 +2145,98 @@
       return;
     }
     if (!a) {
-      if (S.cpick && !e.target.closest('.cpop')) { S.cpick = null; renderPanel(); }
-      if (!e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#modal')) closeFloating();
+      if (S.cpick && !downInFpop && !e.target.closest('#fpop,#fpop2')) closeFpop();
+      if (!downInFpop && !e.target.closest('#ask,#noteRes,#bar,#changes,#toast,#panel,#layers,#top,#topR,#topC,#modal,#fpop,#fpop2')) closeFloating();
       return;
     }
     const act = a.dataset.act, v = a.dataset.v;
     switch (act) {
       case 'mode': setMode(v); break;
+      case 'present': setMode('preview'); break;
+      case 'settings': openSettings(); break;
+      case 'setTog':
+        if (v === 'agents') { S.agentsOn = !S.agentsOn; save('kerf.agents', S.agentsOn ? 'on' : 'off'); }
+        if (v === 'sim') { S.simScope = S.simScope === 'all' ? 'one' : 'all'; save('kerf.sim', S.simScope); renderPanel(); }
+        if (v === 'scale') { S.scaleArrows = !S.scaleArrows; save('kerf.scale', S.scaleArrows ? 'on' : 'off'); }
+        if (v === 'sound') { S.sound = !S.sound; save('kerf.sound', S.sound ? 'on' : 'off'); if (S.sound) cue('edit'); }
+        openSettings(); break;
+      case 'setMode': setStyleMode(v); openSettings(); break;
+      case 'setTheme': applyTheme(v); showSettings(); api('/prefs', { theme: v }).catch((err) => toast(err.message, '', true)); break;
+      case 'setDir': $('modal').hidden = true; openDirection(); break;
+      case 'setPanels': for (const k of Object.keys(SIDE)) { try { localStorage.removeItem(`kerf.side.${k}`); } catch {} setSide(k, SIDE[k].def); } applyDevice(); toast('Panels are back to their usual widths'); break;
+      case 'simScope': S.simScope = v; renderPanel(); break;
+      case 'keys': shortcuts(); break;
       case 'undo': undo(); break;
       case 'changes': S.changesOpen = !S.changesOpen; renderChanges(); break;
+      case 'diagnose': { if (S.diagnosing) break; const r = a.getBoundingClientRect(); openMenu([{ head: 'Diagnose with Tovi' }, { label: 'This page', sub: 'Every section, top to bottom · about a minute', run: () => runDiagnose('page') }, { label: 'This selection', sub: S.sel ? ctxName(S.sel.el) : 'Select something first', disabled: !S.sel, run: () => runDiagnose('selection') }, { label: 'Whole product', sub: 'Every page it can reach, up to 10 · a few minutes', run: () => runDiagnoseProduct() }], { x: r.left - 90, y: r.top - 200 }); break; }
       case 'toastClose': $('toast').hidden = true; break;
-      case 'scope': S.scope = v; S.cpick = null; renderPanel(); break;
+      case 'scope': S.scope = v; S.cpick = S.cp = null; renderPanel(); break;
+      case 'scopeMenu': scopeMenu(v, a); break;
       case 'srcScope': S.srcScope = v; renderPanel(); break;
       case 'sizeOnly': S.sizeOnly[S.device] = v === 'true'; renderPanel(); break;
       case 'reveal': S.reveal = { el: S.sel?.el, ...(S.reveal?.el === S.sel?.el ? S.reveal : {}), [v]: true }; renderPanel(); break;
+      case 'vSel': if (!e.target.closest('.vMore,.vName')) { S.vSel = S.vSel === +v ? null : +v; renderPanel(); } break;
+      case 'vGroup': S.vGroups.has(+v) ? S.vGroups.delete(+v) : S.vGroups.add(+v); renderPanel(); break;
+      case 'vMenu': {
+        const n = +v, x = S.versions.versions.find((y) => y.n === n);
+        const r = a.getBoundingClientRect();
+        S.vSel = n; renderPanel();
+        openMenu([
+          { label: S.vOpen === n ? 'Hide what changed' : `What changed (${x?.changes.length || 0})`, run: () => { S.vOpen = S.vOpen === n ? null : n; renderPanel(); } },
+          { label: S.versions.peeking === n ? 'Back to the current screen' : 'Show the screen before this', run: () => peek(n) },
+          { label: x?.name ? 'Rename…' : 'Name this version…', run: () => { S.vNaming = n; renderPanel(); setTimeout(() => document.querySelector('.vName input')?.focus(), 0); } },
+          '-',
+          { label: 'Restore this version', sub: 'Undo every change after it', danger: true, run: () => restore(n) },
+        ], { x: r.left - 180, y: r.bottom + 4 });
+        break;
+      }
       case 'saveVersion': api('/version', {}).then((v) => { S.versions = v; renderPanel(); renderTop(); toast(`Saved version ${v.versions.length}`); }).catch((e) => toast(e.message, '', true)); break;
       case 'copyLoc': navigator.clipboard?.writeText(activeLoc() || '').then(() => toast('Copied the code location', activeLoc() || '')).catch(() => {}); break;
       case 'parent': { const p = S.sel && pick(S.sel.el.parentElement); if (p) select(p); break; }
       case 'corners': S.corners = !S.corners; renderPanel(); break;
-      case 'cpick': S.cpick = S.cpick === v ? null : v; renderPanel(); break;
-      case 'token': case 'set': commit({ ops: [{ prop: a.dataset.p, value: v }] }); break;
+      case 'cpick': S.cpick = S.cpick === v ? null : v; S.cp = null; S.ipLink = false; S.fpY = a.getBoundingClientRect().top; if (v === 'grad') S.gstop = 'from'; renderPanel(); break;
+      case 'fpClose': closeFpop(); break;
+      case 'diagStop': S.diagStop = true; if (S.card?.progress) { S.card.progress = 'Stopping after this page…'; renderChat(); } break;
+      case 'goPage': if (v !== S.path) goTo(v); break;
+      case 'fontPick': pickFont(a); break;
+      case 'gStop': if (e.target.closest('input')) { if (S.gstop !== v) { S.gstop = v; S.cp = null; } break; } S.gstop = v; S.cp = null; S.gpick = true; renderFpop(); break;
+      case 'gPickClose': S.gpick = false; renderFpop(); break;
+      case 'fpType': { if (v === 'image') { if (S.cpick !== 'bgimg') { S.cpick = 'bgimg'; S.ipLink = false; renderPanel(); } break; } const want = v === 'gradient' ? 'grad' : 'bg'; if (S.cpick !== want) { S.cpick = want; S.cp = null; S.gstop = 'from'; setFillType(v); } break; }
+      case 'gFlip': { const g = gradOf(); if (!g) break; const st = stopsOf(g); const r = st.map((x) => ({ col: x.col, pos: 100 - x.pos })).reverse(); ['from', g.via ? 'via' : null, 'to'].filter(Boolean).forEach((kk, n) => { g[kk] = r[n].col; g[kk + 'Pos'] = r[n].pos; }); S.cp = null; commitGrad(g); break; }
+      case 'gRot': { const g = gradOf(); if (!g) break; g.dir = ROT[(ROT.indexOf(g.dir) + 1) % ROT.length]; commitGrad(g); break; }
+      case 'gAdd': { const g = gradOf(); if (!g || g.via) break; g.via = g.from; g.viaPos = Math.round((posOf(g, 'from') + posOf(g, 'to')) / 2); S.gstop = 'via'; S.cp = null; commitGrad(g); break; }
+      case 'gDel': { const g = gradOf(); if (!g || !g.via) break; if (v === 'from') { g.from = g.via; g.fromPos = g.viaPos; } else if (v === 'to') { g.to = g.via; g.toPos = g.viaPos; } g.via = null; g.viaPos = null; S.gstop = 'from'; S.cp = null; commitGrad(g); break; }
+      case 'cpTab': S.cpTab = v; renderFpop(); break;
+      case 'token': case 'set': if (a.dataset.p === 'grad') { const g = gradOf() || { dir: 'r' }; g[S.gstop || 'from'] = v; S.cp = null; commit({ ops: [{ prop: 'gradient', value: gradValue(g) }] }); } else if (a.dataset.p === 'layout' && v === 'none') {
+          // Auto layout off: gap and alignment do nothing without it, so they go too.
+          commit({ ops: [{ prop: 'layout', value: 'none' }, { prop: 'gap', value: null }, { prop: 'justify', value: null }, { prop: 'alignItems', value: null }] });
+        } else { if (a.dataset.act === 'token') S.cp = null; commit({ ops: [{ prop: a.dataset.p, value: v }] }); } break;
+      case 'rmBgImg': if (S.cpick === 'bgimg') S.cpick = null; commit({ ops: [{ prop: 'bgImg', value: 'none' }, { prop: 'bgSize', value: 'none' }, { prop: 'bgPos', value: 'none' }] }); break;
+      case 'imgFillMenu': { const r = a.getBoundingClientRect(); openMenu([{ label: 'Colour behind the image', icon: 'plus', run: () => commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }) }, { label: 'Change image…', icon: 'image', run: () => { S.cpick = 'img'; S.fpY = r.top; S.ipLink = false; renderPanel(); } }], { x: r.right - 236, y: r.bottom + 6 }); break; }
+      case 'ipFit': commit({ ops: S.cpick === 'img' ? [{ prop: 'fit', value: v }] : [{ prop: 'bgSize', value: v }] }); break;
+      case 'ipFind': openImagePicker({ kind: v, onPick: S.cpick === 'bgimg' ? ({ src }) => setBgImg(src) : undefined }); break;
+      case 'ipUpload': { const bg = S.cpick === 'bgimg'; pickFile().then(upload).then((src) => { if (src) bg ? setBgImg(src) : structure({ type: 'image', src }, { keepSel: true }); }).catch(() => {}); break; }
+      case 'ipLink': S.ipLink = !S.ipLink; renderFpop(); setTimeout(() => $('ipLinkIn')?.focus(), 0); break;
       case 'addFill': commit({ ops: [{ prop: 'bg', value: tokens().find(([n]) => n === 'surface')?.[0] || 'white' }] }); break;
-      case 'rmFill': S.cpick = null; commit({ ops: gradOf() ? [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] : [{ prop: 'bg', value: 'transparent' }] }); break;
+      case 'rmFill': S.cpick = S.cp = null; if (gradOf()) commit({ ops: [{ prop: 'gradient', value: 'none' }, { prop: 'clipText', value: 'off' }] }); else clearStyle([{ prop: 'bg', value: null }], [{ prop: 'bg', value: 'transparent' }], (el) => !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs(el).backgroundColor)); break;
+      case 'rmShadow': clearStyle([{ prop: 'shadow', value: null }], [{ prop: 'shadow', value: 'none' }], (el) => cs(el).boxShadow.split(/,(?![^(]*\))/).some((x) => !/rgba\([^)]*,\s*0\)/.test(x) && /[1-9]\d*(\.\d+)?px/.test(x))); break;
       case 'addStroke': commit({ ops: [{ prop: 'borderW', value: 1 }, { prop: 'borderC', value: tokens().find(([n]) => n === 'border')?.[0] || 'black' }] }); break;
-      case 'rmStroke': S.cpick = null; commit({ ops: [{ prop: 'borderW', value: 0 }] }); break;
+      case 'rmStroke': S.cpick = S.cp = null; clearStyle([{ prop: 'borderW', value: null }, { prop: 'borderC', value: null }], [{ prop: 'borderW', value: 0 }], (el) => parseFloat(cs(el).borderTopWidth) > 0); break;
       case 'setProp': commit({ props: [{ name: a.dataset.p, value: v }] }); break;
-      case 'tab': S.tab = v; renderPanel(v === 'chat'); renderBar(); break;
-      case 'chatToggle': toggleAI(false); break;
       case 'ask': toggleAI(false); break;
-      case 'layersToggle': S.layersOpen = !S.layersOpen; renderLayers(); renderTop(); break;
+      case 'layersToggle': S.layersOpen = !S.layersOpen; renderLeft(); renderTop(); setTimeout(applyDevice, 0); break;
+      case 'left': S.left = v; try { localStorage.setItem('kerf.left', v); } catch {} renderLeft(v === 'chat'); break;
       case 'device': S.device = v; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); break;
+      // The frame's label is the screen-size switch (like Framer's breakpoint labels): no bar over the canvas.
+      case 'marSplit': {
+        const el = S.sel?.el; if (!el) break;
+        if ((+val('mT') || 0) !== (+val('mB') || 0)) { toast('Top and bottom are different. Type the same number in both to join them.'); break; }
+        S.marSplit = S.marSplit === el ? null : el; renderPanel(); break;
+      }
+      case 'deviceMenu': { const r = a.getBoundingClientRect(); openMenu([...Object.keys(DEVICES).map((d) => ({ label: DEV_LABEL[d], icon: d, sub: devRange(d), on: S.device === d, run: () => { S.device = d; S.zoom = 'fit'; applyDevice(); renderTop(); renderPanel(); } }))], { x: r.left, y: r.bottom + 6 }); break; }
       case 'zoom': setZoom(v); break;
       case 'kerfMenu': kerfMenu(below(a)); break;
+      case 'meMenu': meMenu(a); break;
       case 'pagesMenu': pagesMenu(below(a)); break;
       case 'zoomMenu': zoomMenu(below(a)); break;
       case 'shortcuts': shortcuts(); break;
@@ -1145,12 +2251,38 @@
   });
   document.addEventListener('change', (e) => {
     const t = e.target;
-    if (t.dataset.propsel) return t.value && commit({ props: [{ name: t.dataset.propsel, value: t.value }] });
+    if (t.dataset.propsel) return t.value && commit({ props: [{ name: t.dataset.propsel, value: t.value, ...(t.dataset.options ? { options: t.dataset.options.split('|') } : {}), ...(t.dataset.def ? { def: t.dataset.def } : {}) }] });
     if (t.dataset.propnum) { const n = parseFloat(t.value); return isFinite(n) && commit({ props: [{ name: t.dataset.propnum, value: n }] }); }
     if (t.dataset.proptext) return commit({ props: [{ name: t.dataset.proptext, value: t.value }] });
     if (t.dataset.sel) return commit({ ops: [{ prop: t.dataset.sel, value: /^\d+$/.test(t.value) ? +t.value : t.value }] });
-    if (t.dataset.text) return t.value.trim() && commit({ text: t.value.trim() });
-    if (t.dataset.colorinput) return commit({ ops: [{ prop: t.dataset.colorinput, value: t.value.toUpperCase() }] });
+    if (t.dataset.text) { const v = t.value.replace(/\s+/g, ' ').trim(); return v && v !== t.defaultValue.replace(/\s+/g, ' ').trim() && commit({ text: v }); }
+    if (t.dataset.shv != null || t.dataset.shhex != null || t.dataset.shtype != null) {
+      const o = shadowNow();
+      if (t.dataset.shtype != null) o.inset = t.value === 'inner';
+      else if (t.dataset.shhex != null) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderPanel(); o.hex = hx.toUpperCase(); }
+      else { const n = parseFloat(t.value); if (!isFinite(n)) return renderPanel(); const k = t.dataset.shv; o[k] = k === 'a' ? Math.max(0, Math.min(100, Math.round(n))) : k === 'blur' ? Math.max(0, Math.round(n)) : Math.round(n); }
+      return commit({ ops: [{ prop: 'shadow', value: shadowValue(o) }] });
+    }
+    if (t.dataset.gpos || t.dataset.ghex || t.dataset.galpha) {
+      const g = gradOf(); if (!g) return;
+      const k = t.dataset.gpos || t.dataset.ghex || t.dataset.galpha;
+      if (t.dataset.gpos) { const n = parseFloat(t.value); if (!isFinite(n)) return renderFpop(); g[k + 'Pos'] = Math.max(0, Math.min(100, Math.round(n))); }
+      else {
+        const cur = toHexA(tokenSwatch(g[k]));
+        if (t.dataset.ghex) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderFpop(); cur.hex = hx.toUpperCase(); }
+        else { const n = parseFloat(t.value); if (!isFinite(n)) return renderFpop(); cur.a = Math.max(0, Math.min(100, Math.round(n))); }
+        g[k] = '#' + cur.hex + (cur.a >= 100 ? '' : ('0' + Math.round(cur.a * 2.55).toString(16)).slice(-2).toUpperCase());
+      }
+      S.gstop = k; S.cp = null;
+      return commitGrad(g);
+    }
+    if (t.dataset.cphex || t.dataset.cpa) {
+      const p = t.dataset.cphex || t.dataset.cpa, c = S.cp;
+      if (!c) return;
+      if (t.dataset.cphex) { const hx = t.value.trim().replace(/^#/, ''); if (!/^[0-9a-f]{6}$/i.test(hx)) return renderPanel(); Object.assign(c, hexToHsv(hx.toUpperCase())); }
+      else { const n = parseFloat(t.value); if (!isFinite(n)) return renderPanel(); c.a = Math.max(0, Math.min(100, Math.round(n))); }
+      return cpCommit(c);
+    }
     const p = t.dataset.prop;
     if (!p) return;
     if (t.dataset.color) {
@@ -1159,9 +2291,20 @@
       else renderPanel();
       return;
     }
-    const n = parseFloat(t.value);
+    // Corner radius reads "Full" for pills; typing "full" (or keeping it) means fully round.
+    const n = /^(radius|r[TB][LR])$/.test(p) && /^\s*full\s*$/i.test(t.value) ? 9999 : parseFloat(t.value);
     if (isNaN(n)) return renderPanel();
-    commit({ ops: [{ prop: p, value: clamp(p, Math.round(n * 10) / 10) }] });
+    const v = n === 9999 ? 9999 : clamp(p, Math.round(n * 10) / 10);
+    // Zero padding, margin or gap: remove the class (like a developer would) rather than write px-0,
+    // unless something else (a component's own classes) still sets it.
+    if (v === 0 && ['padX', 'padY', 'mX', 'mY', 'mT', 'mB', 'gap'].includes(p)) return clearStyle([{ prop: p, value: null }], [{ prop: p, value: 0 }], (el) => (+read(p, el) || 0) !== 0);
+    if (v === 100 && p === 'opacity') return clearStyle([{ prop: p, value: null }], [{ prop: p, value: 100 }], (el) => +read(p, el) !== 100);
+    // Icons keep their proportions when resized, like Figma.
+    if ((p === 'w' || p === 'h') && S.sel?.el?.tagName.toLowerCase() === 'svg') {
+      const r = S.sel.el.getBoundingClientRect(), k = p === 'w' ? r.height / (r.width || 1) : r.width / (r.height || 1);
+      return commit({ ops: [{ prop: p, value: v }, { prop: p === 'w' ? 'h' : 'w', value: Math.round(v * k) }] });
+    }
+    commit({ ops: [{ prop: p, value: v }] });
   });
   document.addEventListener('input', (e) => {
     const t = e.target;
@@ -1172,11 +2315,70 @@
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && t.closest && t.closest('.kc')) { e.preventDefault(); t.form.requestSubmit(); return; }
     if (!p || t.dataset.color || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || !S.sel) return;
     e.preventDefault();
-    const n = clamp(p, (parseFloat(t.value) || 0) + (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1));
+    // Arrows step through the app's own scale (so values stay on the design system); Shift is a precise 1px nudge.
+    const up = e.key === 'ArrowUp', cur = parseFloat(t.value) || 0, steps = S.scaleArrows ? scaleSteps(p) : null;
+    const n = clamp(p, steps && !e.shiftKey ? (up ? steps.find((x) => x > cur + 0.01) : [...steps].reverse().find((x) => x < cur - 0.01)) ?? cur + (up ? 1 : -1) : cur + (up ? 1 : -1) * (steps || !e.shiftKey ? 1 : 10));
     t.value = n;
     preview(S.sel.el, p, n);
     commitSoon(p, n);
   });
+  // Settings → AI: the provider picks which key and models to show; choosing a model switches Tovi over.
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'setProvSel') { aiPick = { provider: e.target.value }; showSettings(); return; }
+    if (e.target.id !== 'setModelSel') return;
+    const provider = aiPick?.provider || aiCfg.provider, model = e.target.value;
+    if (model !== '__other') { api('/ai-config', { provider, model }).then(() => { toast('Model saved'); openSettings(); }).catch((err) => toast(err.message, '', true)); return; }
+    $('setModelForm').hidden = false;
+    $('setModel').value = '';
+    $('setModel').focus();
+  });
+  // Colour picker: drag the square, hue or opacity. The element previews live; the change is written once on release.
+  document.addEventListener('pointerdown', (e) => {
+    const area = e.target.closest?.('[data-cpdrag]');
+    if (!area || !S.cp || !S.sel) return;
+    e.preventDefault();
+    const kind = area.dataset.cpdrag, c = S.cp, pop = area.closest('.cpop');
+    const paint = () => {
+      const hx = hsvToHex(c.h, c.s, c.v);
+      pop.querySelector('.cpSV').style.setProperty('--hue', `hsl(${c.h} 100% 50%)`);
+      const [sv, hue, al] = pop.querySelectorAll('.cpK');
+      sv.style.left = c.s * 100 + '%'; sv.style.top = (1 - c.v) * 100 + '%';
+      hue.style.left = c.h / 3.6 + '%'; hue.style.background = `hsl(${c.h} 100% 50%)`;
+      al.style.left = c.a + '%';
+      pop.querySelector('.cpAlpha').style.setProperty('--c', '#' + hx);
+      pop.querySelector('[data-cphex]').value = hx;
+      pop.querySelector('[data-cpa]').value = c.a;
+      const sw = pop.querySelector('.cpSw');
+      if (sw) sw.style.background = chipBg('#' + hx, c.a);
+      const chip = c.p !== 'grad' && document.querySelector(`#panel [data-act="cpick"][data-v="${c.p}"]`);
+      if (chip) chip.style.background = chipBg('#' + hx, c.a);
+      cpPreview(c);
+    };
+    const at = (ev) => {
+      const r = area.getBoundingClientRect(), x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+      if (kind === 'sv') { c.s = x; c.v = 1 - y; } else if (kind === 'hue') c.h = Math.min(359.9, x * 360); else c.a = Math.round(x * 100);
+      paint();
+    };
+    at(e);
+    area.setPointerCapture(e.pointerId);
+    const up = () => { area.removeEventListener('pointermove', at); area.removeEventListener('pointerup', up); area.removeEventListener('pointercancel', up); cpCommit(c); };
+    area.addEventListener('pointermove', at); area.addEventListener('pointerup', up); area.addEventListener('pointercancel', up);
+  }, true);
+  // Where did this click start? Picking a colour redraws the floating panel under the pointer, so the click that
+  // follows can land on an element that's gone; a click that started inside the panel never closes it.
+  let downInFpop = false;
+  document.addEventListener('pointerdown', (e) => { downInFpop = !!e.target.closest?.('#fpop,#fpop2'); }, true);
+  // Naming a version: Escape or clicking away cancels.
+  // Tovi asked a question: 1, 2 or 3 picks an answer (when you're not typing).
+  document.addEventListener('keydown', (e) => {
+    if (!/^[1-3]$/.test(e.key) || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.target.closest?.('input,textarea,select,[contenteditable]')) return;
+    const m = [...S.chat].reverse().find((x) => x.role === 'kerf');
+    if (m?.status !== 'ask' || m.picked != null || !m.proposal.ask.options[+e.key - 1]) return;
+    e.preventDefault();
+    askPick(m, +e.key - 1);
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && e.target.closest?.('.vName')) { e.stopPropagation(); S.vNaming = null; renderPanel(); } }, true);
+  document.addEventListener('focusout', (e) => { if (e.target.closest?.('.vName') && S.vNaming != null) setTimeout(() => { if (!document.activeElement?.closest('.vName')) { S.vNaming = null; renderPanel(); } }, 120); });
   document.addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target.dataset.form;
@@ -1185,6 +2387,11 @@
     if (f === 'chat') sendChat();
     if (f === 'pick' && S.pick) { S.pick.prompt = $('pickQ').value; if (S.pick.kind === 'photo') S.pick.photos = null; else S.pick.drawings = null; runPicker(); }
     if (f === 'note') addNote();
+    if (f === 'aimodel') { api('/ai-config', { provider: aiPick?.provider || aiCfg.provider, model: $('setModel').value.trim() }).then(() => { toast('Model saved'); openSettings(); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'aikey') { const inp = e.target.querySelector('input'), key = inp.value.trim(), provider = e.target.dataset.p; if (!key) return; api('/keys', { provider, key }).then(() => { toast(`${aiCfg.defaults?.[provider]?.label || 'Key'} saved`); openSettings(); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'person') { const name = $('setPerson').value.trim(); if (!name) return; api('/person', { name }).then((p) => { $('setPerson').value = p.name; toast(`Versions will show ${p.name}`); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'vsave') { const name = e.target.querySelector('input').value.trim(); api('/version', { kind: 'named', name: name || null }).then((v) => { S.versions = v; S.verAt = S.count; renderPanel(); renderTop(); toast(name ? `Saved “${name}”` : 'Saved a version'); }).catch((err) => toast(err.message, '', true)); }
+    if (f === 'vname') { const n = +e.target.dataset.n, name = e.target.querySelector('input').value.trim(); api('/rename', { n, name }).then((v) => { S.versions = v; S.vNaming = null; renderPanel(); }).catch((err) => toast(err.message, '', true)); }
     if (f === 'reply') {
       const where = e.target.dataset.where, prev = S.card;
       take('replyIn', (v, atts) => runAI(v, where === 'notes' && prev?.targets ? prev.targets : visibleTargets(), where, v, true, atts));
@@ -1225,12 +2432,13 @@
     afterEdit();
   }
   async function restore(n) {
-    if (!confirm(n === 0 ? 'Undo every change from this session?' : `Undo everything after version ${n}?`)) return;
+    if (!confirm(n === 0 ? 'Undo every change from this session?' : 'Restore this version? Every change after it is undone.')) return;
     try {
       S.versions = await api('/restore', { n });
       const c = await api('/changes');
       S.count = c.length;
-      toast(n === 0 ? 'Back to how the screen started' : `Restored version ${n}`);
+      toast(n === 0 ? 'Back to how the screen started' : 'Restored that version');
+      S.vSel = null;
     } catch (e) { toast(e.message, '', true); }
     afterEdit();
   }
@@ -1239,22 +2447,28 @@
   async function openPR() {
     await api('/version', {}).then((v) => (S.versions = v)).catch(() => {});
     const p = await api('/project').catch(() => ({}));
-    const all = [...S.versions.versions.flatMap((v) => v.changes), ...S.versions.draft];
+    // A dry run says what will happen (new PR or update, which branch, any problem) before anything is sent.
+    const plan = p.repo ? await api('/pr', { dryRun: true }).catch((e) => ({ error: e.message })) : null;
+    const every = [...S.versions.versions.flatMap((v) => v.changes), ...S.versions.draft];
+    const all = every.slice(S.versions.sent || 0); // only what hasn't been handed off yet
     const files = [...new Set(all.map((c) => c.file))];
-    const title = all.length === 1 ? `Design: ${all[0].name ? all[0].name + ' · ' : ''}${all[0].label}`.slice(0, 72) : `Design updates: ${all.length} changes${S.path === '/' ? '' : ` on ${S.path}`}`;
+    const nm = (c) => (c.name || '').replace(/\s*“[^”]*…”/, ''); // no cut-off quotes in a PR title
+    const title = !all.length ? 'Design updates from Tovi' : all.length === 1 ? `Design: ${nm(all[0]) ? nm(all[0]) + ' · ' : ''}${all[0].label}`.slice(0, 72) : `Design updates: ${all.length} changes${S.path === '/' ? '' : ` on ${S.path}`}`;
+    const retry = plan && !plan.error && !all.length && plan.unpushed;
+    const ok = p.repo && plan && !plan.error;
     S.prAll = all;
     const m = $('modal');
     m.hidden = false;
     m.innerHTML = `<section class="dialog" role="dialog" aria-modal="true" aria-labelledby="prT">
-      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="prT">Hand off to developers</h2><span class="note">Tovi sends your changes as one pull request on GitHub. Developers review it before anything goes live.</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
+      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="prT">${plan?.reuse ? 'Update your pull request' : 'Hand off to developers'}</h2><span class="note">${plan?.reuse ? 'These changes go into the pull request you already opened, with a comment saying what’s new.' : 'Tovi sends your changes as one pull request on GitHub. Developers review it before anything goes live.'}</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
       <div class="db">
-        ${!p.repo ? `<span class="note warn">This project isn’t connected to a GitHub repository, so Tovi can’t open a pull request for it.</span>` : ''}
-        <label><span class="secT">Title</span><input class="fld" id="prTitle" value="${esc(title)}"></label>
+        ${!p.repo ? `<span class="note warn">This project isn’t connected to a GitHub repository, so Tovi can’t open a pull request for it.</span>` : plan?.error ? `<span class="note warn">${esc(plan.error)}</span>` : retry ? `<span class="note warn">Your last hand off didn’t reach GitHub. Send it again to finish.</span>` : ''}
+        <label><span class="secT">Title</span><input class="fld" id="prTitle" value="${esc(retry ? 'Design updates from Tovi' : title)}"${plan?.reuse ? ' disabled title="The pull request keeps its title"' : ''}></label>
         <label><span class="secT">Note for your developers <span class="note" style="font-weight:400">(optional)</span></span><textarea class="fld" id="prBody" rows="3" placeholder="Anything they should know, e.g. why you made these changes"></textarea></label>
-        <div style="display:flex;align-items:center;gap:8px;color:var(--ink2)"><span class="chip mono" style="color:var(--ink)">${p.branch?.startsWith('kerf/') ? esc(p.branch) : 'kerf/…'}</span>→<span class="chip mono" style="color:var(--ink)">${esc(p.branch?.startsWith('kerf/') ? 'its pull request' : p.branch || 'main')}</span>${p.repo ? `<span class="note">${esc(p.repo)}</span>` : ''}</div>
-        <div class="files"><div class="fh"><span>What changed · ${all.length}</span><span class="note" title="${esc(files.join('\n'))}">${files.length} code file${files.length === 1 ? '' : 's'}</span></div><div class="frs">${all.map((c) => `<div class="fr"><span class="dot" style="margin:0"></span><span>${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${c.name ? `<b>${esc(c.name)}</b> · ` : ''}${esc(c.label)}</span></div>`).join('')}</div></div>
+        ${ok ? `<div style="display:flex;align-items:center;gap:8px;color:var(--ink2);flex-wrap:wrap"><span class="chip mono" style="color:var(--ink)">${esc(plan?.branch && plan.reuse ? plan.branch : 'kerf/…')}</span>→<span class="chip mono" style="color:var(--ink)">${esc(plan?.base || (plan?.reuse ? 'its pull request' : p.branch || 'main'))}</span><span class="note">${esc(p.repo)}</span></div>` : ''}
+        <div class="files"><div class="fh"><span>What changed · ${all.length}</span><span class="note" title="${esc(files.join('\n'))}">${files.length} code file${files.length === 1 ? '' : 's'}</span></div><div class="frs">${all.map((c) => `<div class="fr"><span class="dot" style="margin:0"></span><span>${c.source === 'ai' ? '<span class="src">AI</span> ' : ''}${c.name ? `<b>${esc(c.name)}</b> · ` : ''}${esc(c.label)}</span></div>`).join('') || `<span class="note" style="padding:8px 10px">${retry ? 'Already committed, waiting to be pushed.' : 'Nothing new since your last hand off.'}</span>`}</div></div>
       </div>
-      <div class="df"><button class="outline" data-act="closeModal">Cancel</button><button class="primary solo" data-act="createPR" ${p.repo && files.length ? '' : 'disabled'}>Create pull request</button></div></section>`;
+      <div class="df"><button class="outline" data-act="closeModal">Cancel</button><button class="primary solo" data-act="createPR" ${ok ? '' : 'disabled'}>${plan?.reuse ? 'Update pull request' : 'Create pull request'}</button></div></section>`;
   }
   async function createPR() {
     const btn = document.querySelector('[data-act="createPR"]');
@@ -1262,15 +2476,17 @@
     btn.innerHTML = '<i class="spin"></i>Sending to GitHub…';
     try {
       const all = S.prAll || [], note = $('prBody').value.trim();
-      const body = `${note ? note + '\n\n' : ''}### What changed\n${all.map((c) => `- ${c.source === 'ai' ? '(AI) ' : ''}${c.name ? `**${c.name}**: ` : ''}${c.label}`).join('\n')}\n\n<details><summary>Code changes</summary>\n\n${all.map((c) => `- \`${c.file}\`: ${c.code || c.label}`).join('\n')}\n</details>\n\nMade with Tovi.`;
+      const body = `${note ? note + '\n\n' : ''}### What changed\n${all.map((c) => `- ${c.source === 'ai' ? '(AI) ' : ''}${c.name ? `**${c.name}**: ` : ''}${c.label}`).join('\n') || '- (see commits)'}\n\n<details><summary>Code changes</summary>\n\n${all.map((c) => `- \`${c.file}\`: ${c.code || c.label}`).join('\n')}\n</details>\n\nMade with Tovi.`;
       const r = await api('/pr', { title: $('prTitle').value, body });
+      cue('sent');
       $('modal').innerHTML = `<section class="dialog" role="dialog" aria-modal="true"><div class="db" style="padding:20px;gap:10px">
         <span style="display:grid;place-items:center;width:32px;height:32px;border-radius:8px;background:var(--raised)">${ico('check', 16)}</span>
         <h2 style="margin:0;font-size:18px">${r.updated ? 'Pull request updated' : r.needsGitHubStep ? 'Branch pushed' : 'Pull request ready'}</h2>
-        <span class="note">${r.files.length} file${r.files.length === 1 ? '' : 's'} on <span class="mono">${esc(r.branch)}</span>.${r.needsGitHubStep ? ' Open the link to finish creating the pull request on GitHub.' : ''}</span>
+        <span class="note">${r.files.length ? `${r.files.length} file${r.files.length === 1 ? '' : 's'}` : 'Your changes'} on <span class="mono">${esc(r.branch)}</span>${r.base ? ` → <span class="mono">${esc(r.base)}</span>` : ''}.${r.needsGitHubStep ? ' Open the link to finish creating the pull request on GitHub.' : ''}</span>
         ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>` : ''}</div>
         <div class="df"><button class="primary solo" data-act="closeModal">Done</button></div></section>`;
       S.project = await api('/project').catch(() => S.project);
+      S.versions = await api('/versions').catch(() => S.versions);
       renderTop();
     } catch (e) {
       btn.disabled = false;
@@ -1280,12 +2496,14 @@
   }
 
   /* ---------- AI: Ask bar, chat, annotations ---------- */
-  const PROP_NAMES = { gradient: 'Gradient', clipText: 'Gradient text', fit: 'Image fit', bg: 'Fill', color: 'Text color', borderC: 'Stroke color', fontSize: 'Size', fontWeight: 'Weight', lineHeight: 'Line height', letterSpacing: 'Letter spacing', align: 'Align', radius: 'Radius', rTL: 'Top-left corner', rTR: 'Top-right corner', rBR: 'Bottom-right corner', rBL: 'Bottom-left corner', padX: 'Padding X', padY: 'Padding Y', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', w: 'Width', h: 'Height', mX: 'Margin X', mY: 'Margin Y', layout: 'Layout', alignItems: 'Align', justify: 'Distribute', wrap: 'Wrap' };
+  const PROP_NAMES = { gradient: 'Gradient', clipText: 'Gradient text', fit: 'Image fit', bg: 'Fill', color: 'Text color', borderC: 'Stroke color', fontSize: 'Size', fontWeight: 'Weight', lineHeight: 'Line height', letterSpacing: 'Letter spacing', align: 'Align', radius: 'Radius', rTL: 'Top-left corner', rTR: 'Top-right corner', rBR: 'Bottom-right corner', rBL: 'Bottom-left corner', padX: 'Padding X', padY: 'Padding Y', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', w: 'Width', h: 'Height', mX: 'Margin X', mY: 'Margin Y', mT: 'Top margin', mB: 'Bottom margin', fontFamily: 'Font', layout: 'Layout', alignItems: 'Align', justify: 'Distribute', wrap: 'Wrap' };
   const UNIT = { w: 'px', h: 'px', mX: 'px', mY: 'px', fontSize: 'px', lineHeight: 'px', radius: 'px', rTL: 'px', rTR: 'px', rBR: 'px', rBL: 'px', padX: 'px', padY: 'px', gap: 'px', borderW: 'px', opacity: '%', letterSpacing: '%' };
   const WORDS = { fill: 'Fill', grow: 'Fill', hug: 'Hug', auto: 'Auto', row: 'Horizontal', col: 'Vertical', none: 'Off', true: 'On', false: 'Off' };
-  const opLabel = (o) => { const v = String(o.value); if (o.prop === 'fontWeight') return `Weight ${({ 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold', 800: 'Extra bold' })[v] || v}`; return `${PROP_NAMES[o.prop] || o.prop} ${WORDS[v] || v}${/^-?[\d.]+$/.test(v) ? UNIT[o.prop] || '' : ''}`; };
-  const structLabel = (st) => ({ token: `Colour “${st.name}”${st.which && st.which !== 'both' ? ` (${st.which})` : ''} → ${st.hex}`, code: `Code change in ${String(st.file || '').split('/').pop()}`, group: `Group into a frame (${st.className || ''})`, ungroup: 'Ungroup', replace: `Replace with: ${(st.jsx || '').slice(0, 60)}`, delete: 'Delete', duplicate: 'Duplicate', move: `Move ${st.dir || 'to ' + st.index}`, swap: `Swap → ${st.to}`, insert: `Add ${st.position}: ${(st.jsx || '').slice(0, 60)}`, image: [st.src && `Image → ${st.src}`, st.alt != null && `Alt “${st.alt}”`].filter(Boolean).join(' · ') })[st.type];
-  const editLabel = (e) => e.structure ? structLabel(e.structure) : [...e.ops.map(opLabel), ...(e.props || []).map((p) => `${p.name}: ${p.value}`), ...(e.text ? [`“${e.text}”`] : [])].join(' · ');
+  const opLabel = (o) => { const v = String(o.value); if (o.prop === 'fontFamily') return `Font ${S.theme?.fonts?.[v] || v}`; if (o.prop === 'fontWeight') return `Weight ${({ 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold', 800: 'Extra bold' })[v] || v}`; return `${PROP_NAMES[o.prop] || o.prop} ${WORDS[v] || v}${/^-?[\d.]+$/.test(v) ? UNIT[o.prop] || '' : ''}`; };
+  // New elements in words: their text (“New”) or what they are, never their code.
+  const jsxWords = (j) => { const t = String(j || '').replace(/<[^>]*>/g, ' ').replace(/\{[^}]*\}/g, ' ').replace(/\s+/g, ' ').trim(); const tag = (String(j || '').match(/^\s*<\s*([\w.]+)/) || [])[1]; return t ? `“${t.length > 30 ? t.slice(0, 29) + '…' : t}”` : tag && /^[A-Z]/.test(tag) ? tag : 'an element'; };
+  const structLabel = (st) => ({ token: `Colour “${st.name}”${st.which && st.which !== 'both' ? ` (${st.which})` : ''} → ${st.hex}`, code: `Code change in ${String(st.file || '').split('/').pop()}`, group: 'Group into a frame', ungroup: 'Ungroup', replace: `Replace with ${jsxWords(st.jsx)}`, delete: 'Delete', duplicate: 'Duplicate', move: `Move ${st.dir || 'to ' + st.index}`, swap: `Swap → ${st.to}`, insert: `Add ${jsxWords(st.jsx)} ${st.position === 'inside' ? 'inside' : st.position}`, image: [st.src && `Image → ${st.src}`, st.alt != null && `Alt “${st.alt}”`].filter(Boolean).join(' · ') })[st.type];
+  const editLabel = (e) => e.structure ? structLabel(e.structure) : [...e.ops.map(opLabel), ...(e.props || []).map((p) => `${humanize(p.name)} ${p.value}`), ...(e.text ? [`“${e.text}”`] : [])].join(' · ');
   function measure(el) {
     const c = cs(el);
     return { fontSize: c.fontSize, color: rgbHex(c.color), fill: rgbHex(c.backgroundColor), radius: c.borderTopLeftRadius, padding: c.padding, display: c.display };
@@ -1322,6 +2540,8 @@
     return uniq(out);
   }
   function noteTargets(n, i) {
+    // Tovi's notes name their elements; the person's notes find them under the mark.
+    if (n.locs?.length) { const own = n.locs.map(elOf).filter(Boolean); if (own.length) return uniq(own.flatMap((el) => targetsOf(el, i + 1))).slice(0, 24); }
     const pts = n.shape === 'pin' ? [[n.x, n.y]] : n.shape === 'arrow' ? [[n.x2, n.y2]] : [[n.x + n.w / 2, n.y + n.h / 2]];
     const els = [];
     for (const [px, py] of pts) D.elementsFromPoint(px - W.scrollX, py - W.scrollY).map(pick).filter(Boolean).slice(0, 3).forEach((e) => els.push(e));
@@ -1334,12 +2554,184 @@
     return uniq(els.flatMap((el) => targetsOf(el, i + 1))).slice(0, 24);
   }
 
+  // The page's sections, top to bottom: the header, each <section>, the footer (outermost ones only, and only
+  // real blocks). Pages without such tags get none, and are reviewed a screen at a time instead.
+  function pageBlocks() {
+    if (!D) return [];
+    const all = [...D.querySelectorAll('header, nav, section, footer, [role="banner"], [role="contentinfo"]')].filter((el) => { const r = el.getBoundingClientRect(); return r.height >= 60 && r.width >= 200 && tagged(el).length + (el.matches('[data-kerf],[data-kerf-use]') ? 1 : 0) > 0; });
+    return all.filter((el) => !all.some((o) => o !== el && o.contains(el))).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top).slice(0, 14);
+  }
+  // A picture of one element, whole (even the parts off screen), sharp enough to judge detail.
+  async function captureEl(el) {
+    if (!el?.isConnected || !D) return null;
+    try {
+      const lib = await loadH2i();
+      const css = await fontsFor(lib);
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return null;
+      const k = Math.min(1.5, 1400 / r.width, 3000 / r.height);
+      const shot = lib.toJpeg(el, { pixelRatio: k, quality: 0.8, backgroundColor: cs(D.body).backgroundColor, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
+      const url = await Promise.race([shot, new Promise((res) => setTimeout(() => res(null), 6000))]);
+      return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
+    } catch { return null; }
+  }
+  const blockName = (el) => { const h = el.querySelector('h1, h2, h3'); const t = (h?.innerText || '').trim().split('\n')[0]; return /^(header|nav)$/i.test(el.tagName) ? 'Header' : /^footer$/i.test(el.tagName) ? 'Footer' : t ? (t.length > 28 ? t.slice(0, 27) + '…' : t) : 'Section'; };
+  // Review the whole current page: every section on its own (three at a time), or a screen at a time down the
+  // page when it has no sections. Returns the findings (as notes) and a summary.
+  async function reviewPage(m, label) {
+    const ctx = aiContext();
+    let jobs = [];
+    const blocks = pageBlocks();
+    if (blocks.length >= 2) {
+      m.progress = `${label} · taking screenshots`;
+      workOn(blocks.map(locOfEl), 'Reading', 'scan');
+      renderChat();
+      const real = await realShots({ locs: blocks.map(locOfEl).filter(Boolean) });
+      S.working = S.working.filter((w) => w.state !== 'scan');
+      jobs = blocks.map((b) => ({ name: blockName(b), loc: locOfEl(b), make: async () => ({ targets: uniq(tagged(b).concat(b.matches('[data-kerf],[data-kerf-use]') ? [b] : []).flatMap((el) => targetsOf(el))).slice(0, 70), screen: jpeg(real?.sections?.[locOfEl(b)]) || await captureEl(b), scope: 'section' }) }));
+    } else {
+      const parts = Math.max(1, Math.min(8, Math.ceil(D.documentElement.scrollHeight / W.innerHeight)));
+      for (let k = 0; k < parts; k++) jobs.push({ name: `screen ${k + 1}`, make: async () => { W.scrollTo(0, k * W.innerHeight); await wait(600); return { targets: visibleTargets(), screen: await captureScreen(), scope: 'page' }; } });
+    }
+    const results = new Array(jobs.length);
+    let next = 0, finished = 0;
+    // Pictures are taken one at a time (scrolling must not overlap); reviews run three at a time.
+    const prepared = [];
+    for (const j of jobs) { if (S.diagStop) break; prepared.push(await j.make()); }
+    W.scrollTo(0, 0);
+    m.lookedN = (m.lookedN || 0) + prepared.reduce((a, x) => a + x.targets.length, 0);
+    await Promise.all(Array.from({ length: Math.min(3, prepared.length) }, async () => {
+      while (next < prepared.length && !S.diagStop) {
+        const k = next++, x = prepared[k];
+        m.progress = `${label}${jobs.length > 1 ? ` · ${jobs[k].name} (${k + 1} of ${jobs.length})` : ''}`;
+        const bl = jobs[k].loc;
+        if (bl) workOn([bl], 'Reviewing', 'scan');
+        renderChat();
+        results[k] = x.targets.length ? await api('/diagnose', { targets: x.targets, screen: x.screen, context: ctx, scope: x.scope }).catch((e) => ({ error: e.message, findings: [] })) : { findings: [] };
+        if (bl) S.working = S.working.filter((w) => w.loc !== bl);
+        finished++;
+      }
+    }));
+    const titles = new Set();
+    const found = results.filter(Boolean).flatMap((r) => r.findings || []).filter((f) => { const key = `${f.title.toLowerCase()}|${f.locs.join(',')}`; if (titles.has(key)) return false; titles.add(key); return true; });
+    const sum = results.find((r) => r?.summary)?.summary || '';
+    return { notes: notesFrom(found), summary: sum, failed: results.filter((r) => r?.error).length, reviewed: finished, sections: jobs.length };
+  }
+  // Findings become Tovi's notes: a box around the elements each one is about, in page coordinates.
+  function notesFrom(findings) {
+    const out = [];
+    for (const f of findings) {
+      const boxes = f.locs.map(elOf).filter((el) => el?.isConnected).map((el) => el.getBoundingClientRect()).filter((b) => b.width || b.height);
+      if (!boxes.length) continue;
+      const x0 = Math.min(...boxes.map((b) => b.left)), y0 = Math.min(...boxes.map((b) => b.top)), x1 = Math.max(...boxes.map((b) => b.right)), y1 = Math.max(...boxes.map((b) => b.bottom));
+      out.push({ shape: 'box', x: x0 + W.scrollX - 4, y: y0 + W.scrollY - 4, w: x1 - x0 + 8, h: y1 - y0 + 8, text: f.fix, title: f.title, problem: f.problem, sev: f.severity, locs: f.locs, by: 'tovi', quick: f.quick || null, quickFor: f.fix });
+    }
+    return out;
+  }
+  const loaded = () => new Promise((res) => { const done = () => { clearTimeout(t); frame.removeEventListener('load', done); setTimeout(res, 1400); }; const t = setTimeout(done, 12000); frame.addEventListener('load', done); });
+  // Whole product: start where the designer is, follow the app's own links (same site, up to 10 pages), and
+  // review each page top to bottom a screen at a time (up to 3 screens, reviewed side by side). Notes land on
+  // their page as each one finishes; the summary links to every page with notes. Stop ends it at any point.
+  async function runDiagnoseProduct() {
+    if (S.diagnosing || S.card?.busy || !D) return;
+    S.diagnosing = true; S.diagStop = false;
+    renderBar();
+    S.chat.push({ role: 'user', text: 'Diagnose the whole product', shown: 'Diagnose the whole product', ctx: 'Whole product', where: 'chat', atts: [] });
+    const m = { role: 'kerf', busy: true, status: 'pending', where: 'chat', targets: [], skip: [], started: Date.now(), looked: [], lookedN: 0, pages: [], progress: 'Finding your pages…' };
+    S.chat.push(m);
+    S.card = m;
+    if (S.mode === 'edit') { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
+    renderAI();
+    const start = S.path, seen = new Set([start]), queue = [start];
+    const sums = [];
+    try {
+      while (queue.length && !S.diagStop) {
+        const p = queue.shift();
+        if (S.path !== p) { const l = loaded(); frame.src = p; await l; }
+        if (!D || S.diagStop) break;
+        // More pages: links to this same app.
+        for (const a of D.querySelectorAll('a[href]')) {
+          let u; try { u = new URL(a.getAttribute('href'), W.location.href); } catch { continue; }
+          const k = u.pathname + u.search;
+          if (u.origin === W.location.origin && !u.pathname.startsWith('/__kerf') && !/\.[a-z0-9]{2,5}$/i.test(u.pathname) && !seen.has(k) && seen.size < 10) { seen.add(k); queue.push(k); }
+        }
+        const no = m.pages.length + 1, name = pageName(p);
+        const r = await reviewPage(m, `Page ${no} of ${seen.size} · ${name}`);
+        if (S.path !== p) break; // the designer went somewhere else
+        S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...r.notes];
+        const n = S.notes.filter((x) => x.by === 'tovi').length;
+        m.pages.push({ path: p, name, n, ...(r.failed && r.failed === r.sections ? { error: 'Couldn’t review' } : {}) });
+        if (r.summary) sums.push(r.summary);
+        refreshTasks();
+        renderBar();
+      }
+    } catch (e) { m.error = e.message; }
+    // Back to where the designer started.
+    if (S.path !== start && !m.error) { const l = loaded(); frame.src = start; await l; }
+    const total = m.pages.reduce((a, x) => a + x.n, 0), withNotes = m.pages.filter((x) => x.n).length;
+    m.proposal = { message: m.pages.length ? `${S.diagStop ? 'Stopped. ' : ''}I reviewed ${m.pages.length} page${m.pages.length === 1 ? '' : 's'} and left ${total} note${total === 1 ? '' : 's'}${withNotes > 1 ? ` across ${withNotes} pages` : ''}. ${sums[0] || ''} Open a page to see its notes, keep the ones you agree with, then Apply.`.trim() : 'I couldn’t review any pages.', edits: [] };
+    m.status = total ? 'diag' : 'info';
+    m.progress = null;
+    m.busy = false;
+    m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
+    S.diagnosing = false;
+    renderBar();
+    renderAI();
+    saveChat();
+  }
+
+  // Diagnose: Tovi reviews the page (or the selection) like a design lead and leaves notes on the spots that need
+  // work, each saying what's wrong and what it would change. The person keeps, edits or removes them, then Apply
+  // fixes the rest through Tasks, as one undoable batch.
+  async function runDiagnose(scope) {
+    if (S.diagnosing || S.card?.busy || !D) return;
+    const targets = scope === 'selection' && S.sel ? selectionTargets() : visibleTargets();
+    if (!targets.length) { toast('Nothing on screen to review yet.', '', true); return; }
+    S.diagnosing = true;
+    renderBar();
+    const label = scope === 'selection' ? `Diagnose ${ctxName(S.sel.el)}` : 'Diagnose this page';
+    S.chat.push({ role: 'user', text: label, shown: label, ctx: scope === 'selection' ? ctxName(S.sel.el) : 'Whole screen', where: 'chat', atts: [] });
+    const m = { role: 'kerf', busy: true, status: 'pending', where: 'chat', targets, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).slice(0, 40), lookedN: targets.length };
+    S.chat.push(m);
+    S.card = m;
+    if (S.mode === 'edit') { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
+    renderAI();
+    try {
+      let r;
+      if (scope === 'selection') {
+        workOn(scopeLocs(), 'Reviewing', 'scan');
+        const [screen, focus] = await Promise.all([captureScreen(), captureFocus()]);
+        r = await api('/diagnose', { targets, screen, focus, context: aiContext(), scope });
+        r.notes = notesFrom(r.findings);
+      } else {
+        S.diagStop = false;
+        r = await reviewPage(m, 'Reviewing this page');
+        m.progress = null;
+      }
+      // Fresh notes replace Tovi's earlier ones; the person's own notes stay.
+      S.notes = [...S.notes.filter((x) => x.by !== 'tovi'), ...r.notes];
+      const n = S.notes.filter((x) => x.by === 'tovi').length;
+      const what = scope === 'selection' ? r.summary : `I reviewed ${r.sections > 1 ? `all ${r.sections} sections of this page` : 'this page'}${S.diagStop ? ' until you stopped me' : ''}.`;
+      m.proposal = { message: `${what}${n ? ` I left ${n} note${n === 1 ? '' : 's'} on it. Keep the ones you agree with, change or remove the rest, then Apply, and I’ll check the result.` : ' Nothing stood out that needs fixing.'}`, edits: [] };
+      m.status = n ? 'diag' : 'info';
+    } catch (e) { m.error = e.message; }
+    m.busy = false;
+    m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
+    S.diagnosing = false;
+    workClear();
+    S.openTask = [];
+    renderBar();
+    renderAI();
+    saveChat();
+  }
+
   // One conversation shared by the Ask bar, notes and chat.
   function historyFor() {
     const h = [];
     for (const m of S.chat) {
       if (m.role === 'user') h.push({ role: 'user', text: m.text });
       else if (m.error) h.push({ role: 'assistant', text: `(error) ${m.error}` });
+      else if (m.proposal?.ask) h.push({ role: 'assistant', text: `${m.proposal.message}\nAsked: ${m.proposal.ask.question} Options: ${m.proposal.ask.options.join(' / ')}` });
       else if (m.proposal) h.push({ role: 'assistant', text: `${m.proposal.message}\nProposed: ${m.proposal.edits.map((e) => `${e.tag} ${editLabel(e)}`).join('; ') || 'no edits'}\nStatus: ${m.status}` });
     }
     return h.filter((x, i) => !(i > 0 && h[i - 1].role === x.role));
@@ -1360,7 +2752,7 @@
   const dirName = () => (S.direction ? PRESET[S.direction.preset]?.[0] || (S.direction.text ? 'Custom' : '') : '');
   function modePill() {
     const m = S.styleMode, d = m !== 'system' && dirName();
-    return `<button type="button" class="kcMode ${m}" data-act2="modeMenu" title="How far Tovi may go beyond your design system">${ico(m === 'system' ? 'comp' : m === 'improve' ? 'spark' : 'pen', 12)}<span>${esc(MODE_LABEL[m])}${d ? ` · ${esc(d)}` : ''}</span>${ico('chev', 10)}</button>`;
+    return `<button type="button" class="kcMode ${m}" data-act2="modeMenu" title="How far Tovi may go beyond your design system">${ico(m === 'system' ? 'comp' : m === 'improve' ? 'sliders' : 'pen', 12)}<span>${esc(MODE_LABEL[m])}${d ? ` · ${esc(d)}` : ''}</span>${ico('chev', 10)}</button>`;
   }
   function setStyleMode(m) {
     S.styleMode = m;
@@ -1407,42 +2799,305 @@
   }
   // A screenshot of exactly what's on screen (viewport), small and quick; skipped if it takes too long.
   let h2i = null;
-  async function captureScreen() {
+  // The app's web fonts, embedded once per page load so screenshots show the real type (not a fallback font).
+  let fontCss = null;
+  async function fontsFor(lib) {
+    if (!fontCss) fontCss = Promise.race([buildFontCss(lib), wait(8000).then(() => '')]);
+    return fontCss;
+  }
+  // The page's own fonts, plus its Google Fonts: the browser won't let a page copy fonts from another site, but
+  // Google serves them openly, so Tovi fetches the stylesheet and the font files (Latin only, to stay small) itself.
+  const asDataUrl = (u) => fetch(u).then((r) => r.blob()).then((b) => new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(b); })).catch(() => null);
+  async function buildFontCss(lib) {
+    const own = await lib.getFontEmbedCSS(D.documentElement).catch(() => '');
+    const links = [...D.querySelectorAll('link[href*="fonts.googleapis.com"]')].filter((l) => /stylesheet/i.test(l.rel)).map((l) => l.href);
+    const parts = await Promise.all(links.map(async (href) => {
+      const css = await fetch(href).then((r) => (r.ok ? r.text() : '')).catch(() => '');
+      if (!css) return '';
+      const blocks = css.split(/(?=\/\* [\w-]+ \*\/)/);
+      const latin = blocks.filter((b) => /^\/\* latin \*\//.test(b));
+      const keep = latin.length ? latin : [css];
+      return (await Promise.all(keep.map(async (b) => {
+        let out = b;
+        for (const [, u] of [...b.matchAll(/url\((https:[^)]+)\)/g)]) { const d = await asDataUrl(u); if (d) out = out.replace(u, d); }
+        return out;
+      }))).join('');
+    }));
+    return own + parts.join('');
+  }
+  const loadH2i = () => (h2i ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js'; sc.onload = () => res(window.htmlToImage); sc.onerror = rej; document.head.appendChild(sc); }));
+  async function captureScreen(full = false) {
     if (!D || !W) return null;
     try {
-      h2i ||= new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js'; sc.onload = () => res(window.htmlToImage); sc.onerror = rej; document.head.appendChild(sc); });
-      const lib = await h2i;
-      const w = W.innerWidth, h = W.innerHeight, k = Math.min(1, 1280 / w);
-      const shot = lib.toJpeg(D.documentElement, { width: w, height: h, canvasWidth: Math.round(w * k), canvasHeight: Math.round(h * k), pixelRatio: 1, quality: 0.72, skipFonts: true, cacheBust: false, style: { transform: `translate(${-W.scrollX}px, ${-W.scrollY}px)`, transformOrigin: '0 0' } });
-      const url = await Promise.race([shot, new Promise((r) => setTimeout(() => r(null), 2500))]);
+      const lib = await loadH2i();
+      const css = await fontsFor(lib);
+      // full: the whole page top to bottom (capped), for checking changes that may be off screen.
+      const w = W.innerWidth, h = full ? Math.min(D.documentElement.scrollHeight, 6000) : W.innerHeight, k = Math.min(1, 1280 / w, full ? 7000 / h : 1);
+      const shot = lib.toJpeg(D.documentElement, { width: w, height: h, canvasWidth: Math.round(w * k), canvasHeight: Math.round(h * k), pixelRatio: 1, quality: 0.72, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
+      const url = await Promise.race([shot, new Promise((r) => setTimeout(() => r(null), full ? 9000 : 4000))]);
       return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
     } catch { h2i = null; return null; }
   }
-  async function runAI(text, targets, where, shown, followUp, atts = []) {
+  // Real screenshots from Tovi's hidden Chrome (exact pixels, as visitors see the page). null when unavailable,
+  // and callers fall back to the redraw.
+  async function realShots(opts) {
+    if (!W) return null;
+    const r = await api('/shots', { path: S.path, width: W.innerWidth, height: W.innerHeight, theme: aiContext().theme, ...opts }).catch(() => null);
+    return r?.available ? r : null;
+  }
+  const jpeg = (data) => (data ? { media_type: 'image/jpeg', data } : null);
+  async function realFull() { const r = await realShots({ full: true }); return jpeg(r?.full); }
+  // A sharp close-up of the selected element (twice the size, at most 1600px wide), for judging detail.
+  async function captureFocus() {
+    const el = S.sel?.el;
+    if (!el?.isConnected || !D) return null;
+    try {
+      const lib = await loadH2i();
+      const css = await fontsFor(lib);
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return null;
+      const k = Math.min(2, 1600 / r.width, 2400 / r.height);
+      const shot = lib.toJpeg(el, { pixelRatio: k, quality: 0.8, backgroundColor: cs(D.body).backgroundColor, ...(css ? { fontEmbedCSS: css } : { skipFonts: true }), cacheBust: false });
+      const url = await Promise.race([shot, new Promise((res) => setTimeout(() => res(null), 4000))]);
+      return url && url.startsWith('data:image/jpeg') ? { media_type: 'image/jpeg', data: url.split(',')[1] } : null;
+    } catch { return null; }
+  }
+  /* ---------- Tovi and its helpers, visible on the canvas ---------- */
+  // Tovi (amber) answers the chat. Tasks go to helpers that work in parallel, each with a name and colour.
+  // Blue stays the designer's selection and red stays for errors.
+  const AGENTS = [{ name: 'Tovi', color: '#FCBDDD' }, { name: 'Milo', color: '#2DB3A6' }, { name: 'Juno', color: '#E36BA8' }, { name: 'Remi', color: '#5BBF6A' }, { name: 'Nova', color: '#9B7BEA' }];
+  const helperFor = (n) => AGENTS[1 + ((Math.max(1, n) - 1) % 4)];
+  const agentNamed = (name) => AGENTS.find((a) => a.name === name) || AGENTS[0];
+  const agentOf = () => AGENTS[0]; // one agent on screen: Tovi
+  // Tovi's own picture; helpers keep their letter.
+  const TOVI_PIC = 'data:image/png;base64,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';
+  const avatar = (a, cls = '') => a.name === 'Tovi'
+    ? `<i class="agAv pic ${cls}" title="Tovi"><img src="${TOVI_PIC}" alt=""></i>`
+    : `<i class="agAv ${cls}" style="--ac:${a.color}" title="${a.name}">${a.name[0]}</i>`;
+  const calm = matchMedia('(prefers-reduced-motion: reduce)');
+  S.agentsOn = (() => { try { return localStorage.getItem('kerf.agents') !== 'off'; } catch { return true; } })();
+  const live = () => S.agentsOn && !calm.matches && !!D && S.mode === 'edit';
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Each agent is drawn like another person in a Figma file: a cursor with its name, a box in its colour
+  // around what it's looking at (thin) or editing (solid, with its name), and a tag for the change it makes.
+  // Positions are in the app's own pixels; labels counter-scale with the zoom (--iz).
+  const crew = new Map();
+  const elOf = (loc) => (D && loc ? D.querySelector(q(loc)) : null);
+  function agentDom(a) {
+    let g = crew.get(a.name);
+    if (g && g.cur.isConnected) { clearTimeout(g.hideT); return g; }
+    const mk = (cls, html = '') => { const d = document.createElement('div'); d.className = cls; d.style.setProperty('--ac', a.color); d.innerHTML = html; $('ov').appendChild(d); return d; };
+    const box = mk('agBox', `<span class="agBoxTag">${a.name}</span>`);
+    const chip = mk('agChip');
+    const cur = mk('agent', `<svg width="26" height="26" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.5 2.5l12.5 5.2-5.4 1.7-1.8 5.3z" fill="var(--ac)" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="agLbl">${avatar(a)}<span class="agTag">${a.name}</span></span><span class="agSay" hidden></span>`);
+    g = { a, cur, box, chip, x: null, y: null, el: null, mode: null, sayT: null, hideT: null, run: 0 };
+    crew.set(a.name, g);
+    return g;
+  }
+  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  function placeCur(g) {
+    g.cur.style.transform = `translate(${g.x}px, ${g.y}px) scale(var(--iz, 1))`;
+    // Near the right edge the name tag and bubble sit to the left of the cursor, so they're never cut off.
+    g.cur.classList.toggle('flip', !!W && g.x > W.innerWidth - 240 * (S.z ? 1 / S.z : 1));
+  }
+  // Glide along a gentle curve, faster over long distances, like a hand on a mouse.
+  function glide(g, x, y, ms) {
+    if (g.x == null) { g.x = x; g.y = y; placeCur(g); g.cur.classList.add('on'); return Promise.resolve(); }
+    const x0 = g.x, y0 = g.y, dx = x - x0, dy = y - y0, dist = Math.hypot(dx, dy);
+    const dur = ms ?? Math.min(900, 260 + dist * 0.9);
+    const bend = Math.min(60, dist * 0.18) * (Math.random() < 0.5 ? -1 : 1);
+    const cx = x0 + dx / 2 - (dy / (dist || 1)) * bend, cy = y0 + dy / 2 + (dx / (dist || 1)) * bend;
+    const run = ++g.run, t0 = performance.now();
+    g.cur.classList.add('on');
+    return new Promise((res) => {
+      const step = (now) => {
+        if (run !== g.run) return res();
+        const t = Math.min(1, (now - t0) / dur), k = ease(t), u = 1 - k;
+        g.x = u * u * x0 + 2 * u * k * cx + k * k * x; g.y = u * u * y0 + 2 * u * k * cy + k * k * y;
+        placeCur(g);
+        if (t < 1) requestAnimationFrame(step); else res();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  // The box follows its element every frame (it moves and resizes as the page changes).
+  function trackBoxes() {
+    let any = false;
+    for (const g of crew.values()) {
+      if (!g.el || !g.mode) { g.box.classList.remove('on', 'edit'); continue; }
+      if (!g.el.isConnected) { const fresh = g.loc ? elOf(g.loc) : null; if (fresh) g.el = fresh; else continue; }
+      const r = g.el.getBoundingClientRect();
+      Object.assign(g.box.style, { transform: `translate(${r.left}px, ${r.top}px)`, width: r.width + 'px', height: r.height + 'px' });
+      g.box.classList.add('on');
+      g.box.classList.toggle('edit', g.mode === 'edit');
+      if (g.chip.classList.contains('on')) g.chip.style.transform = `translate(${r.left}px, ${r.bottom + 6}px) scale(var(--iz, 1))`;
+      any = true;
+    }
+    if (any) requestAnimationFrame(trackBoxes); else trackBoxes.on = false;
+  }
+  function track(g, el, mode, loc) {
+    g.el = el; g.mode = mode; g.loc = loc || null;
+    if (!trackBoxes.on) { trackBoxes.on = true; requestAnimationFrame(trackBoxes); }
+  }
+  function agentSay(a, text) {
+    if (!text || !S.agentsOn) return;
+    const g = agentDom(a), b = g.cur.querySelector('.agSay');
+    b.textContent = String(text).split(/\s+/).slice(0, 7).join(' ');
+    b.hidden = false;
+    clearTimeout(g.sayT);
+    g.sayT = setTimeout(() => { b.hidden = true; }, 2400);
+  }
+  const pointIn = (r, fx, fy) => [r.left + r.width * fx, r.top + Math.min(r.height * fy, r.height - 4)];
+  async function inView(el) {
+    if (!el?.isConnected || !W) return false;
+    const r = el.getBoundingClientRect();
+    if (r.bottom < 40 || r.top > W.innerHeight - 40) {
+      W.scrollTo({ top: Math.max(0, W.scrollY + r.top - W.innerHeight / 3), behavior: calm.matches ? 'auto' : 'smooth' });
+      await wait(450);
+    }
+    return true;
+  }
+  // Look an element over the way a designer does: hover it, then read across it.
+  async function lookAt(a, el, say, loc) {
+    if (!el?.isConnected) return;
+    const g = agentDom(a);
+    track(g, el, 'look', loc);
+    let r = el.getBoundingClientRect();
+    await glide(g, ...pointIn(r, 0.12 + Math.random() * 0.15, 0.3));
+    if (say) agentSay(a, say);
+    r = el.getBoundingClientRect();
+    await glide(g, ...pointIn(r, 0.55 + Math.random() * 0.3, 0.45 + Math.random() * 0.2), 520 + Math.random() * 300);
+    await wait(120 + Math.random() * 200);
+  }
+  // Make one change like a person would: select the element, go to the right spot (an edge for spacing
+  // and size, the middle for colour), click, show what's changing, and drag a little as it lands.
+  async function editOn(a, el, e, apply) {
+    const g = agentDom(a);
+    if (!(await inView(el))) return apply();
+    track(g, el, 'edit', e.loc);
+    const props = (e.ops || []).map((o) => o.prop);
+    const edge = props.some((p) => /^(padX|w|mX|gap)$/.test(p)) ? 'right' : props.some((p) => /^(padY|h|mY)$/.test(p)) ? 'bottom' : props.some((p) => /^(fontSize|fontWeight|lineHeight|letterSpacing|align)$/.test(p)) || e.text ? 'text' : 'center';
+    let r = el.getBoundingClientRect();
+    const at = edge === 'right' ? [r.right - 2, r.top + r.height / 2] : edge === 'bottom' ? [r.left + r.width / 2, r.bottom - 2] : edge === 'text' ? [r.left + Math.min(14, r.width / 4), r.top + Math.min(r.height / 2, 14)] : [r.left + r.width / 2, r.top + r.height / 2];
+    await glide(g, ...at);
+    g.cur.classList.add('press');
+    setTimeout(() => g.cur.classList.remove('press'), 160);
+    g.chip.textContent = editLabel(e) || e.why || 'Updating';
+    g.chip.classList.add('on');
+    await wait(260);
+    const nudge = edge === 'right' ? [14, 0] : edge === 'bottom' ? [0, 12] : [0, 0];
+    const drag = glide(g, g.x + nudge[0], g.y + nudge[1], 420);
+    const res = await apply();
+    await drag;
+    await wait(380);
+    g.chip.classList.remove('on');
+    return res;
+  }
+  function release(names) {
+    for (const n of names) {
+      const g = crew.get(n);
+      if (!g) continue;
+      g.mode = null; g.el = null;
+      g.chip.classList.remove('on');
+      clearTimeout(g.hideT);
+      g.hideT = setTimeout(() => { g.cur.classList.remove('on'); g.x = g.y = null; }, 1400);
+    }
+  }
+  // While thinking, the agents split the elements they're reading and look them over (only ones in view).
+  // While thinking, Tovi looks over a few of the elements it's reading, once, then rests there: "Thinking…".
+  // Apply so you can watch it: style changes are shared out to lanes (one per agent), each lane makes its
+  // changes one by one as its agent gets there; structure, code and colour-token changes follow together
+  // (their order matters). One batch = one undo. A click or key press finishes at once.
+  // Apply everything in one go (one save, one reload of the app), with Tovi's cursor touring a few of the changed
+  // elements on screen at the same time. The tour never holds up the work: it stops as soon as the save is done
+  // (plus a moment to finish its current move), or at once on a click or key press. One batch = one undo.
+  async function applyLive(m, edits, batch = Date.now()) {
+    m.batch = batch;
+    const styles = edits.filter((e) => !e.structure), rest = edits.filter((e) => e.structure);
+    const all = [...styles, ...rest];
+    let skip = !live();
+    const onSkip = () => { skip = true; };
+    if (!skip) { window.addEventListener('pointerdown', onSkip, true); window.addEventListener('keydown', onSkip, true); W?.addEventListener('pointerdown', onSkip, true); }
+    const a = AGENTS[0], used = new Set();
+    const onScreen = (el) => { if (!el?.isConnected || !W) return false; const r = el.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < W.innerHeight; };
+    const seen = new Set();
+    const tour = (async () => {
+      for (const e of all) {
+        if (skip || seen.size >= 5) return;
+        const el = elOf(e.loc);
+        if (!onScreen(el) || seen.has(el)) continue;
+        seen.add(el); used.add(a.name);
+        await editOn(a, el, e, async () => {});
+      }
+    })().catch(() => {});
+    // Short tags: the first change, and how many more ("Top margin 0 +3").
+    const short = (t) => { const p = String(t || '').split(' · '); return p.length > 1 ? `${p[0]} +${p.length - 1}` : p[0]; };
+    for (const e of all) workOn([e.loc], short(editLabel(e)) || e.why || 'Changing', 'edit');
+    // The cursor tour is only an effect: the save never waits for it. It finishes its current move on its own.
+    const endTour = () => { skip = true; window.removeEventListener('pointerdown', onSkip, true); window.removeEventListener('keydown', onSkip, true); W?.removeEventListener('pointerdown', onSkip, true); release([...used]); };
+    try {
+      const r = await api('/ai/apply', { batch, edits: all });
+      workDone(r.results.filter((x) => x.ok).map((x) => x.loc));
+      return { results: r.results, n: r.n };
+    } catch (err) {
+      return { error: err.message };
+    } finally {
+      skip = true;
+      tour.finally(endTour);
+    }
+  }
+
+  async function runAI(text, targets, where, shown, followUp, atts = [], autoApply = where !== 'notes', opts = {}) {
     text = String(text || '').trim() || (atts.length ? 'Use the attached image.' : '');
-    if (!text || S.card?.busy) return;
+    if (!text || (S.card?.busy && !opts.review)) return;
     if (!targets.length) { toast('Nothing on screen to work with yet. Wait for the page to load, or select something.', '', true); return; }
     const history = historyFor();
-    const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? dName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
-    S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
-    const m = { role: 'kerf', busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
+    const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? ctxName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
+    if (!opts.review) S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
+    const m = { role: 'kerf', batch: !!opts.notes, second: !!opts.review, checkLabel: opts.notes ? (opts.round > 1 ? 'Final check' : 'Checking the fixes') : opts.round > 1 ? 'Final check' : null, busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
     S.chat.push(m);
     S.card = m;
+    workOn(opts.notes ? uniq(opts.notes.flatMap((n) => n.locs || [])) : scopeLocs(), opts.review ? 'Checking' : 'Looking');
     renderAI();
     try {
-      const screen = await captureScreen();
+      const [screen, focus] = await Promise.all([opts.full ? realFull().then((x) => x || captureScreen(true)) : captureScreen(), !opts.full && (where === 'chat' || where === 'ask') ? captureFocus() : null]);
       m.mode = S.modeOnce || S.styleMode;
       S.modeOnce = null;
-      m.proposal = await api('/ai', { request: text, targets, history, screen, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
+      // Tovi shows up on the canvas only when it applies edits (applyLive), not while it thinks or answers.
+      m.proposal = await api('/ai', { request: opts.review ? opts.review : text, light: !!opts.review, fast: !opts.review, targets, history, screen, focus, context: aiContext(), mode: m.mode, images: atts.map((a) => ({ name: a.name, media_type: a.type, data: a.data, orig: a.orig })) });
       S.amber = m.proposal.edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
       if (m.proposal.edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
-      if (!m.proposal.edits.length) m.status = 'info';
+      if (!m.proposal.edits.length) m.status = m.proposal.ask ? 'ask' : 'info';
     } catch (e) { m.error = e.message; }
     m.busy = false;
     m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
     renderAI();
+    // Tasks: Apply means apply. Every change is undoable, and the answer has its own Undo.
+    if (autoApply && m.status === 'pending' && chosen(m).length) await decide(m, 'apply');
+    workClear();
     saveChat();
+    // Tovi checks its own work like a designer stepping back: after a look-and-feel change it screenshots the
+    // result, judges it against the request, fixes what's still off, and checks once more if it changed anything.
+    if (m.status === 'applied' && where === 'chat' && !opts.notes && (opts.review ? (opts.round || 1) < 2 && chosen(m).length : isLookAndFeel(text))) {
+      await checkAndFix({ request: text, done: chosen(m), round: (opts.round || 0) + 1, notes: opts.notes, full: opts.full });
+    } else if (m.status === 'applied' && opts.notes && (opts.round || 1) < 2 && chosen(m).length) {
+      await checkAndFix({ request: text, done: chosen(m), round: (opts.round || 1) + 1, notes: opts.notes, full: true });
+    }
   }
+  // One check: a fresh screenshot, the request (or each note) as a checklist, and what was applied so far.
+  async function checkAndFix({ request, done, round, notes, full }) {
+    await wait(1800);
+    refind();
+    const applied = done.map((e) => `${e.name || e.tag}: ${editLabel(e)}`).join('; ');
+    const list = notes ? notes.map((n, k) => `${k + 1}. ${n.title ? `${n.title}: ` : ''}${n.text}`).join('\n') : '';
+    const ask = notes
+      ? `Check the result${round > 1 ? ' once more' : ''}. The designer asked Tovi to fix these notes:\n${list}\nYou applied: ${applied}. The screenshot shows the whole page now. Go through the notes one by one and check on screen that each is really fixed, fully and everywhere it applies, not just in one place. Then look at those same areas for anything still conspicuous, or anything these changes made worse. Fix all of it now with edits. In the message, give a short verdict for each note (e.g. "1 fixed. 2 two labels were still grey, fixed now."). Return no edits only if every note is fully fixed and the areas look right, and then say why.`
+      : `${round > 1 ? 'Final check' : 'Second look'}. The designer asked: "${request}". You${round > 1 ? ' have now' : ' already'} applied: ${applied}. The screenshots now show the result. Step back and judge the whole selection the way a demanding design lead at a top product company would in a design review, using the designer moves for this kind of request. Common misses to check: buttons or controls left at their old size or weight when the request is about feel ("premium", "modern"); items that should line up but don't, or alignment faked with fixed margins; spacing between groups not clearly larger than spacing inside a group; secondary text not quiet enough, or the focal point not strong enough; siblings with the same role styled differently (sizes, weights, radii, colours); nested or fussy frames; anything your earlier passes made worse. Fix every miss you find with edits. Return no edits only if it would pass that review as it is, and then say in one short sentence why it works.`;
+    const own = notes ? uniq(notes.flatMap((n) => (n.locs || []).map(elOf).filter(Boolean).flatMap((el) => targetsOf(el)))) : [];
+    const targets = uniq([...own, ...(S.sel && !notes ? selectionTargets() : visibleTargets())]).slice(0, 80);
+    await runAI(request, targets, 'chat', null, true, [], true, { review: ask, round, notes, full });
+  }
+  const isLookAndFeel = (t) => /premium|polish|better|clean|modern|nice|improv|refin|elegant|beautif|pop|feel|look|tidy|balance|hierarch|design|luxur|minimal|professional|fresh|sleek|ugly|messy|cluttered/i.test(t) && !/\d\s*(px|%|pt)?\b/.test(t);
   async function decide(m, v) {
     if (!m || m.status !== 'pending') return;
     if (m.previewing) { m.previewing = false; previewTokens(m, false); }
@@ -1451,13 +3106,14 @@
       const hadError = !!D?.querySelector('vite-error-overlay');
       m.applying = true;
       renderAI();
-      const r = await api('/ai/apply', { edits: chosen(m).map((e) => (e.structure ? e : { ...e, bp: bpParam() })) }).catch((e) => ({ error: e.message }));
+      const r = await applyLive(m, chosen(m).map((e) => (e.structure ? e : { ...e, bp: bpParam() }))).catch((e) => ({ error: e.message }));
       m.applying = false;
       if (!r.error && chosen(m).some((e) => e.structure?.type === 'code')) guard(hadError);
       if (r.error) { toast(r.error, '', true); renderAI(); return; }
       const ok = r.results.filter((x) => x.ok && x.changed).length, bad = r.results.filter((x) => !x.ok);
       m.failed = bad.map((x) => x.loc);
       m.appliedN = ok;
+      if (ok) cue('done');
       S.count = r.n;
       m.status = ok ? 'applied' : 'failed';
       toast(`Applied ${ok} change${ok === 1 ? '' : 's'}`, bad.length ? `${bad.length} skipped: ${bad[0].error}` : '', !!bad.length && !ok, !!ok);
@@ -1468,17 +3124,18 @@
     renderAI();
     saveChat();
   }
-  const STATUS = { applied: 'Applied', discarded: 'Discarded', failed: 'Couldn’t apply', info: 'No changes to your app' };
+  const STATUS = { applied: 'Applied', undone: 'Undone', discarded: 'Discarded', failed: 'Couldn’t apply', info: 'No changes to your app', diag: 'Notes added to your screen' };
   // Status is shown by Tovi, not written into the reply: drop a leading "Nothing changed yet." if the model adds one.
   const cleanMsg = (t) => { const x = String(t || '').replace(/^\s*(nothing (has )?changed( yet)?|no changes( were)?( made)?( yet)?|i (haven[’']t|have not) changed anything( yet)?)\s*[.:;,—–-]*\s*/i, ''); return x ? x[0].toUpperCase() + x.slice(1) : String(t || ''); };
   const chosen = (m) => m.proposal.edits.filter((e, k) => !(m.off || []).includes(k) && !(m.skip || []).includes(e.note ?? 0) && e.structure?.type !== 'imageAsk');
   // Each proposed change shows where it stands: to do, applying, done, failed or left out.
   function rowState(m, e) {
+    if (e.structure?.type === 'imageAsk') return m.status === 'pending' ? 'todo' : 'skip';
     const inPlan = chosen(m).includes(e);
     if (m.applying) return inPlan ? 'run' : 'skip';
     if (m.status === 'applied') return !inPlan ? 'skip' : (m.failed || []).includes(e.loc) ? 'bad' : 'ok';
     if (m.status === 'failed') return 'bad';
-    if (m.status === 'discarded') return 'skip';
+    if (m.status === 'discarded' || m.status === 'undone') return 'skip';
     return inPlan ? 'pick' : 'unpick';
   }
   const CHECK = '<svg width="10" height="10" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1486,7 +3143,7 @@
   const rowFor = (m) => (e) => editRow(e, m ? rowState(m, e) : 'todo', m ? `data-act2="edPick" data-i="${S.chat.indexOf(m)}" data-e="${m.proposal.edits.indexOf(e)}"` : '');
   // While pending, each row is a checkbox: ticked changes are applied, unticked ones left out.
   document.addEventListener('keydown', (e) => { const r = e.target.closest?.('[data-act2="edPick"]') || (e.target.matches?.('[data-act2="tkOpen"],[data-act2="ngOpen"]') ? e.target : null); if (r && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); r.click(); } });
-  const editRow = (e, st = 'todo', pick = '') => `<div class="ed ${st}"${st === 'pick' || st === 'unpick' ? ` ${pick} role="checkbox" aria-checked="${st === 'pick'}" tabindex="0" title="${st === 'pick' ? 'Leave this change out' : 'Include this change'}"` : ''}>${MARK[st] || ''}<div class="edB"><div class="edT"><b>${esc(e.name || e.tag)}</b>${e.structure?.type === 'imageAsk' ? `<span class="mono">${e.structure.kind === 'photo' ? 'New photo' : 'New illustration'}: “${esc(e.structure.prompt)}”</span>` : e.structure?.type === 'image' && e.structure.preview ? `<span class="imgPick"><img src="${esc(e.structure.preview)}" alt=""><span class="mono">${esc(e.structure.alt || 'New image')}</span></span>` : e.structure?.type === 'token' ? tokenChange(e.structure) : `<span class="mono">${esc(editLabel(e))}</span>`}${e.offSystem ? '<i class="offSys">Off-system</i>' : ''}</div>${(e.structure?.type === 'imageAsk' || e.structure?.preview) && pick ? `<button class="outline sm imgOpt" ${pick.replace('data-act2="edPick"', 'data-act2="imgOptions"')}>${e.structure.type === 'imageAsk' ? (e.structure.kind === 'photo' ? 'Show photos' : 'Draw options') : 'Choose another'}</button>` : ''}${e.where ? `<span class="reach">Changes ${esc(e.where)}</span>` : ''}${e.why ? `<span>${esc(e.why)}</span>` : ''}${e.structure?.type === 'code' ? `<details class="code"><summary>Code change in ${esc(e.structure.file)}</summary><pre class="diff"><span class="del">${esc(e.structure.find)}</span><span class="add">${esc(e.structure.replace)}</span></pre></details>` : ''}</div></div>`;
+  const editRow = (e, st = 'todo', pick = '') => `<div class="ed ${st}"${st === 'pick' || st === 'unpick' ? ` ${pick} role="checkbox" aria-checked="${st === 'pick'}" tabindex="0" title="${st === 'pick' ? 'Leave this change out' : 'Include this change'}"` : ''}>${MARK[st] || ''}<div class="edB"><div class="edT"><b>${esc(e.name || e.tag)}</b>${e.structure?.type === 'imageAsk' ? `<span class="mono">${e.structure.kind === 'photo' ? 'New photo' : 'New illustration'}: “${esc(e.structure.prompt)}”</span>` : e.structure?.type === 'image' && e.structure.preview ? `<span class="imgPick"><img src="${esc(e.structure.preview)}" alt=""><span class="mono">${esc(e.structure.alt || 'New image')}</span></span>` : e.structure?.type === 'token' ? tokenChange(e.structure) : `<span class="mono">${esc(editLabel(e))}</span>`}${e.offSystem ? '<i class="offSys">Off-system</i>' : ''}</div>${(e.structure?.type === 'imageAsk' || e.structure?.preview) && pick ? `<button class="outline sm imgOpt" ${pick.replace('data-act2="edPick"', 'data-act2="imgOptions"')}>${e.structure.type === 'imageAsk' ? (e.structure.kind === 'photo' ? 'Show photos' : 'Draw options') : 'Choose another'}</button>` : ''}${e.where ? `<span class="reach">Changes ${esc(e.where)}</span>` : ''}${e.why ? `<span>${esc(e.why)}</span>` : ''}${e.structure?.type === 'code' ? `<details class="code"><summary>See the code</summary><pre class="diff"><span class="del">${esc(e.structure.find)}</span><span class="add">${esc(e.structure.replace)}</span></pre></details>` : ''}</div></div>`;
   function tokenChange(st) {
     const t = (S.tokens || []).find((x) => x.name === st.name);
     const cur = t ? (t.values.find((v) => v.theme === st.which) || t.values.find((v) => v.theme === (aiContext().theme || 'light')) || t.values[0])?.hex : null;
@@ -1524,7 +3181,8 @@
     const loose = p.edits.filter((e) => !e.note || e.note > count);
     if (loose.length) groups.push({ n: 0, info: null, eds: loose, text: null });
     const pending = m.status === 'pending';
-    return groups.map((g) => {
+    const more = groups.length > 3 && !m.allRows ? groups.length - 3 : 0;
+    return groups.slice(0, more ? 3 : groups.length).map((g) => {
       const st = NSTAT[g.info?.status] || (g.eds.length ? NSTAT.done : NSTAT.not_possible);
       const idx = g.eds.map((e) => p.edits.indexOf(e)), offN = idx.filter((k) => (m.off || []).includes(k)).length;
       const off = (m.skip || []).includes(g.n) || (idx.length > 0 && offN === idx.length);
@@ -1534,10 +3192,17 @@
       return `<div class="ng tk${off ? ' off' : ''}${open ? ' open' : ''}" data-ng="${g.n}" data-i="${i}">
         <div class="tkH" data-act2="ngOpen" data-i="${i}" data-n="${g.n}" role="button" tabindex="0" aria-expanded="${open}">${box}<b>${g.n ? `Task ${g.n}` : 'Also'}</b><span class="tkT">${g.text ? esc(g.text) : g.n ? '' : 'changed alongside'}</span>${(g.info || g.n) && st[1] !== 'ok' ? `<span class="nSt ${st[1]}">${st[0]}</span>` : ''}<span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span></div>
         ${open ? `<div class="tkB">${g.info?.summary ? `<p>${esc(g.info.summary)}</p>` : ''}${g.eds.length ? `<div class="ngE">${g.eds.map(rowFor(m)).join('')}</div>` : ''}</div>` : ''}</div>`;
-    }).join('');
+    }).join('') + (groups.length > 3 ? `<button class="tkMore" data-act2="ngMore" data-i="${i}">${m.allRows ? 'Show fewer' : `${more} more task${more === 1 ? '' : 's'}`}${ico(m.allRows ? 'chev' : 'chevR', 10)}</button>` : '');
+  }
+  // Apply all, as a list that ticks off: each task shimmers while Tovi works on it, then gets a tick.
+  function stepListHTML(m) {
+    const st = m.steps, done = st.filter((x) => x.state !== 'wait' && x.state !== 'run').length, left = st.length - done;
+    return `<div class="aSteps"><div class="aStH"><i class="aRing" style="--p:${st.length ? done / st.length : 0}"></i><b>${left ? `${left} of ${st.length} left` : 'Finishing up'}</b><span class="aSec" data-secs="${m.started}">${Math.max(0, Math.round((Date.now() - m.started) / 1000))}s</span></div>${st.map((x) => `<div class="aSt ${x.state}"><i>${x.state === 'done' ? ico('check', 12) : x.state === 'fail' ? ico('x', 12) : ''}</i><span>${esc(x.title)}</span></div>`).join('')}</div>`;
   }
   function kerfHTML(m, i) {
-    if (m.busy) return `<div class="prop">${stepsHTML(m, true)}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
+    if (m.busy && m.steps) return `<div class="prop">${stepListHTML(m)}</div>`;
+    if (m.busy && m.helpers) return `<div class="prop"><div class="crewRow">${avatar(AGENTS[0])}<span>Tovi is working on ${m.helpers.length === 1 ? 'the task' : `${m.helpers.length} tasks`}</span></div><div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
+    if (m.busy) return `<div class="prop">${stepsHTML(m, true)}${live() ? `<div class="crewRow">${avatar(AGENTS[0])}<span>Tovi is looking it over</span></div>` : ''}<div class="kLive"><i class="kSpin"><b></b><b></b><b></b><b></b></i><span class="kT" data-since="${m.started || Date.now()}">${liveText(m.started)}</span></div></div>`;
     if (m.error) return `<div class="prop err">${stepsHTML(m)}<span class="note warn">${esc(m.error)}</span></div>`;
     const p = m.proposal;
     const badge = { partial: 'Partly possible', not_yet: 'Not possible in Tovi yet', needs_developer: 'For developers' }[p.scope];
@@ -1549,11 +3214,24 @@
     // Explore is a try-on: keep it, undo it, or turn it into the design system.
     const keep = p.mode === 'explore' && m.status === 'applied' ? (m.kept ? `<div class="kSuggest"><span>Kept. Want it everywhere?</span><button data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>` : `<div class="tryOn"><span>Trying this look on your screen.</span><div class="acts"><button class="ghostBtn" data-act2="tryUndo" data-i="${i}">Undo</button><button class="primary applyBtn" data-act2="tryKeep" data-i="${i}">Keep it</button></div><button class="linkBtn" data-act2="keepLook" data-i="${i}">Make it part of the design system →</button></div>`) : '';
     const head = m.applying ? `Applying ${n} change${n === 1 ? '' : 's'}…` : m.status === 'applied' ? `Applied ${m.appliedN ?? n} of ${p.edits.length}` : `${p.edits.length} proposed change${p.edits.length === 1 ? '' : 's'}`;
-    return `<div class="prop${byNote ? ' byNote' : ''}">${stepsHTML(m)}${badge ? `<span class="badge">${badge}</span>` : ''}<p class="kText">${esc(cleanMsg(p.message))}</p>
-      ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
+    return `<div class="prop${byNote ? ' byNote' : ''}">${stepsHTML(m)}${badge ? `<span class="badge">${badge}</span>` : ''}${p.ask ? askHTML(m, i) : `<p class="kText">${esc(cleanMsg(p.message))}</p>`}${p.alt && !p.ask ? `<button class="kAlt${m.altUsed ? ' used' : ''}" data-act2="altRun" data-i="${i}"${m.altUsed ? ' disabled' : ''}><span>Try instead</span><b>${esc(p.alt.label)}</b>${ico('chevR', 10)}</button>` : ''}
+      ${m.talk?.length ? `<div class="talk">${m.talk.map((t) => `<div>${avatar(agentNamed(t.agent))}<b>${esc(t.agent)}</b><span>${esc(t.text)}</span></div>`).join('')}</div>` : ''}
+      ${byNote ? `<div class="ngs">${notesHTML(m, i)}</div>` : toks.length ? `<div class="edits sys"><div class="edH">${ico('comp', 12)}Design system · ${toks.length} colour${toks.length === 1 ? '' : 's'}${m.status === 'pending' && m.where === 'notes' ? `<button class="pvBtn${m.previewing ? ' on' : ''}" data-act2="tokPreview" data-i="${i}">${ico('eye', 12)}${m.previewing ? 'Previewing' : 'Preview'}</button>` : ''}</div>${toks.map(rowFor(m)).join('')}</div>${rest.length ? `<div class="edits"><div class="edH">On this screen · ${rest.length}</div>${rest.map(rowFor(m)).join('')}</div>` : ''}` : p.edits.length ? `<div class="edits"><div class="edH">${m.applying ? '<i class="spin"></i>' : ''}${head}</div>${p.edits.map(rowFor(m)).join('')}</div>` : ''}
       ${suggest}${keep}
-      ${m.status === 'pending' && p.edits.length ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${ico('spark', 14)}${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : status}</div>`;
+      ${m.status === 'applied' && !p.mode?.startsWith('explore') ? `<div class="kDone">${status}<button class="ghostBtn sm" data-act2="tryUndo" data-i="${i}">Undo</button></div>` : ''}
+      ${(() => { const need = m.status === 'pending' && !m.applying ? p.edits.filter((e) => e.structure?.type === 'imageAsk').length : 0; if (!need) return ''; const kind = p.edits.find((e) => e.structure?.type === 'imageAsk').structure.kind === 'photo' ? 'photo' : 'illustration'; return `<div class="pickBar"><span>${ico('image', 14)}Choose ${need === 1 ? `the ${kind}` : `${need} ${kind}s`} to finish</span><button class="primary applyBtn" data-act2="pickAll" data-i="${i}">Choose ${need === 1 ? kind : `${kind}s`}</button></div>`; })()}
+      ${m.status === 'pending' && p.edits.length && !m.applying && !p.edits.some((e) => e.structure?.type === 'imageAsk') ? `<div class="acts${byNote ? ' tkFoot' : ''}">${byNote ? `<span class="tkN">${n} change${n === 1 ? '' : 's'}</span>` : ''}<button class="ghostBtn" data-act2="decide" data-i="${i}" data-v="discard">Discard</button><button class="primary applyBtn" data-act2="decide" data-i="${i}" data-v="apply" ${n ? '' : 'disabled'}>${p.mode === 'explore' ? (n < p.edits.length ? `Try ${n} of ${p.edits.length}` : 'Try this look') : byNote ? 'Apply' : n < p.edits.length ? `Apply ${n} of ${p.edits.length}` : `Apply ${n === 1 ? 'change' : `${n} changes`}`}</button></div>` : m.status === 'applied' && !p.mode?.startsWith('explore') ? '' : status}</div>`;
   }
+  // When a request is wide open, Tovi asks one question with a few directions (press 1–3) instead of guessing.
+  function askHTML(m, i) {
+    const a = m.proposal.ask, done = m.picked != null;
+    return `<div class="kAsk"><p class="kText">${esc(a.question)}</p><div class="kOpts">${a.options.map((o, k) => `<button class="kOpt${m.picked === k ? ' on' : ''}" data-act2="askPick" data-i="${i}" data-v="${k}"${done ? ' disabled' : ''}><kbd>${k + 1}</kbd><span>${esc(o)}</span>${m.picked === k ? ico('check', 12) : ''}</button>`).join('')}</div>${done ? '' : '<span class="note">Or type your own answer.</span>'}</div>`;
+  }
+  const askPick = (m, k) => {
+    if (!m?.proposal?.ask || m.picked != null || S.card?.busy) return;
+    m.picked = k;
+    runAI(m.proposal.ask.options[k], m.targets?.length ? m.targets : S.sel ? selectionTargets() : visibleTargets(), m.where, null, true);
+  };
   // "Looked at 14 elements · Thought for 9s", which opens to show what Tovi read.
   function stepsHTML(m, live) {
     const n = m.lookedN || m.looked?.length || 0;
@@ -1567,7 +3245,13 @@
     return `${t < 60 ? `${t}s` : `${Math.floor(t / 60)}m ${t % 60}s`} · ${t < 2 ? 'Reading the screen' : 'Thinking'}`;
   };
   // Tick the live timers without re-drawing the conversation.
-  setInterval(() => document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = liveText(+el.dataset.since); }), 1000);
+  setInterval(() => {
+    document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = liveText(+el.dataset.since); });
+    document.querySelectorAll('[data-secs]').forEach((el) => { el.textContent = `${Math.max(0, Math.round((Date.now() - +el.dataset.secs) / 1000))}s`; });
+  }, 1000);
+  // While Tovi works through Apply all (and checks those fixes), a soft pink light circles the rim of the message
+  // box. Only then: chat replies keep their thinking dots, and Diagnose has its own sweep.
+  setInterval(() => document.body.classList.toggle('aiWorking', S.chat.some((m) => m.busy && (m.steps || m.batch))), 200);
   /* Tovi's floating card: drag it by its header, or collapse it to a slim bar so the page stays visible */
   S.cardPos = {};
   S.cardMin = false;
@@ -1616,16 +3300,16 @@
       placeCard(a, 'ask');
       if (!m.busy) setTimeout(() => { $('replyIn')?.focus(); syncKC('replyIn'); }, 0);
     } else {
-      a.innerHTML = `${composer('askIn', { form: 'ask', big: true, lead: `<span class="spark">${ico('spark', 16)}</span>`, placeholder: 'Ask Tovi to change something on this screen' })}
+      a.innerHTML = `${composer('askIn', { form: 'ask', big: true, lead: `<span class="spark">${ico('kerf', 16)}</span>`, placeholder: 'Ask Tovi to change something on this screen' })}
         <div class="askHints">${['Make this page feel more premium', 'Make the text easier to read', 'Tighten the spacing'].map((s) => `<button data-act2="askHint" data-v="${s}">${s}</button>`).join('')}</div>`;
       setTimeout(() => { $('askIn')?.focus(); syncKC('askIn'); }, 0);
     }
   }
   function chatHTML() {
-    const ctx = S.sel ? esc(dName(S.sel.el)) : 'Whole screen';
-    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${kerfHTML(m, i)}</div>`)).join('');
-    return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><span class="ceMark">${ico('spark', 20)}</span><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
-      <div class="comp">${tasksShown() ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
+    const ctx = S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen';
+    const msgs = S.chat.map((m, i) => (m.role === 'user' ? `<div class="uMsg"><span class="uCtx">${esc(m.ctx)}</span>${m.atts?.length ? `<div class="uAtt">${m.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}" title="${esc(a.name)}">`).join('')}</div>` : ''}<div class="bub">${esc(m.shown || m.text)}</div></div>` : `<div class="kMsg">${m.second ? `<div class="kSecond">${avatar(AGENTS[0])}${m.checkLabel || 'Second look'}</div>` : ''}${kerfHTML(m, i)}${m.progress && !(m.busy && m.steps) ? `<div class="diagProg"><span>${esc(m.progress)}</span>${m.noStop ? '' : '<button class="ghostBtn" data-act="diagStop">Stop</button>'}</div>` : ''}${!m.busy && m.pages?.length > 1 ? `<div class="diagPages">${m.pages.map((x) => `<button data-act="goPage" data-v="${esc(x.path)}"${x.path === S.path ? ' class="on"' : ''}><span>${esc(x.name)}</span><b>${x.error ? 'Couldn’t review' : x.n ? `${x.n} note${x.n === 1 ? '' : 's'}` : 'Looks good'}</b></button>`).join('')}</div>` : ''}</div>`)).join('');
+    return `<div class="chatScroll" id="chatScroll">${msgs || `<div class="chatEmpty"><img class="ceAvatar" src="${TOVI_PIC}" alt=""><b>What should change?</b><span>Select something, or ask about the whole screen. Tovi proposes the edit first, and you approve it.</span><div class="ceHints">${['Make this feel more premium', 'Improve the contrast', 'Tighten the spacing'].map((t) => `<button data-act2="chatHint" data-v="${t}">${t}</button>`).join('')}</div></div>`}</div>
+      <div class="comp">${tasksShown() && !(S.card?.busy && S.card.steps) ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
   }
   function sendChat() {
     take('chatIn', (v, atts) => runAI(v, S.sel ? selectionTargets() : visibleTargets(), 'chat', null, false, atts));
@@ -1642,10 +3326,10 @@
     const rec = mic?.id === id, has = (S.drafts[id] || '').trim() || atts.length;
     return `<form class="kc${o.big ? ' big' : ''}${o.bar ? ' slim' : ''}" data-form="${o.form}" data-where="${o.where || ''}" data-kc="${id}">
       ${atts.length ? `<div class="kcAtt">${atts.map((a, i) => `<span class="kcThumb" title="${esc(a.name)}"><img src="${a.thumb}" alt="${esc(a.name)}"><button type="button" data-act2="attX" data-id="${id}" data-i="${i}" aria-label="Remove ${esc(a.name)}">${ico('x', 10)}</button></span>`).join('')}</div>` : ''}
+      ${o.ctx ? `<div class="kcTop"><span class="kcCtx" title="What Tovi will look at">${ico(S.sel ? 'frame' : 'desktop', 12)}${o.ctx}</span></div>` : ''}
       <div class="kcRow">${o.lead || ''}<textarea id="${id}" rows="1" placeholder="${esc(o.placeholder)}" aria-label="${esc(o.placeholder)}">${esc(S.drafts[id] || '')}</textarea></div>
       <div class="kcBar">
         <button type="button" class="kcB" data-act2="attach" data-id="${id}" title="Attach images · or paste / drop them here" aria-label="Attach images">${ico(o.bar ? 'plus' : 'clip', 15)}</button>
-        ${o.ctx ? `<span class="kcCtx" title="What Tovi will look at">${ico(S.sel ? 'frame' : 'desktop', 12)}${o.ctx}</span>` : ''}
         ${o.form !== 'note' ? modePill() : ''}
         <span class="sp"></span>
         ${SR ? `<button type="button" class="kcB mic${rec ? ' rec' : ''}" data-act2="mic" data-id="${id}" title="${rec ? 'Stop dictation' : 'Dictate, in any language'}" aria-label="${rec ? 'Stop dictation' : 'Dictate'}">${ico('mic', 15)}</button>` : ''}
@@ -1707,7 +3391,35 @@
     }
     reKC(id);
   }
-  function stopMic() { if (!mic) return; const r = mic.r; mic = null; try { r.stop(); } catch {} markMic(); }
+  function stopMic() { if (!mic) return; const r = mic.r; mic = null; try { r.stop(); } catch {} micLevel(false); markMic(); }
+  // While dictating, the mic's halo follows your voice (louder, wider), so you can see Tovi is hearing you.
+  let lvl = null;
+  async function micLevel(on) {
+    if (lvl) { cancelAnimationFrame(lvl.raf); lvl.stream?.getTracks().forEach((t) => t.stop()); lvl.ctx?.close().catch(() => {}); lvl = null; document.querySelectorAll('.kcB.mic').forEach((b) => b.style.removeProperty('--lv')); }
+    if (!on || !navigator.mediaDevices?.getUserMedia) return;
+    const me = (lvl = {});
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (lvl !== me) { stream.getTracks().forEach((t) => t.stop()); return; }
+      const ctx = new AudioContext(), an = ctx.createAnalyser();
+      an.fftSize = 512;
+      ctx.createMediaStreamSource(stream).connect(an);
+      Object.assign(me, { stream, ctx });
+      const buf = new Uint8Array(an.fftSize);
+      let v = 0;
+      const tick = () => {
+        an.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (const x of buf) sum += ((x - 128) / 128) ** 2;
+        // Rise fast, fall slowly, so the halo breathes instead of flickering.
+        const now = Math.min(1, Math.sqrt(sum / buf.length) * 5);
+        v = now > v ? v + (now - v) * 0.5 : v + (now - v) * 0.12;
+        document.querySelectorAll('.kcB.mic.rec').forEach((b) => b.style.setProperty('--lv', v.toFixed(3)));
+        me.raf = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch { /* no level meter; dictation still works */ }
+  }
   const markMic = () => document.querySelectorAll('[data-act2="mic"]').forEach((b) => { const on = mic?.id === b.dataset.id; b.classList.toggle('rec', on); b.title = on ? 'Stop dictation' : 'Dictate, in any language'; });
   function toggleMic(id) {
     const same = mic?.id === id;
@@ -1720,8 +3432,13 @@
     const t = $(id), base = t && t.value.trim() ? t.value.replace(/\s*$/, ' ') : '';
     mic = { id, r };
     r.onresult = (e) => {
+      // Chrome sometimes resends a phrase it already gave (or the whole text so far): keep each part once.
       let said = '';
-      for (const x of e.results) said += x[0].transcript;
+      for (const x of e.results) {
+        const s = x[0].transcript.trim(), lo = s.toLowerCase(), had = said.toLowerCase();
+        if (!s || (lo.includes(' ') && had.endsWith(lo))) continue;
+        said = had && lo.startsWith(had) ? s : said ? `${said} ${s}` : s;
+      }
       const el = $(id);
       if (el) { el.value = base + said.trimStart(); S.drafts[id] = el.value; syncKC(id); }
     };
@@ -1729,8 +3446,8 @@
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('The microphone is blocked. Allow it for this site in your browser, then try again.', '', true);
       else if (e.error !== 'no-speech' && e.error !== 'aborted') toast('Dictation stopped', e.error, true);
     };
-    r.onend = () => { if (mic?.r === r) { mic = null; markMic(); } };
-    try { r.start(); } catch { mic = null; }
+    r.onend = () => { if (mic?.r === r) { mic = null; micLevel(false); markMic(); } };
+    try { r.start(); micLevel(true); } catch { mic = null; }
     markMic();
     t?.focus();
   }
@@ -1753,18 +3470,49 @@
   });
 
   /* annotations */
-  function shapeSVG(n, i, draft, hl) {
-    const st = `stroke="#2B66D9" stroke-width="${hl ? 3 : 2}" fill="${draft ? 'none' : 'rgba(43,102,217,.06)'}"`;
+  function shapeSVG(n, i, draft, hl, dy = 0) {
+    // Notes for Tovi are pink (Tovi's colour), never blue: blue means "what you're touching".
+    const tovi = n.by === 'tovi', z = S.z || 1;
+    const st = `stroke="var(--noteLine)" stroke-width="${1.5 / z}" stroke-dasharray="${5 / z} ${4 / z}" fill="var(--noteArea)"`;
     let s = '';
+    // A written note shows only its marker; its area comes back while its task is hovered.
+    const o = n;
+    if (i != null && !hl) n = { ...n, shape: n.shape === 'pin' ? 'pin' : 'none' };
     if (n.shape === 'box') s = `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6" ${st}/>`;
     else if (n.shape === 'circle') s = `<ellipse cx="${n.x + n.w / 2}" cy="${n.y + n.h / 2}" rx="${n.w / 2}" ry="${n.h / 2}" ${st}/>`;
-    else if (n.shape === 'arrow') { const a = Math.atan2(n.y2 - n.y, n.x2 - n.x), L = 12; s = `<path d="M${n.x} ${n.y}L${n.x2} ${n.y2}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a - 0.5)} ${n.y2 - L * Math.sin(a - 0.5)}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a + 0.5)} ${n.y2 - L * Math.sin(a + 0.5)}" stroke="#2B66D9" stroke-width="2.5" fill="none" stroke-linecap="round"/>`; }
-    const [bx, by] = n.shape === 'pin' || n.shape === 'arrow' ? [n.x, n.y] : [n.x + n.w, n.y];
-    if (i != null) s += `<g transform="translate(${bx} ${by}) scale(${1 / (S.z || 1)})" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${hl ? '<circle r="16" fill="rgba(43,102,217,.28)"/>' : ''}<circle r="11" fill="#2B66D9" stroke="#fff" stroke-width="2"/><text y="4" fill="#fff" font-size="11" font-weight="600" font-family="Geist,system-ui,sans-serif" text-anchor="middle">${i + 1}</text></g>`;
-    else if (n.shape === 'pin') s += `<circle cx="${n.x}" cy="${n.y}" r="6" fill="#2B66D9"/>`;
+    else if (n.shape === 'arrow') { const a = Math.atan2(n.y2 - n.y, n.x2 - n.x), L = 12; s = `<path d="M${n.x} ${n.y}L${n.x2} ${n.y2}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a - 0.5)} ${n.y2 - L * Math.sin(a - 0.5)}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a + 0.5)} ${n.y2 - L * Math.sin(a + 0.5)}" stroke="var(--noteLine)" stroke-width="${1.75 / z}" stroke-linecap="round" fill="none"/>`; }
+    const [bx, by] = o.shape === 'pin' || o.shape === 'arrow' ? [o.x, o.y] : [o.x + o.w, o.y];
+    // The marker, like Figma's Dev Mode annotations: a small dot on the exact spot and a number tag just above and
+    // to the right, so it never covers what it points at. No shadow: a thin halo keeps it readable on any page.
+    // Tovi's own notes are pink; the note you're hovering opens its tag to show what it says.
+    const tag = (num, text) => {
+      const label = text ? `${num} · ${text}` : String(num), w = Math.round(12 + label.length * 6.4);
+      // dy lifts a tag that would sit on another one; a hairline leads from the dot up to it.
+      const lead = dy ? `<path class="nLead" d="M0 -3.5V${-25 + dy + 18}H7"/>` : '';
+      return `<g class="noteTag${tovi ? ' tovi' : ''}${hl ? ' hl' : ''}" transform="translate(${bx} ${by}) scale(${1 / z})">${lead}<circle class="nDot" r="3.5"/><g transform="translate(7 ${-25 + dy})"><rect width="${w}" height="18" rx="6"/><text x="${w / 2}" y="12.5" text-anchor="middle">${esc(label)}</text></g></g>`;
+    };
+    if (i != null) { const t = String(o.title || o.text || '').trim().replace(/\s+/g, ' '); s += tag(i + 1, hl && t ? (t.length > 34 ? t.slice(0, 33) + '…' : t) : ''); }
+    else if (n.shape === 'pin') s += `<g class="noteTag draft" transform="translate(${n.x} ${n.y}) scale(${1 / z})"><circle class="nDot" r="3.5"/></g>`;
     return s;
   }
-  const drawMarks = () => { $('marksG').innerHTML = S.notes.map((n, i) => shapeSVG(n, i, false, S.hlNote === i + 1)).join('') + (S.noteDraft ? shapeSVG(S.noteDraft, null, true) : ''); };
+  // Tags of notes that sit close together are stacked upwards instead of overlapping (screen pixels, any zoom).
+  // The hovered note is drawn last so its open tag sits on top.
+  const tagLabel = (n, i, hl) => { const t = String(n.title || n.text || '').trim().replace(/\s+/g, ' '); return hl && t ? `${i + 1} · ${t.length > 34 ? t.slice(0, 33) + '…' : t}` : String(i + 1); };
+  const drawMarks = () => {
+    const z = S.z || 1, placed = [], out = [];
+    const order = S.notes.map((n, i) => i).sort((a, b) => (S.hlNote === a + 1) - (S.hlNote === b + 1));
+    const dys = {};
+    S.notes.map((n, i) => i).forEach((i) => {
+      const n = S.notes[i], [bx, by] = n.shape === 'pin' || n.shape === 'arrow' ? [n.x, n.y] : [n.x + n.w, n.y];
+      const w = Math.round(12 + tagLabel(n, i, false).length * 6.4), x = bx * z + 7, y0 = by * z - 25;
+      let dy = 0;
+      while (dy > -400 && placed.some((r) => x < r.x + r.w + 2 && x + w + 2 > r.x && y0 + dy < r.y + 20 && y0 + dy + 20 > r.y)) dy -= 22;
+      placed.push({ x, y: y0 + dy, w });
+      dys[i] = dy;
+    });
+    order.forEach((i) => out.push(shapeSVG(S.notes[i], i, false, S.hlNote === i + 1, dys[i])));
+    $('marksG').innerHTML = out.join('') + (S.noteDraft ? shapeSVG(S.noteDraft, null, true) : '');
+  };
   // Hovering a note's answer lights up its mark and the elements it changes.
   document.addEventListener('mouseover', (e) => {
     const row = e.target.closest?.('.ntRow');
@@ -1782,17 +3530,20 @@
   // Compact, like Figma: one line per task, a chevron for the details, one footer with the actions.
   function tasksHTML(busy) {
     const n = S.notes.length;
+    if (busy && S.card?.steps) return `<div class="tasks">${stepListHTML(S.card)}</div>`;
     return `<div class="tasks">
-      <div class="tkList">${S.notes.map((x, i) => { const open = S.openTask.includes(i); return `<div class="tk ntRow${open ? ' open' : ''}" data-note="${i + 1}">
-        <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${ico('task', 15)}<b>Task ${i + 1}</b><span class="tkT">${esc(x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
-        ${open ? `<div class="tkB"><p>${esc(x.text)}</p>${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
-      </div>`; }).join('')}</div>
-      <div class="tkFoot">${busy ? `<span class="tkN"><i class="kSpin"><b></b><b></b><b></b><b></b></i>Tovi is reading ${n === 1 ? 'the task' : `${n} tasks`}…</span>` : `<span class="tkN">${ico('spark', 14)}${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Send to Tovi</button>`}</div>
+      <div class="tkList">${S.notes.map((x, i) => { if (i >= 3 && !S.tasksAll) return ''; const open = S.openTask.includes(i); return `<div class="tk ntRow${open ? ' open' : ''}" data-note="${i + 1}">
+        <div class="tkH" data-act2="tkOpen" data-i="${i}" role="button" tabindex="0" aria-expanded="${open}">${x.by === 'tovi' ? avatar(AGENTS[0]) : ico('task', 15)}<b>${x.by === 'tovi' ? `${i + 1} · ${esc(x.title || 'Tovi')}` : `Task ${i + 1}`}</b><span class="tkT">${esc(x.by === 'tovi' ? x.problem || x.text : x.text)}</span><span class="tkC">${ico(open ? 'chev' : 'chevR', 10)}</span><button class="tkX" data-act2="noteDel" data-i="${i}" title="Remove task" aria-label="Remove task ${i + 1}">${ico('x', 12)}</button></div>
+        ${open ? `<div class="tkB">${x.by === 'tovi' ? `<p>${esc(x.problem || '')}</p><label class="tkFix"><span>Tovi will</span><textarea data-tkedit="${i}" rows="3" aria-label="What Tovi will change">${esc(x.text)}</textarea></label>` : `<p>${esc(x.text)}</p>`}${x.atts?.length ? `<div class="uAtt">${x.atts.map((a) => `<img src="${a.thumb}" alt="${esc(a.name)}">`).join('')}</div>` : ''}<span class="note">${{ pin: 'Pinned', box: 'Boxed', circle: 'Circled', arrow: 'Arrow' }[x.shape] || 'Marked'} on the screen</span></div>` : ''}
+      </div>`; }).join('')}${S.notes.length > 3 ? `<button class="tkMore" data-act2="tasksAll">${S.tasksAll ? 'Show fewer' : `${S.notes.length - 3} more task${S.notes.length - 3 === 1 ? '' : 's'}`}${ico(S.tasksAll ? 'chev' : 'chevR', 10)}</button>` : ''}</div>
+      <div class="tkFoot">${busy ? `<span class="tkN">${avatar(AGENTS[0])}Tovi is on it…</span>` : `<span class="tkN">${n} task${n === 1 ? '' : 's'}</span><button class="ghostBtn" data-act2="notesClear">Discard</button><button class="primary applyBtn" data-act2="notesApply">Apply</button>`}</div>
     </div>`;
   }
+  // Editing what Tovi will do for one of its notes.
+  document.addEventListener('input', (e) => { const i = e.target.dataset?.tkedit; if (i == null || !S.notes[+i]) return; S.notes[+i].text = e.target.value; });
   function refreshTasks() {
     renderMarks();
-    if (S.mode === 'edit' && S.tab === 'chat') renderPanel();
+    renderChat();
   }
   function renderMarks() {
     drawMarks();
@@ -1829,22 +3580,119 @@
   function renderAI() {
     renderAsk();
     renderMarks();
-    if (S.mode === 'edit' && S.tab === 'chat') renderPanel();
+    renderChat();
   }
-  function applyNotes() {
-    if (!S.notes.length) return;
-    const targets = uniq(S.notes.flatMap((n, i) => noteTargets(n, i)));
-    const request = S.notes.map((n, i) => `Note ${i + 1}: ${n.text}`).join('\n') + '\nEach element is tagged with the note it sits under.';
-    const atts = [], tagged = [];
-    S.notes.forEach((n, i) => (n.atts || []).forEach((a) => { if (atts.length < 4) { atts.push(a); tagged.push(`Attachment ${atts.length} belongs to note ${i + 1}.`); } }));
-    runAI(request + (tagged.length ? '\n' + tagged.join(' ') : ''), targets, 'notes', S.notes.map((n, i) => `${i + 1}. ${n.text}`).join('\n'), false, atts);
+  // Each task goes to its own helper (Milo, Juno, Remi, Nova), at most four at once, all working in parallel.
+  // Tovi then puts their answers together, says where two of them meet, and applies the lot.
+  async function applyNotes() {
+    if (!S.notes.length || S.card?.busy) return;
+    const notes = S.notes.slice();
+    const per = notes.map((n, i) => noteTargets(n, i));
+    const all = uniq(per.flat());
+    if (!all.length) { toast('Nothing on screen to work with yet. Wait for the page to load.', '', true); return; }
+    const history = historyFor();
+    S.chat.push({ role: 'user', text: notes.map((n, i) => `Note ${i + 1}: ${n.text}`).join('\n'), shown: notes.map((n, i) => `${i + 1}. ${n.text}`).join('\n'), ctx: `${notes.length} task${notes.length === 1 ? '' : 's'}`, where: 'notes', atts: [] });
+    const m = { role: 'kerf', busy: true, status: 'pending', where: 'notes', targets: all, noteTexts: notes.map((n) => n.text), skip: [], started: Date.now(), looked: all.map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: all.length, helpers: notes.map((n, i) => ({ n: i + 1, name: helperFor(i + 1).name })) };
+    m.steps = notes.map((n) => ({ title: n.title || n.text, state: 'wait' }));
+    const stepTo = (k, state) => { m.steps[k].state = state; renderChat(); renderMarks(); };
+    S.chat.push(m);
+    S.card = m;
+    notes.forEach((n, k) => workOn(n.locs?.length ? n.locs : per[k].slice(0, 3).map((t) => t.loc), `Note ${k + 1}`));
+    renderAI();
+    const offScreen = notes.some((n) => W && (n.y + (n.h || 0) < W.scrollY || n.y > W.scrollY + W.innerHeight));
+    const screen = offScreen ? (await realFull()) || (await captureScreen(true)) : await captureScreen();
+    m.mode = S.modeOnce || S.styleMode;
+    S.modeOnce = null;
+    const run = async (k) => {
+      stepTo(k, 'run');
+      if (!per[k].length) return { error: 'Nothing is under this mark any more (the page may have moved). Draw it again.' };
+      const stop = () => {};
+      const atts = (notes[k].atts || []).slice(0, 4);
+      // A Diagnose note with exact edits, still worded as Tovi wrote it, lands at once with no AI round trip.
+      const q = notes[k].quick;
+      if (q?.length && notes[k].text === notes[k].quickFor && !atts.length) return { p: { scope: 'done', message: notes[k].text, notes: [{ note: k + 1, status: 'done', summary: notes[k].text }], edits: q.map((e) => ({ loc: e.loc, ops: e.ops, props: [], text: null, structure: null, note: k + 1 })) } };
+      try {
+        const p = await api('/ai', { request: `Note ${k + 1}: ${notes[k].text}\nEach element is tagged with the note it sits under.`, fast: true, targets: per[k], history, screen, context: aiContext(), mode: m.mode, images: atts.map((x) => ({ name: x.name, media_type: x.type, data: x.data, orig: x.orig })) });
+        return { p };
+      } catch (e) { return { error: e.message }; } finally { stop(); }
+    };
+    const out = [];
+    let next = 0;
+    // Each note's changes land as soon as its answer arrives, so the page starts changing within seconds.
+    // Saves run one after another (never two writing at once) and share one batch, so one Undo reverts them all.
+    const batch = Date.now(), results = [];
+    let saving = Promise.resolve(), landed = 0, nNow = S.count;
+    m.noStop = true;
+    const land = (k) => {
+      const es = (out[k]?.p?.edits || []).filter((e) => e.structure?.type !== 'imageAsk').map((e) => (e.structure ? { ...e, note: k + 1 } : { ...e, note: k + 1, bp: bpParam() }));
+      if (!es.length) { landed++; stepTo(k, out[k]?.error ? 'fail' : 'skip'); return; }
+      saving = saving.then(async () => {
+        const r = await applyLive(m, es, batch).catch((e) => ({ error: e.message }));
+        if (r.results) { results.push(...r.results); nNow = Math.max(nNow, r.n || nNow); S.count = nNow; afterEdit(); }
+        landed++;
+        m.steps[k].state = r.error ? 'fail' : 'done';
+        renderMarks();
+        m.progress = `Applied ${landed} of ${notes.length} note${notes.length === 1 ? '' : 's'}…`;
+        renderChat();
+      });
+    };
+    m.progress = `Working on ${notes.length} note${notes.length === 1 ? '' : 's'}…`;
+    renderChat();
+    await Promise.all(Array.from({ length: Math.min(4, notes.length) }, async () => { while (next < notes.length) { const k = next++; out[k] = await run(k); land(k); } }));
+    await saving;
+    m.progress = null;
+    // Put the answers together, one row per task.
+    const edits = [], rows = [];
+    out.forEach((o, k) => {
+      const nn = k + 1;
+      if (o.error) { rows.push({ note: nn, status: 'not_possible', summary: o.error }); return; }
+      o.p.edits.forEach((e) => edits.push({ ...e, note: nn }));
+      const own = o.p.notes?.find((x) => x.note === nn) || o.p.notes?.[0];
+      const st = own?.status || (o.p.scope === 'done' ? 'done' : o.p.edits.length ? 'partial' : 'not_possible');
+      rows.push({ note: nn, status: st, summary: own?.summary || cleanMsg(o.p.message) });
+    });
+    // Where two helpers change the same element, they say so (and Tovi applies them in task order).
+    const byLoc = new Map();
+    edits.forEach((e) => byLoc.set(e.loc, [...new Set([...(byLoc.get(e.loc) || []), e.note])]));
+    const talk = [];
+    for (const [loc, ns] of byLoc) {
+      if (ns.length < 2) continue;
+      const [first, ...later] = ns.sort((a, b) => a - b), el = elOf(loc), what = el ? dName(el) : 'this element';
+
+    }
+    const names = m.helpers.map((h) => h.name);
+    m.talk = talk;
+    m.proposal = { scope: rows.every((r) => r.status === 'done') ? 'done' : edits.length ? 'partial' : 'not_yet', message: `Tovi worked on ${notes.length === 1 ? 'the task' : `${notes.length} tasks`}.`, notes: rows, edits, suggest: null, mode: m.mode };
+    S.amber = edits.filter((e) => e.structure?.type !== 'token').map((e) => e.loc);
+    if (edits.some((e) => e.structure?.type === 'token') && !S.tokens) loadTokens();
+    if (!edits.length) m.status = 'info';
+    m.busy = false;
+    m.took = Math.max(1, Math.round((Date.now() - m.started) / 1000));
+    renderAI();
+    if (m.status === 'pending' && chosen(m).length) {
+      const ok = results.filter((x) => x.ok && x.changed).length, bad = results.filter((x) => !x.ok);
+      m.failed = bad.map((x) => x.loc);
+      m.appliedN = ok;
+      if (ok) cue('done');
+      m.status = ok ? 'applied' : 'failed';
+      toast(`Applied ${ok} change${ok === 1 ? '' : 's'}`, bad.length ? `${bad.length} skipped: ${bad[0].error}` : '', !!bad.length && !ok, !!ok);
+      if (ok) S.notes = [];
+      if (chosen(m).some((e) => e.structure?.type === 'token')) S.tokens = null;
+      S.amber = [];
+      afterEdit();
+      renderAI();
+    }
+    workClear();
+    saveChat();
+    // Then look at the page and check every note was really fixed; fix what's left (up to two checks).
+    if (m.status === 'applied') await checkAndFix({ request: notes.map((n) => n.title || n.text).join('; '), done: chosen(m), round: 1, notes, full: true });
   }
   let draw = null;
   const ovPoint = (e) => { const r = $('ov').getBoundingClientRect(); return { x: (e.clientX - r.left) / S.z + W.scrollX, y: (e.clientY - r.top) / S.z + W.scrollY }; };
   $('annoCap').addEventListener('pointerdown', (e) => {
     if (S.tool !== 'annotate' || !W) return;
     e.preventDefault();
-    $('annoCap').setPointerCapture(e.pointerId);
+    try { $('annoCap').setPointerCapture(e.pointerId); } catch {}
     S.noteDraft = null;
     renderMarks();
     draw = ovPoint(e);
@@ -1852,7 +3700,7 @@
   $('annoCap').addEventListener('pointermove', (e) => {
     if (!draw) return;
     const { x: x2, y: y2 } = ovPoint(e);
-    S.noteDraft = S.shape === 'pin' ? { shape: 'pin', x: x2, y: y2 } : S.shape === 'arrow' ? { shape: 'arrow', x: draw.x, y: draw.y, x2, y2 } : { shape: S.shape, x: Math.min(draw.x, x2), y: Math.min(draw.y, y2), w: Math.abs(x2 - draw.x), h: Math.abs(y2 - draw.y) };
+    S.noteDraft = { shape: 'box', x: Math.min(draw.x, x2), y: Math.min(draw.y, y2), w: Math.abs(x2 - draw.x), h: Math.abs(y2 - draw.y) };
     renderMarks();
   });
   $('annoCap').addEventListener('pointerup', () => {
@@ -1869,16 +3717,22 @@
     take('noteIn', (v, atts) => {
       S.notes.push({ ...S.noteDraft, text: v || 'See the attached image.', atts });
       S.noteDraft = null;
-      if (S.mode === 'edit' && S.tab !== 'chat') { S.tab = 'chat'; renderBar(); }
+      if (S.mode === 'edit' && (S.left !== 'chat' || !S.layersOpen)) { S.left = 'chat'; if (!S.layersOpen) { S.layersOpen = true; renderTop(); setTimeout(applyDevice, 0); } renderLeft(); }
       refreshTasks();
     });
   }
   function setTool(t) {
+    if ((t === 'interact') !== (S.tool === 'interact')) cue(t === 'interact' ? 'interact' : 'edit');
     S.tool = t;
     S.noteDraft = null;
     S.hintSeen = true;
-    if (t === 'annotate') { S.hover = null; S.askOpen = false; }
-    renderBar(); renderMarks(); renderAsk();
+    if (t !== 'select') { S.hover = null; S.pendingInsert = false; pickHint(false); }
+    if (t === 'interact') S.pageSel = false;
+    // Interacting or moving around isn't editing: let go of the selection so the outline and handles go away.
+    if (t === 'interact' && (S.sel || S.multi.length)) { S.multi = []; select(null); }
+    if (t === 'annotate') S.askOpen = false;
+    syncTool();
+    renderBar(); renderMarks(); renderAsk(); renderPanel();
   }
   // AI buttons use data-act2 so they never collide with the editor's own actions.
   document.addEventListener('click', (e) => {
@@ -1888,6 +3742,9 @@
       if (act === 'askHint') runAI(v, visibleTargets(), 'ask');
       else if (act === 'chatHint') runAI(v, S.sel ? selectionTargets() : visibleTargets(), 'chat');
       else if (act === 'decide') decide(S.chat[+a.dataset.i], v);
+      else if (act === 'askPick') askPick(S.chat[+a.dataset.i], +v);
+      // Tovi did what you asked; its better option is one click away.
+      else if (act === 'altRun') { const m = S.chat[+a.dataset.i]; if (m?.proposal?.alt && !m.altUsed && !S.card?.busy) { m.altUsed = true; runAI(m.proposal.alt.request, m.targets?.length ? m.targets : S.sel ? selectionTargets() : visibleTargets(), m.where, m.proposal.alt.label, true); } }
       else if (act === 'cardMin') { S.cardMin = !S.cardMin; renderAI(); }
       else if (act === 'closeCard') { S.cardMin = false; S.cardPos = {}; if (S.card?.previewing) { S.card.previewing = false; previewTokens(S.card, false); } if (S.card?.status === 'pending') S.card.status = 'discarded'; S.card = null; S.amber = []; renderAI(); }
       else if (act === 'modeMenu') { const r = a.getBoundingClientRect(); modeMenu({ x: r.left, y: r.top - 230 }); }
@@ -1908,9 +3765,11 @@
         if (!m) return;
         (async () => {
           let undone = 0;
-          for (let k = 0; k < (m.appliedN || 0); k++) { const r = await api('/undo', {}).catch(() => null); if (!r?.undone) break; S.count = r.n; undone++; }
-          m.status = 'discarded';
-          toast(undone ? `Undid the look (${undone} change${undone === 1 ? '' : 's'})` : 'Nothing to undo');
+          if (m.batch) { const r = await api('/undo', {}).catch(() => null); if (r?.undone) { S.count = r.n; undone = r.count || 1; } }
+          else for (let k = 0; k < (m.appliedN || 0); k++) { const r = await api('/undo', {}).catch(() => null); if (!r?.undone) break; S.count = r.n; undone++; }
+          m.status = 'undone';
+          const what = m.proposal?.mode === 'explore' ? 'Undid the look:' : 'Undid';
+          toast(undone ? `${what} ${undone} change${undone === 1 ? '' : 's'}` : 'Nothing to undo');
           afterEdit(); renderAI(); saveChat();
         })();
       }
@@ -1947,6 +3806,24 @@
       }
       else if (act === 'pickKind') { if (S.pick) { S.pick.kind = v; S.pick.prompt = $('pickQ')?.value || S.pick.prompt; renderPicker(); if (S.pick.prompt && !(v === 'photo' ? S.pick.photos : S.pick.drawings)) runPicker(); } }
       else if (act === 'pickImg') { if (S.pick) chooseImage(S.pick, +a.dataset.i); }
+      else if (act === 'pickAll') {
+        // Choose each picture in turn (each opens on its own element); when they're all chosen, apply.
+        const m = S.chat[+a.dataset.i];
+        if (!m) return;
+        const next = () => {
+          const e2 = m.proposal.edits.find((x) => x.structure?.type === 'imageAsk');
+          if (!e2) { renderAI(); if (m.status === 'pending' && chosen(m).length) decide(m, 'apply'); return; }
+          const el = D?.querySelector(q(e2.loc)), left = m.proposal.edits.filter((x) => x.structure?.type === 'imageAsk').length;
+          el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          openImagePicker({ kind: e2.structure.kind, prompt: e2.structure.prompt, el, step: left > 1 || m._picks ? `${(m._picks || 0) + 1} of ${(m._picks || 0) + left}` : '', onPick: ({ src, alt, credit }) => {
+            e2.structure = { type: 'image', src, alt, credit, kind: e2.structure.kind, prompt: e2.structure.prompt, preview: src };
+            m._picks = (m._picks || 0) + 1;
+            renderAI();
+            setTimeout(next, 250);
+          } });
+        };
+        next();
+      }
       else if (act === 'imgOptions') {
         // A proposed image: open the picker with Tovi's description; the pick fills in this edit.
         const m = S.chat[+a.dataset.i], e2 = m?.proposal.edits[+a.dataset.e];
@@ -1980,13 +3857,15 @@
       else if (act === 'noteDiscard') { S.noteDraft = null; renderMarks(); }
       else if (act === 'noteDel') { S.notes.splice(+a.dataset.i, 1); S.openTask = []; S.hlNote = null; refreshTasks(); }
       else if (act === 'notesClear') { S.notes = []; S.openTask = []; if (S.card?.where === 'notes') S.card = null; S.amber = []; refreshTasks(); }
+      else if (act === 'tasksAll') { S.tasksAll = !S.tasksAll; refreshTasks(); }
+      else if (act === 'ngMore') { const m = S.chat[+a.dataset.i]; if (m) { m.allRows = !m.allRows; renderAI(); } }
       else if (act === 'tkOpen') { const i = +a.dataset.i; S.openTask = S.openTask.includes(i) ? S.openTask.filter((x) => x !== i) : [...S.openTask, i]; refreshTasks(); }
       else if (act === 'ngOpen') { const m = S.chat[+a.dataset.i], n = +a.dataset.n; if (m) { m.openN = (m.openN || []).includes(n) ? m.openN.filter((x) => x !== n) : [...(m.openN || []), n]; renderAI(); } }
       else if (act === 'notesApply') applyNotes();
       return;
     }
     const t = e.target.closest('[data-act="tool"],[data-act="shape"]');
-    if (t) { if (t.dataset.act === 'tool') setTool(S.tool === t.dataset.v ? 'select' : t.dataset.v); else { S.shape = t.dataset.v; renderBar(); } }
+    if (t) { if (t.dataset.act === 'tool') setTool(t.dataset.v === 'annotate' && S.tool === 'annotate' ? 'select' : t.dataset.v); }
   });
 
   /* ---------- structure: delete, duplicate, move, swap, insert, images ---------- */
@@ -2019,7 +3898,7 @@
       const r = await api('/structure', { loc, op, name: S.sel ? dName(S.sel.el) : null });
       if (!r.changed) return false;
       S.count = r.n;
-      toast(`${S.sel ? dName(S.sel.el) + ' · ' : ''}${r.summary.action}`, '', false, true, fileName(r.file));
+      if (op?.type === 'delete' || /delet|remov/i.test(r.summary.action || '')) cue('remove'), toast(`${S.sel ? kindOf(S.sel.el) : 'Element'} deleted`, '', false, true);
       if (!keepSel) { S.sel = null; renderPanel(); }
       afterEdit();
       guard(before);
@@ -2052,20 +3931,18 @@
   }
   function imageSection(el) {
     if (!el || el.tagName.toLowerCase() !== 'img') return '';
-    const src = el.getAttribute('src') || '', alt = el.getAttribute('alt') || '';
-    const fit = cs(el).objectFit;
-    return sec('Image', `<div class="thumb"><img src="${esc(el.currentSrc || src)}" alt=""></div>
-      <div class="r2"><button class="outline" data-act="imgFind" data-v="photo">${ico('search', 12)} Find a photo</button><button class="outline" data-act="imgFind" data-v="illustration">${ico('pen', 12)} Draw one</button></div>
-      <div class="r2"><button class="ghostBtn" data-act="imgUpload">Upload…</button><button class="ghostBtn" data-act="imgLink">Use a link</button></div>
-      <label class="inp" title="Alt text"><span class="u">Alt</span><input type="text" data-alt="1" value="${esc(alt)}" placeholder="Describe the image"></label>
-      <div class="ibs txt">${['cover', 'contain', 'fill'].map((v) => `<button class="ib${fit === v ? ' on' : ''}" data-act="set" data-p="fit" data-v="${v}" title="${v === 'cover' ? 'Fill the box, crop the edges' : v === 'contain' ? 'Fit inside the box' : 'Stretch to the box'}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div>`);
+    // A picture is the element itself (like text is), so it has its own Image section rather than a fill. One row
+    // like a fill row: thumbnail, name, size. Clicking it opens the image panel (fit, replace, alt text).
+    const src = el.getAttribute('src') || '', alt = el.getAttribute('alt') || '', file = fileOf(src);
+    const dims = el.naturalWidth ? `${el.naturalWidth} × ${el.naturalHeight}` : '';
+    return sec('Image', `<div class="cr"><label class="inp imgF" title="${esc(alt || file)}"><button class="cchip img" data-act="cpick" data-v="img" style="background-image:url('${esc(el.currentSrc || src)}')" aria-label="Edit image"></button><button class="imgFName" data-act="cpick" data-v="img">${esc(file || 'Image')}</button>${dims ? `<span class="u">${dims}</span>` : ''}</label></div>`);
   }
   /* image picker: real photos (Unsplash) or illustrations Claude draws, chosen from a few options */
   S.pick = null;
-  function openImagePicker({ kind = 'photo', prompt = '', el = S.sel?.el, onPick }) {
+  function openImagePicker({ kind = 'photo', prompt = '', el = S.sel?.el, onPick, step = '' }) {
     const r = el?.getBoundingClientRect?.() || { width: 4, height: 3 };
     const ratio = r.width && r.height ? r.width / r.height : 4 / 3;
-    S.pick = { kind, prompt, ratio, onPick, photos: null, drawings: null, busy: false, error: '' };
+    S.pick = { kind, prompt, ratio, onPick, step, photos: null, drawings: null, busy: false, error: '' };
     $('modal').hidden = false;
     renderPicker();
     if (prompt) runPicker();
@@ -2085,7 +3962,7 @@
         ? `<div class="pkGrid">${res.map((x, i) => `<button class="pkItem" data-act2="pickImg" data-i="${i}" title="${esc(x.alt)}"><img src="${esc(x.thumb)}" alt="${esc(x.alt)}" style="aspect-ratio:${P.ratio}"><span>${esc(x.credit?.name || '')}</span></button>`).join('')}</div><p class="note pkCredit">Photos from <a href="https://unsplash.com/?utm_source=kerf&utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>, free to use.</p>`
         : `<div class="pkGrid draw">${res.map((x, i) => `<button class="pkItem" data-act2="pickImg" data-i="${i}" title="${esc(x.title)}"><img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(x.svg)}" alt="${esc(x.title)}" style="aspect-ratio:${P.ratio}"><span>${esc(x.title)}</span></button>`).join('')}</div>`;
     $('modal').innerHTML = `<section class="dialog pick" role="dialog" aria-modal="true" aria-labelledby="pkT">
-      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="pkT">Choose an image</h2><span class="note">Pick one and it takes this image’s place, at the same size.</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
+      <div class="dh"><div style="display:flex;flex-direction:column;gap:4px"><h2 id="pkT">Choose an image${P.step ? ` <span class="note" style="font-weight:400">· ${esc(P.step)}</span>` : ''}</h2><span class="note">${P.prompt ? `For: “${esc(P.prompt)}”. ` : ''}Pick one and it takes this element’s place, at the same size.</span></div><button class="ib" data-act="closeModal" aria-label="Close">${ico('x')}</button></div>
       <div class="db">
         <div class="seg pkTabs"><button data-act2="pickKind" data-v="photo" class="${P.kind === 'photo' ? 'on' : ''}">${ico('image', 12)} Photos</button><button data-act2="pickKind" data-v="illustration" class="${P.kind === 'illustration' ? 'on' : ''}">${ico('pen', 12)} Illustrations</button></div>
         <form class="insSearch" data-form="pick">${ico('search', 14)}<input id="pickQ" value="${esc(P.prompt)}" placeholder="${P.kind === 'photo' ? 'Search photos' : 'Describe the illustration'}" autocomplete="off" spellcheck="false" aria-label="What should the image show?"><button class="primary sm">${P.kind === 'photo' ? 'Search' : 'Draw'}</button></form>
@@ -2171,12 +4048,33 @@
       { k: 'heading', label: 'Heading', icon: 'heading', jsx: `<h2 className="text-2xl font-semibold ${ink}">New heading</h2>` },
       { k: 'button', label: 'Button', yours: has('Button'), icon: 'button', jsx: has('Button') ? '<Button>Button</Button>' : `<button className="rounded-md px-4 py-2 text-sm font-medium ${tokenClass('bg', ['primary'], 'bg-gray-900')} ${tokenClass('text', ['primary-fg', 'primary-foreground'], 'text-white')}">Button</button>` },
       { k: 'image', label: 'Image…', icon: 'image', image: true },
-      { k: 'icon', label: 'Icon…', icon: 'spark', iconPick: true },
+      { k: 'icon', label: 'Icon…', icon: 'shapes', iconPick: true },
       { k: 'frame', label: 'Frame', icon: 'frame', jsx: `<div className="flex flex-col gap-3 rounded-lg ${tokenClass('border', ['border'], 'border-gray-200')} border p-4"><p className="text-sm ${muted}">New frame</p></div>` },
     ];
   }
   // Boxes that hold other elements take new ones inside; text, images and buttons get them after.
   const defaultPos = () => (S.sel && S.sel.el.children.length && !['p', 'span', 'button', 'a', 'label', 'svg'].includes(S.sel.el.tagName.toLowerCase()) ? 'inside' : 'after');
+  // Add from anywhere: it switches to Select (clicks must pick a spot, not use the app), and if nothing is
+  // selected yet, the next click picks where the new element goes and opens Add right there.
+  // An instruction, not news: one quiet pill at the top of the canvas that stays until you pick a spot or press Esc.
+  function pickHint(on) {
+    let h = $('pickHint');
+    if (!on) { if (h) h.hidden = true; return; }
+    if (!h) { h = document.createElement('div'); h.id = 'pickHint'; h.className = 'pickHint'; h.setAttribute('role', 'status'); $('toast').after(h); }
+    h.innerHTML = `${ico('addEl', 14)}<span>Click where the new element should go</span><span class="kbd">Esc</span>`;
+    h.hidden = false;
+  }
+  function startInsert() {
+    if (S.mode === 'preview') setMode('edit');
+    if (S.tool !== 'select') setTool('select');
+    if (!S.sel) {
+      S.pendingInsert = true;
+      pickHint(true);
+      return;
+    }
+    S.insertPos = defaultPos();
+    openInsert();
+  }
   async function openInsert() {
     if (!S.sel) { toast('Select where the new element should go, then add it.', '', true); return; }
     S._tpls = await templates();
@@ -2259,7 +4157,7 @@
       if (S.sel.el.tagName.toLowerCase() === 'svg') openIcons('swap');
       else { S.insertPos = 'after'; openSwapComponent(); }
     }
-    else if (act === 'insertMenu') { S.insertPos = defaultPos(); openInsert(); }
+    else if (act === 'insertMenu') startInsert();
     else if (act === 'insPos') { S.insertPos = v; openInsert(); }
     else if (act === 'insTpl') {
       const t = S._tpls[+v];
@@ -2285,6 +4183,16 @@
       if (src) structure({ type: 'replace', jsx: `<img src="${src}" alt="" className="${cls}" />` });
     }
     else if (act === 'imgFind') openImagePicker({ kind: v });
+    else if (act === 'imgReplace') {
+      const r = (a.classList.contains('repBtn') ? a : a.parentNode.querySelector('.repBtn')).getBoundingClientRect(), at = { x: r.right - 236, y: r.bottom + 6 };
+      openMenu([
+        { label: 'Find a photo', icon: 'search', run: () => openImagePicker({ kind: 'photo' }) },
+        { label: 'Draw one', icon: 'pen', sub: 'An illustration made for this spot', run: () => openImagePicker({ kind: 'illustration' }) },
+        '-',
+        { label: 'Upload from this Mac…', icon: 'upload', run: async () => { const src = await upload(await pickFile()); if (src) structure({ type: 'image', src }, { keepSel: true }); } },
+        { label: 'Use a link…', icon: 'link', run: () => setTimeout(() => openMenu([{ input: true, placeholder: 'Paste an image link (https://…)', run: (u) => { if (u && /^https?:\/\//.test(u)) structure({ type: 'image', src: u.trim() }, { keepSel: true }); else if (u) toast('That isn’t a web link. It should start with https://', '', true); } }], at), 0) },
+      ], at);
+    }
     else if (act === 'imgUpload') { const src = await upload(await pickFile()); if (src) structure({ type: 'image', src }, { keepSel: true }); }
     else if (act === 'imgLink') { const u = prompt('Image link (https://…)'); if (u && /^https?:\/\//.test(u)) structure({ type: 'image', src: u.trim() }, { keepSel: true }); }
   });
@@ -2297,12 +4205,12 @@
     const prop = (n) => props.find((p) => p.name === n);
     const sw = prop('strokeWidth'), abs = prop('absoluteStrokeWidth'), wt = prop('weight');
     const row = `<button class="icRow btnRow" data-act="iconPick" title="Swap icon" aria-haspopup="dialog">
-        <span class="icNow">${real ? `<img src="${iconSrc({ name, lib: lib || 'lucide-react' })}" alt="" onerror="this.style.visibility='hidden'">` : ico('spark', 16)}</span>
+        <span class="icNow">${real ? `<img src="${iconSrc({ name, lib: lib || 'lucide-react' })}" alt="" onerror="this.style.visibility='hidden'">` : ico('shapes', 16)}</span>
         <span class="icMeta"><b>${esc(real ? camelWords(name) : 'Custom icon')}</b><span class="note">${esc(real ? libName(lib) || 'Icon' : 'Drawn in the code')}</span></span>
         <span class="icSwap">Swap${ico('chev', 10)}</span></button>`;
     const ctl = [
       sw ? `<div class="kv"><span>Stroke</span><label class="inp"><input type="text" inputmode="decimal" data-propnum="strokeWidth" value="${sw.value ?? ''}" placeholder="2" aria-label="Stroke width"></label></div>` : '',
-      abs ? `<div class="kv"><span title="Keep the lines the same thickness when the icon is resized">Fixed stroke</span><div class="seg"><button data-act="setProp" data-p="absoluteStrokeWidth" data-v="false" class="${abs.value !== true ? 'on' : ''}">Off</button><button data-act="setProp" data-p="absoluteStrokeWidth" data-v="true" class="${abs.value === true ? 'on' : ''}">On</button></div></div>` : '',
+      abs ? `<div class="kv"><span title="Keep the lines the same thickness when the icon is resized">Same line when resized</span><div class="seg"><button data-act="setProp" data-p="absoluteStrokeWidth" data-v="false" class="${abs.value !== true ? 'on' : ''}">Off</button><button data-act="setProp" data-p="absoluteStrokeWidth" data-v="true" class="${abs.value === true ? 'on' : ''}">On</button></div></div>` : '',
       wt ? `<div class="kv"><span>Weight</span><label class="inp"><select data-propsel="weight" aria-label="Icon weight">${wt.value == null ? '<option value="" selected>Default</option>' : ''}${wt.options.map((o) => `<option${o === wt.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${ico('chev', 12)}</label></div>` : '',
     ].join('');
     return sec('Icon', row + ctl);
@@ -2358,7 +4266,7 @@
   window.addEventListener('keydown', structKeys, true);
   function structKeys(e) {
     const t = e.target;
-    if (S.mode !== 'edit' || !S.sel || S.editing || (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName)))) return;
+    if (!picking() || !S.sel || S.editing || (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName)))) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); e.stopImmediatePropagation(); deleteSelected(); }
     else if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyG') { e.preventDefault(); e.stopImmediatePropagation(); groupSelected(); }
     else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === 'KeyG') { e.preventDefault(); e.stopImmediatePropagation(); structure({ type: 'ungroup' }); }
@@ -2373,40 +4281,60 @@
     if (!W) return;
     W.addEventListener('keydown', structKeys, true);
     W.addEventListener('pointerdown', (e) => {
-      if (S.mode !== 'edit' || S.tool === 'annotate' || !S.sel || !S.sel.el.contains(e.target) || S.editing) return;
-      const el = S.sel.el, parent = el.parentElement;
-      if (!parent) return;
-      const sibs = [...parent.children].filter((c) => c.matches('[data-kerf],[data-kerf-use]'));
-      if (sibs.length < 2) return;
-      drag = { el, sibs, x: e.clientX, y: e.clientY, on: false, idx: sibs.indexOf(el) };
+      if (!picking() || thru(e) || !S.sel || !S.sel.el.contains(e.target) || S.editing) return;
+      dragStart(S.sel.el, e.clientX, e.clientY);
     }, true);
-    W.addEventListener('pointermove', (e) => {
-      if (!drag) return;
-      if (!drag.on && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
-      drag.on = true;
-      const flow = cs(drag.el.parentElement);
-      const horiz = /row/.test(flow.flexDirection) && /flex/.test(flow.display) || /grid/.test(flow.display);
-      let best = 0, bd = 1e9, after = false;
-      drag.sibs.forEach((s, k) => {
-        const r = s.getBoundingClientRect(), c = horiz ? r.left + r.width / 2 : r.top + r.height / 2;
-        const d = Math.abs((horiz ? e.clientX : e.clientY) - c);
-        if (d < bd) { bd = d; best = k; after = (horiz ? e.clientX : e.clientY) > c; }
-      });
-      let to = best + (after ? 1 : 0);
-      if (to > drag.idx) to -= 1;
-      drag.to = to;
-      const r = drag.sibs[best].getBoundingClientRect(), line = $('dropLine');
-      line.hidden = false;
-      line.style.cssText = horiz ? `left:${(after ? r.right : r.left) - 1}px;top:${r.top}px;width:3px;height:${r.height}px` : `left:${r.left}px;top:${(after ? r.bottom : r.top) - 1}px;width:${r.width}px;height:3px`;
-    }, true);
-    W.addEventListener('pointerup', () => {
-      if (!drag) return;
-      const d = drag;
-      drag = null;
-      $('dropLine').hidden = true;
-      if (d.on && d.to != null && d.to !== d.idx) structure({ type: 'move', index: d.to });
-    }, true);
+    W.addEventListener('pointermove', (e) => dragMove(e.clientX, e.clientY), true);
+    W.addEventListener('pointerup', dragEnd, true);
   }
+  // Reorder within the parent: pick a spot among the siblings, show a blue line, move the JSX on release.
+  // Coordinates are the app's own (inside the frame).
+  function dragStart(el, x, y, now = false) {
+    const sibs = reorderSibs(el);
+    if (sibs.length < 2 || repeated(el)) return false;
+    drag = { el, sibs, x, y, on: false, idx: sibs.indexOf(el) };
+    if (now) dragMove(x, y, true);
+    return true;
+  }
+  function dragMove(x, y, force) {
+    if (!drag) return;
+    if (!drag.on && !force && Math.hypot(x - drag.x, y - drag.y) < 6) return;
+    if (!drag.on) { drag.on = true; drag.op = drag.el.style.opacity; drag.el.style.opacity = '0.45'; }
+    const flow = cs(drag.el.parentElement);
+    const horiz = /row/.test(flow.flexDirection) && /flex/.test(flow.display) || /grid/.test(flow.display);
+    let best = 0, bd = 1e9, after = false;
+    drag.sibs.forEach((s, k) => {
+      const r = s.getBoundingClientRect(), c = horiz ? r.left + r.width / 2 : r.top + r.height / 2;
+      const d = Math.abs((horiz ? x : y) - c);
+      if (d < bd) { bd = d; best = k; after = (horiz ? x : y) > c; }
+    });
+    let to = best + (after ? 1 : 0);
+    if (to > drag.idx) to -= 1;
+    drag.to = to;
+    const r = drag.sibs[best].getBoundingClientRect(), line = $('dropLine');
+    line.hidden = false;
+    line.style.cssText = horiz ? `left:${(after ? r.right : r.left) - 1}px;top:${r.top}px;width:3px;height:${r.height}px` : `left:${r.left}px;top:${(after ? r.bottom : r.top) - 1}px;width:${r.width}px;height:3px`;
+  }
+  function dragEnd() {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    $('dropLine').hidden = true;
+    if (d.on) d.el.style.opacity = d.op || '';
+    if (d.on && d.to != null && d.to !== d.idx) structure({ type: 'move', index: d.to });
+  }
+  // The grip on the selection tag: drag it to move the element. Editor coordinates → the app's.
+  const toApp = (e) => { const r = frame.getBoundingClientRect(); return [(e.clientX - r.left) / S.z, (e.clientY - r.top) / S.z]; };
+  document.addEventListener('pointerdown', (e) => {
+    const g = e.target.closest?.('[data-drag]');
+    if (!g || !S.sel?.el) return;
+    e.preventDefault(); e.stopPropagation();
+    if (!dragStart(S.sel.el, ...toApp(e))) return;
+    g.setPointerCapture(e.pointerId);
+    const move = (ev) => dragMove(...toApp(ev));
+    const up = () => { g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); dragEnd(); };
+    g.addEventListener('pointermove', move); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+  }, true);
   frame.addEventListener('load', bindDrag);
   if (frame.contentDocument?.readyState === 'complete') setTimeout(bindDrag, 0);
 
@@ -2432,13 +4360,19 @@
     const L = layoutVal(el);
     let h = '';
     const shown = (k) => S.reveal?.el === el && S.reveal[k];
-    const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = (+val('mX') || 0) !== 0 || (+val('mY') || 0) !== 0;
-    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r2">${nf('mX', 'padH', 'Horizontal margin')}${nf('mY', 'padV', 'Vertical margin')}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'sm', 'data-v="margin"'));
-    const sizeSec = () => sec('Size', `<div class="r2">${modeSel('w')}${modeSel('h')}</div><div class="r2">${fixedField('w')}${fixedField('h')}</div>`);
-    const modeSel = (axis) => `<label class="inp"><span class="u">${axis.toUpperCase()}</span><select data-size="${axis}" aria-label="${axis === 'w' ? 'Width' : 'Height'}">${[['auto', 'Auto'], ['hug', 'Hug'], ['fill', 'Fill'], ['fixed', 'Fixed']].map(([v, n]) => `<option value="${v}"${sizeMode(axis) === v ? ' selected' : ''}>${n}</option>`).join('')}</select>${ico('chev', 12)}</label>`;
-    const fixedField = (axis) => sizeMode(axis) === 'fixed' ? nf(axis, `<b class="tg">${axis.toUpperCase()}</b>`, axis === 'w' ? 'Width' : 'Height') : `<label class="inp lock"><input disabled value="${Math.round(axis === 'w' ? el.getBoundingClientRect().width : el.getBoundingClientRect().height)}"></label>`;
+    const hasPad = (+val('padX') || 0) > 0 || (+val('padY') || 0) > 0, hasMargin = ['mX', 'mT', 'mB'].some((k) => (+val(k) || 0) !== 0);
+    // Margin: always Horizontal | Top | Bottom in one row. Left and right are almost always equal; top and bottom
+    // usually aren't (space above a heading, none below), so there is no combined Vertical and no hidden mode.
+    const marginSec = () => sec('Margin', hasMargin || shown('margin') ? `<div class="r3 lab">${lf('Horizontal', nf('mX', 'marH', 'Horizontal margin'))}${lf('Top', nf('mT', 'marT', 'Top margin'))}${lf('Bottom', nf('mB', 'marB', 'Bottom margin'))}</div>` : '', hasMargin || shown('margin') ? '' : hb('reveal', 'plus', 'Add margin', 'margin'));
+    // Like Figma: one field per axis, "W 468" with Fixed / Hug / Fill inside it. Typing a number makes it fixed.
+    const MODES = [['fixed', 'Fixed'], ['hug', 'Hug'], ['fill', 'Fill'], ['auto', 'Auto']];
+    const sizeField = (axis) => {
+      const mode = sizeMode(axis), r = el.getBoundingClientRect(), px = Math.round(axis === 'w' ? r.width : r.height), nm = axis === 'w' ? 'Width' : 'Height';
+      return `<div class="inp szf${info()?.sized?.includes(axis) ? ' sized' : ''}" title="${nm}"><span class="ic" data-scrub="${axis}"><b class="tg">${axis.toUpperCase()}</b></span><input type="text" inputmode="decimal" data-prop="${axis}" value="${px}" aria-label="${nm}"><label class="szm" title="${nm}: ${MODES.find(([v]) => v === mode)[1]}"><span>${mode === 'fixed' ? '' : MODES.find(([v]) => v === mode)[1]}</span>${ico('chev', 10)}<select data-size="${axis}" aria-label="${nm} sizing">${MODES.map(([v, n]) => `<option value="${v}"${mode === v ? ' selected' : ''}>${n === 'Auto' ? 'Auto (as coded)' : n === 'Hug' ? 'Hug contents' : n === 'Fill' ? 'Fill container' : 'Fixed'}</option>`).join('')}</select></label></div>`;
+    };
+    const sizeSec = () => sec('Size', `<div class="r2">${sizeField('w')}${sizeField('h')}</div>`);
     if (!isContainer(el)) {
-      if (!isMedia(el)) h += sec('Padding', hasPad || shown('pad') ? `<div class="r2">${nf('padX', 'padH', 'Horizontal padding')}${nf('padY', 'padV', 'Vertical padding')}</div>` : '', hasPad || shown('pad') ? '' : hb('reveal', 'plus', 'Add padding', 'sm', 'data-v="pad"'));
+      if (!isMedia(el)) h += sec('Padding', hasPad || shown('pad') ? `<div class="r2">${lf('Horizontal', nf('padX', 'padH', 'Horizontal padding'))}${lf('Vertical', nf('padY', 'padV', 'Vertical padding'))}</div>` : '', hasPad || shown('pad') ? '' : hb('reveal', 'plus', 'Add padding', 'pad'));
       return h + sizeSec() + marginSec();
     }
     // Alignment matrix like Figma's: 3×3, mapped to justify/items by direction.
@@ -2449,10 +4383,19 @@
       return `<button class="mx${on ? ' on' : ''}" data-act="align9" data-j="${main}" data-i="${cross}" title="Align ${cross}, ${main}" aria-label="Align ${cross} ${main}"><i></i></button>`;
     };
     const auto = L.dir !== 'none';
+    // A CSS grid isn't auto layout: switching it to a row or column would quietly break it on every screen, so a grid
+    // shows what it is (columns, gap, padding) and its columns are changed by asking Tovi.
+    const gc = cs(el);
+    if (/grid/.test(gc.display)) {
+      h += sec('Layout', `<div class="r2">${lf('Columns', nf('cols', 'grid', 'Grid columns'))}${lf('Gap', nf('gap', 'gap', 'Gap'))}</div>
+        <div class="r2">${lf('Horizontal', nf('padX', 'padH', 'Horizontal padding'))}${lf('Vertical', nf('padY', 'padV', 'Vertical padding'))}</div>`);
+      h += sizeSec() + marginSec();
+      return h;
+    }
     h += sec('Auto layout', `<div class="r2"><div class="ibs">${[['none', 'Off'], ['col', '↓'], ['row', '→']].map(([v, n]) => `<button class="ib${L.dir === v ? ' on' : ''}" data-act="set" data-p="layout" data-v="${v}" title="${v === 'none' ? 'No auto layout' : v === 'col' ? 'Vertical' : 'Horizontal'}">${n}</button>`).join('')}</div>${auto ? `<div class="ibs txt"><button class="ib${L.wrap ? ' on' : ''}" data-act="set" data-p="wrap" data-v="${L.wrap ? 'nowrap' : 'wrap'}" title="Wrap onto new lines">Wrap</button></div>` : '<span></span>'}</div>
       ${auto ? `<div class="r2c" style="grid-template-columns:76px minmax(0,1fr)"><div class="m9">${[0, 1, 2].map((r) => [0, 1, 2].map((c) => cell(r, c)).join('')).join('')}</div>
-        <div style="display:flex;flex-direction:column;gap:8px">${nf('gap', 'gap', 'Gap')}<div class="ibs txt"><button class="ib${L.justify === 'between' ? ' on' : ''}" data-act="set" data-p="justify" data-v="${L.justify === 'between' ? 'start' : 'between'}" title="Space items out evenly">Space between</button></div></div></div>` : ''}
-      <div class="r2">${nf('padX', 'padH', 'Horizontal padding')}${nf('padY', 'padV', 'Vertical padding')}</div>`);
+        <div style="display:flex;flex-direction:column;gap:8px">${lf('Gap', nf('gap', 'gap', 'Gap'))}<div class="ibs txt"><button class="ib${L.justify === 'between' ? ' on' : ''}" data-act="set" data-p="justify" data-v="${L.justify === 'between' ? 'start' : 'between'}" title="Space items out evenly">Space between</button></div></div></div>` : ''}
+      <div class="r2">${lf('Horizontal', nf('padX', 'padH', 'Horizontal padding'))}${lf('Vertical', nf('padY', 'padV', 'Vertical padding'))}</div>`);
     h += sizeSec() + marginSec();
     return h;
   }
@@ -2555,7 +4498,7 @@
       if (B.left >= A.right) line(A.right, yMid, B.left, yMid); else if (B.right <= A.left) line(B.right, yMid, A.left, yMid);
       if (B.top >= A.bottom) line(xMid, A.bottom, xMid, B.top); else if (B.bottom <= A.top) line(xMid, B.bottom, xMid, A.top);
     }
-    g.innerHTML = lines.map((l) => `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="#F06A5F" stroke-width="1"/><rect x="${(l.x1 + l.x2) / 2 - 14}" y="${(l.y1 + l.y2) / 2 - 9}" width="28" height="16" rx="3" fill="#F06A5F"/><text x="${(l.x1 + l.x2) / 2}" y="${(l.y1 + l.y2) / 2 + 3}" fill="#fff" font-size="10" font-weight="600" text-anchor="middle" font-family="Geist,system-ui,sans-serif">${l.d}</text>`).join('');
+    g.innerHTML = lines.map((l) => `<line x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="#F06A5F" stroke-width="1"/><rect x="${(l.x1 + l.x2) / 2 - 14}" y="${(l.y1 + l.y2) / 2 - 9}" width="28" height="16" rx="3" fill="#F06A5F"/><text x="${(l.x1 + l.x2) / 2}" y="${(l.y1 + l.y2) / 2 + 3}" fill="#fff" font-size="10" font-weight="600" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif">${l.d}</text>`).join('');
   }
   const altKey = (e) => { if (e.key === 'Alt') { S.alt = e.type === 'keydown'; } };
   ['keydown', 'keyup'].forEach((t) => window.addEventListener(t, altKey, true));
@@ -2582,9 +4525,64 @@
 
   /* ---------- start ---------- */
   api('/theme').then((t) => { S.theme = t; renderPanel(); }).catch(() => {});
+  // Opened from the start page with "Check my product" on: review the whole product once the app has loaded.
+  if (new URLSearchParams(location.search).get('diagnose') === '1') {
+    history.replaceState(null, '', location.pathname);
+    const go = () => setTimeout(() => { if (!S.diagnosing) { toast('Tovi is checking your product for design issues…'); runDiagnoseProduct(); } }, 2500);
+    if (frame.contentDocument?.readyState === 'complete' && frame.contentWindow?.location.href !== 'about:blank') go(); else frame.addEventListener('load', go, { once: true });
+  }
   api('/project').then((p) => { S.project = p; renderTop(); }).catch(() => {});
   api('/changes').then((c) => { S.count = c.length; renderBar(); }).catch(() => {});
   api('/chat').then((c) => { S.chat = (c.messages || []).map((m) => (m.role === 'kerf' && m.status === 'pending' ? { ...m, status: 'discarded' } : m)); S.notes = c.notes || []; renderAI(); }).catch(() => {});
+
+  /* ---------- fluid motion: sliding selection pills and gliding hover (after Fluid Functionalism) ---------- */
+  // Segmented controls get one raised pill that slides to the chosen option. Panels re-render often, so each
+  // control remembers where its pill was (by its option labels) and the new pill starts there, then slides.
+  const PILLS = '.seg, .bps, .ibs, .cpTabs, .modes, .tv-seg2';
+  const pillAt = new Map();
+  const pillKey = (c) => c.className + '|' + [...c.children].filter((x) => !x.classList.contains('pill')).map((x) => x.textContent.trim() || x.getAttribute('aria-label') || x.dataset.v || '').join('/');
+  function syncPill(c) {
+    const on = [...c.children].find((x) => x.classList.contains('on') && !x.classList.contains('pill'));
+    let pill = c.querySelector(':scope > .pill');
+    if (!on) { pill?.remove(); return; }
+    c.classList.add('has-pill');
+    if (c.classList.contains('modes')) c.classList.add('iv');
+    const to = { left: on.offsetLeft, top: on.offsetTop, width: on.offsetWidth, height: on.offsetHeight };
+    if (!to.width) return;
+    const key = pillKey(c), from = pillAt.get(key);
+    if (!pill) {
+      pill = document.createElement('span'); pill.className = 'pill'; c.prepend(pill);
+      Object.assign(pill.style, Object.fromEntries(Object.entries(from || to).map(([k, v]) => [k, v + 'px'])));
+      pill.style.borderRadius = getComputedStyle(on).borderRadius;
+      if (from) requestAnimationFrame(() => Object.assign(pill.style, Object.fromEntries(Object.entries(to).map(([k, v]) => [k, v + 'px']))));
+    } else Object.assign(pill.style, Object.fromEntries(Object.entries(to).map(([k, v]) => [k, v + 'px'])));
+    pillAt.set(key, to);
+  }
+  let pillQueued = false;
+  const pillsSoon = () => { if (pillQueued) return; pillQueued = true; requestAnimationFrame(() => { pillQueued = false; document.querySelectorAll(PILLS).forEach(syncPill); }); };
+  new MutationObserver(pillsSoon).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  addEventListener('resize', pillsSoon);
+  pillsSoon();
+
+  // Lists get one soft highlight that glides to the row under the cursor.
+  const ROWS = '.layer, .menu .mi:not([disabled]), .fontRow';
+  document.addEventListener('pointerover', (e) => {
+    const row = e.target.closest?.(ROWS);
+    if (!row) return;
+    const list = row.parentElement;
+    if (!list) return;
+    // Measure rows against the list itself, without moving lists that already float (menus are fixed).
+    if (!list.classList.contains('glides')) { list.classList.add('glides'); if (getComputedStyle(list).position === 'static') list.style.position = 'relative'; }
+    let g = list.querySelector(':scope > .glide');
+    const place = () => { g.style.transform = `translate(${row.offsetLeft}px, ${row.offsetTop}px)`; g.style.width = row.offsetWidth + 'px'; g.style.height = row.offsetHeight + 'px'; };
+    if (!g) { g = document.createElement('span'); g.className = 'glide'; list.prepend(g); g.style.transition = 'none'; place(); g.offsetWidth; g.style.transition = ''; }
+    else place();
+    g.classList.add('on');
+  });
+  document.addEventListener('pointerout', (e) => {
+    const list = e.target.closest?.('.glides');
+    if (list && !list.contains(e.relatedTarget)) list.querySelector(':scope > .glide')?.classList.remove('on');
+  });
   refreshVersions();
   renderAll();
   if (frame.contentDocument?.readyState === 'complete') bindApp();

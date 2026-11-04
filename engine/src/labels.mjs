@@ -3,10 +3,10 @@ export const PROP_NAMES = {
   bg: 'Fill', color: 'Text color', borderC: 'Stroke color', fontSize: 'Size', fontWeight: 'Weight', lineHeight: 'Line height',
   letterSpacing: 'Letter spacing', align: 'Text align', radius: 'Corner radius', rTL: 'Top-left corner', rTR: 'Top-right corner',
   rBR: 'Bottom-right corner', rBL: 'Bottom-left corner', padX: 'Horizontal padding', padY: 'Vertical padding', mX: 'Horizontal margin',
-  mY: 'Vertical margin', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', fit: 'Image fit', gradient: 'Gradient',
+  mY: 'Vertical margin', mT: 'Top margin', mB: 'Bottom margin', fontFamily: 'Font', gap: 'Gap', borderW: 'Stroke', opacity: 'Opacity', shadow: 'Shadow', fit: 'Image fit', gradient: 'Gradient',
   clipText: 'Gradient text', w: 'Width', h: 'Height', layout: 'Layout', alignItems: 'Align', justify: 'Distribute', wrap: 'Wrap',
 };
-const PX = new Set(['fontSize', 'lineHeight', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'mX', 'mY', 'gap', 'borderW', 'w', 'h']);
+const PX = new Set(['fontSize', 'lineHeight', 'radius', 'rTL', 'rTR', 'rBR', 'rBL', 'padX', 'padY', 'mX', 'mY', 'mT', 'mB', 'gap', 'borderW', 'w', 'h']);
 const PCT = new Set(['opacity', 'letterSpacing']);
 const DIRS = { r: 'right', l: 'left', b: 'down', t: 'up', br: 'down-right', bl: 'down-left', tr: 'up-right', tl: 'up-left' };
 const WEIGHTS = { 100: 'Thin', 200: 'Extra light', 300: 'Light', 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold', 800: 'Extra bold', 900: 'Black' };
@@ -39,8 +39,11 @@ export function designName(tag, text, opts) {
   return `${kind} “${t.length > 24 ? t.slice(0, 23) + '…' : t}”`;
 }
 
-export function changeLabel({ prop, from, to }) {
-  const name = PROP_NAMES[prop] || prop;
+// strokeWidth → "Stroke width", variant → "Variant"
+export const humanize = (n) => String(n).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().replace(/^./, (c) => c.toUpperCase());
+
+export function changeLabel({ prop, from, to }, icon) {
+  const name = icon && prop === 'color' ? 'Icon color' : PROP_NAMES[prop] || prop;
   const a = fmt(prop, from), b = fmt(prop, to);
   if (b == null) return `${name} removed`;
   if (a == null || a === b) return `${name} ${b}`;
@@ -50,9 +53,9 @@ export function changeLabel({ prop, from, to }) {
 export function summaryLabels(summary) {
   const out = [];
   if (summary.action) out.push(summary.action);
-  (summary.changes || []).forEach((c) => out.push(changeLabel(c)));
+  (summary.changes || []).forEach((c) => out.push(changeLabel(c, summary.icon)));
   if (summary.text) out.push(`Text “${summary.text.to}”`);
-  (summary.props || []).forEach((p) => out.push(`${p.name} ${p.from ?? 'default'} → ${p.to}`));
+  (summary.props || []).forEach((p) => out.push(`${humanize(p.name)} ${p.from ?? 'default'} → ${p.to}`));
   if (summary.size && out.length) out[out.length - 1] += ` (${summary.size.toLowerCase()})`;
   const where = (summary.where || []).filter((w) => w !== 'this element');
   if (where.length && out.length) out[out.length - 1] += ` · in ${where.join(', ')}`;

@@ -32,6 +32,14 @@ function importSource(code, id) {
   return src;
 }
 
+// Is this element an icon from a known icon library (or a plain <svg>)?
+export function isIconEl(code, el) {
+  const name = el.openingElement.name;
+  if (name.type === 'JSXIdentifier' && name.name === 'svg') return true;
+  const info = propsInfo(code, el);
+  return !!(info.component && ICON_LIBS[info.lib]);
+}
+
 export function propsInfo(code, el) {
   const open = el.openingElement, name = open.name;
   const id = name.type === 'JSXIdentifier' ? name.name : name.type === 'JSXMemberExpression' ? name.object.name : null;
@@ -53,8 +61,12 @@ export function propsInfo(code, el) {
 }
 
 // Check a requested value against what the prop accepts; returns the clean value or throws.
-export function checkProp(info, name, value) {
+export function checkProp(info, name, value, options) {
   const p = info.props.find((x) => x.name === name);
+  if (!p && Array.isArray(options) && !DENY.test(name)) {
+    if (!options.map(String).includes(String(value))) throw new Error(`${name} must be one of: ${options.join(', ')}.`);
+    return String(value);
+  }
   if (!p) throw new Error(`${name} isn’t a property Tovi can change on this component.`);
   if (!p.editable) throw new Error(`${name} is set by code here, so Tovi won’t change it.`);
   if (p.kind === 'option') {
@@ -82,13 +94,13 @@ export function applyProps(s, code, el, changes) {
   if (!info.component) throw new Error('Only components have properties.');
   const open = el.openingElement;
   const done = [];
-  for (const { name, value } of changes) {
-    const v = checkProp(info, name, value);
+  for (const { name, value, options, def } of changes) {
+    const v = checkProp(info, name, value, options);
     const attr = open.attributes.find((a) => a.type === 'JSXAttribute' && a.name.name === name);
     if (!attr) s.appendLeft(open.name.end, ` ${name}=${format(v)}`);
     else if (attr.value == null) s.appendLeft(attr.name.end, `=${format(v)}`);
     else s.overwrite(attr.value.start, attr.value.end, format(v));
-    done.push({ name, from: info.props.find((p) => p.name === name)?.value ?? null, to: v });
+    done.push({ name, from: info.props.find((p) => p.name === name)?.value ?? (def != null ? String(def) : null), to: v });
   }
   return done;
 }

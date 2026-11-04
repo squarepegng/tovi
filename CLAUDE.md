@@ -80,22 +80,25 @@ One dark theme for now (light theme and core components still to do).
 
 | Token | Value |
 |---|---|
-| canvas | #1B1B1E |
-| panel | #232327 |
-| raised | #2D2D32 |
-| line | #3A3A40 |
-| ink | #EDEDF0 |
-| ink-2 | #B0B0BA |
-| ink-3 | #8B8B95 |
-| select (blue) | #2B66D9 |
-| intent (amber) | #E9B547 |
+| canvas | #1C1C1C |
+| panel | #242424 |
+| raised | #2F2F2F |
+| line | #3C3C3C |
+| ink | #EEEEEE |
+| ink-2 | #B3B3B3 |
+| ink-3 | #8E8E8E |
+| brand / action (`--select`) | ivory #F2F1EE in dark (text on it #121212), near-black #1C1C1C in light |
+| selection (blue, `--sel`) | #2B66D9 |
+| Tovi pink (brand, `--intent`) | #FCBDDD (light theme #C2508A); logo two-tone #E9A3C6 + #FCBDDD |
 | danger | #F06A5F |
 
-**Core colour rule: blue means "what you're touching"** (selection, focus, the Create PR button). **Amber means "Tovi's interpretation"** (guides, rule prompts, change markers, AI proposals).
+All greys are neutral (equal red, green and blue). The old greys had a slight blue cast; don't reintroduce tinted greys.
 
-Type: Geist for the interface (12px is the workhorse size), Geist Mono for code paths. Spacing: 4 / 8 / 12 / 16. Radii: 4 / 6 / 10.
+**Core colour rule (changed November 2026): Tovi pink is the brand and the primary colour** (the logo, Tovi's cursor and name tag, guides, rule prompts, change markers, AI proposals). Purple is gone (it read too close to Wonder). **Hand off and the active tool in the bottom toolbar are pink**, like Figma's blue Share button and select tool: pale pink with near-black text in dark, deep pink #C2508A-range with white text in light (`--pkFill`). Other chosen states (small toggles) stay neutral, so pink stays special. **Blue means "what you're touching" on the canvas** (selection outlines, handles, drop line, the Layers highlight), like Figma. In dark theme the top bar and side panels sit darker than the canvas (#121212), Framer-style. Icons are Lucide (1.25px lines at any size) plus a few of Tovi's own field icons. Light and dark themes both exist; dark is the default.
 
-Polish target: Framer-level finish with Figma's structure. All floating controls live in **one minimal bottom toolbar** of icons with hover tooltips (name + shortcut). The Preview/Edit mode switch is in that toolbar; sub-tools open in flyouts; the pending change count is an amber dot on the history icon.
+Type: the Mac system font (SF Pro, like Paper) for the interface, set once as `--ui` in editor.css with Geist as the fallback (12px is the workhorse size); Geist Mono for code paths. Panel fields and toggles follow Paper's exact control style (24px, 6px corners, flat 5% track, soft raised chosen item). Spacing: 4 / 8 / 12 / 16. Radii: 4 / 6 / 10.
+
+Polish target: Framer-level finish with Figma's structure. No top bar (like Paper): the left panel's header holds the Tovi menu, project and page; the right panel's header holds your avatar (first, like Figma; its menu switches GitHub account), history, zoom and Hand off; screen sizes and Present float at the top centre of the canvas; a hidden panel's header becomes a small floating pill. All floating controls live in **one minimal bottom toolbar** of icons with hover tooltips (name + shortcut). The Preview/Edit mode switch is in that toolbar; sub-tools open in flyouts; the pending change count is an amber dot on the history icon.
 
 ## The prototype (`index.html`)
 
