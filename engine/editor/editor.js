@@ -3471,18 +3471,22 @@
 
   /* annotations */
   function shapeSVG(n, i, draft, hl) {
-    const pink = n.by === 'tovi', col = pink ? '#D9468F' : '#2B66D9';
-    const st = `stroke="${col}" stroke-width="${2 / (S.z || 1)}" stroke-dasharray="${6 / (S.z || 1)} ${4 / (S.z || 1)}" fill="${pink ? 'rgba(217,70,143,.07)' : 'rgba(43,102,217,.06)'}"`;
+    // Notes for Tovi are pink (Tovi's colour), never blue: blue means "what you're touching".
+    const tovi = n.by === 'tovi', z = S.z || 1;
+    const st = `stroke="var(--noteLine)" stroke-width="${1.5 / z}" stroke-dasharray="${5 / z} ${4 / z}" fill="var(--noteArea)"`;
     let s = '';
-    // A written note shows only its number; its area comes back while its task is hovered.
+    // A written note shows only its marker; its area comes back while its task is hovered.
     const o = n;
     if (i != null && !hl) n = { ...n, shape: n.shape === 'pin' ? 'pin' : 'none' };
     if (n.shape === 'box') s = `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6" ${st}/>`;
     else if (n.shape === 'circle') s = `<ellipse cx="${n.x + n.w / 2}" cy="${n.y + n.h / 2}" rx="${n.w / 2}" ry="${n.h / 2}" ${st}/>`;
-    else if (n.shape === 'arrow') { const a = Math.atan2(n.y2 - n.y, n.x2 - n.x), L = 12; s = `<path d="M${n.x} ${n.y}L${n.x2} ${n.y2}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a - 0.5)} ${n.y2 - L * Math.sin(a - 0.5)}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a + 0.5)} ${n.y2 - L * Math.sin(a + 0.5)}" stroke="#2B66D9" stroke-width="2.5" fill="none" stroke-linecap="round"/>`; }
+    else if (n.shape === 'arrow') { const a = Math.atan2(n.y2 - n.y, n.x2 - n.x), L = 12; s = `<path d="M${n.x} ${n.y}L${n.x2} ${n.y2}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a - 0.5)} ${n.y2 - L * Math.sin(a - 0.5)}M${n.x2} ${n.y2}L${n.x2 - L * Math.cos(a + 0.5)} ${n.y2 - L * Math.sin(a + 0.5)}" stroke="var(--noteLine)" stroke-width="${1.75 / z}" stroke-linecap="round" fill="none"/>`; }
     const [bx, by] = o.shape === 'pin' || o.shape === 'arrow' ? [o.x, o.y] : [o.x + o.w, o.y];
-    if (i != null) s += `<g transform="translate(${bx} ${by}) scale(${1 / (S.z || 1)})" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">${hl ? `<circle r="16" fill="${pink ? 'rgba(217,70,143,.28)' : 'rgba(43,102,217,.28)'}"/>` : ''}<circle r="11" fill="${col}" stroke="#fff" stroke-width="2"/><text y="4" fill="#fff" font-size="11" font-weight="600" font-family="-apple-system,BlinkMacSystemFont,system-ui,Geist,sans-serif" text-anchor="middle">${i + 1}</text></g>`;
-    else if (n.shape === 'pin') s += `<circle cx="${n.x}" cy="${n.y}" r="6" fill="#2B66D9"/>`;
+    // The marker, like a Figma comment: a bubble whose sharp corner points at the exact spot, the number inside.
+    // Quiet by default; Tovi's own notes are filled pink; a hovered note gets a pink edge and grows a touch.
+    const BUB = 'M0 0V-13A11 11 0 0 1 11-24H13A11 11 0 0 1 24-13V-11A11 11 0 0 1 13 0Z';
+    if (i != null) s += `<g class="noteBub${tovi ? ' tovi' : ''}${hl ? ' hl' : ''}" transform="translate(${bx} ${by}) scale(${(hl ? 1.12 : 1) / z})"><path d="${BUB}"/><text x="12" y="-8" text-anchor="middle">${i + 1}</text></g>`;
+    else if (n.shape === 'pin') s += `<g class="noteBub draft" transform="translate(${n.x} ${n.y}) scale(${1 / z})"><path d="${BUB}"/></g>`;
     return s;
   }
   const drawMarks = () => { $('marksG').innerHTML = S.notes.map((n, i) => shapeSVG(n, i, false, S.hlNote === i + 1)).join('') + (S.noteDraft ? shapeSVG(S.noteDraft, null, true) : ''); };
