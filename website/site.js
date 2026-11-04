@@ -136,27 +136,29 @@
     }, () => { st.r = 24; st.p = 12; st.f = 1; draw(); cur.style.opacity = 0; });
   }
 
-  /* AI improvements: ask, Tovi thinks, answers, its cursor changes the buttons, Applied */
+  /* AI improvements: ask Tovi, it answers, its cursor reworks the destination card into a premium one */
   {
-    const root = $('xAi'), th = $('xAiTh'), inp = $('xAiIn'), send = $('xAiSend'), comp = $('xAiComp'), btns = $('xAiB'), tov = $('xAiTv');
+    const root = $('xAi'), th = $('xAiTh'), inp = $('xAiIn'), send = $('xAiSend'), comp = $('xAiComp'), card = $('xAiD'), sel = $('xAiSel'), tov = $('xAiTv');
     const add = (cls, html) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; th.appendChild(d); return d; };
-    const reset = () => { th.innerHTML = '<div class="xCtx">Title “Nights under the…”</div><div class="xU">Make the hero feel more editorial</div><div class="xMeta"><img src="img/tovi-avatar.png" alt="">Looked at 3 elements · Thought for 6s</div><div class="xReply">I set the title larger with tighter tracking, so it reads like a magazine cover.</div><div class="xDone"><span>✓ Applied</span><u>Undo</u></div>'; inp.className = 'xCompIn'; inp.textContent = 'Describe a change, or follow up…'; send.classList.remove('on'); comp.classList.remove('busy'); btns.classList.remove('soft', 'picked'); tov.style.opacity = 0; };
-    const ask = 'Make the buttons feel softer';
-    const reply = 'I softened both hero buttons: fully rounded corners, a slightly lighter mint and a quieter outline, so they sit more gently on the photo.';
+    const box = () => { const r = card.getBoundingClientRect(), o = root.getBoundingClientRect(); return { x: r.left - o.left, y: r.top - o.top, w: r.width, h: r.height }; };
+    const frame = (pink) => { const b = box(); Object.assign(sel.style, { left: b.x - 4 + 'px', top: b.y - 4 + 'px', width: b.w + 8 + 'px', height: b.h + 8 + 'px' }); sel.classList.add('on'); sel.classList.toggle('pk', !!pink); sel.firstChild.textContent = pink ? 'Tovi · editing' : 'Card'; };
+    const reset = () => { th.innerHTML = '<div class="xMeta"><img src="img/tovi-avatar.png" alt="">Earlier · Title larger, tighter tracking</div><div class="xDone"><span>✓ Applied</span><u>Undo</u></div>'; inp.className = 'xCompIn'; inp.textContent = 'Describe a change…'; send.classList.remove('on'); comp.classList.remove('busy'); card.classList.remove('prem'); tov.style.opacity = 0; sel.classList.remove('on'); };
+    const ask = 'Make this card feel more premium';
+    const reply = 'I let the photo lead: taller, with the name set in your display serif on it, softer corners and a quieter pill button.';
     scene(root, async (A) => {
-      reset(); btns.classList.add('picked'); await A.wait(700);
-      inp.className = 'xCompIn typing'; await typeInto(A, inp, ask, 42); send.classList.add('on'); await A.wait(500);
-      inp.className = 'xCompIn'; inp.textContent = 'Describe a change, or follow up…'; send.classList.remove('on');
-      add('xCtx', 'Button “Find your stay”'); add('xU', ask); comp.classList.add('busy');
-      const meta = add('xMeta', '<img src="img/tovi-avatar.png" alt="">Looking at 5 elements…'); await A.wait(1400);
-      meta.innerHTML = '<img src="img/tovi-avatar.png" alt="">Looked at 5 elements · Thought for 6s';
-      const r = add('xReply', ''); for (let i = 0; i <= reply.length; i += 3) { r.textContent = reply.slice(0, i); await A.wait(28); }
-      const bb = A.box(btns); tov.style.left = bb.x + bb.w * 0.2 + 'px'; tov.style.top = bb.y + bb.h * 0.6 + 'px'; tov.style.opacity = 1; await A.wait(800);
-      btns.classList.add('soft'); await A.wait(700);
-      add('xAppl', '<div class="h">Applied 2 of 2</div><div class="r"><i>✓</i><div>Button “Find your stay”<small>Corners 8 → full · Opacity 90%</small></div></div><div class="r"><i>✓</i><div>Button “Watch the film”<small>Corners 8 → full · Fainter outline</small></div></div>');
-      add('xDone', '<span>✓ Applied</span><u>Undo</u>'); comp.classList.remove('busy'); tov.style.opacity = 0;
-      await A.wait(3200);
-    }, () => { btns.classList.add('soft'); add('xU', ask); add('xReply', reply); add('xDone', '<span>✓ Applied</span><u>Undo</u>'); });
+      reset(); await A.wait(300); frame(false); await A.wait(800);
+      inp.className = 'xCompIn typing'; await typeInto(A, inp, ask, 40); send.classList.add('on'); await A.wait(450);
+      inp.className = 'xCompIn'; inp.textContent = 'Describe a change…'; send.classList.remove('on');
+      add('xCtx', 'Card “The Fireside Suite”'); add('xU', ask); comp.classList.add('busy');
+      const meta = add('xMeta', '<img src="img/tovi-avatar.png" alt="">Looking at the card…'); await A.wait(1300);
+      meta.innerHTML = '<img src="img/tovi-avatar.png" alt="">Looked at 6 elements · Thought for 5s';
+      const r = add('xReply', ''); for (let i = 0; i <= reply.length; i += 3) { r.textContent = reply.slice(0, i); await A.wait(26); }
+      const b = box(); tov.style.left = b.x + b.w * 0.55 + 'px'; tov.style.top = b.y + b.h * 0.35 + 'px'; tov.style.opacity = 1; frame(true); await A.wait(800);
+      card.classList.add('prem'); for (let t = 0; t < 7; t++) { await A.wait(100); frame(true); }
+      add('xAppl', '<div class="h">Applied 3 of 3</div><div class="r"><i>✓</i><div>Card “The Fireside Suite”<small>Corners 6 → 20 · Image 130 → 200</small></div></div><div class="r"><i>✓</i><div>Title<small>Newsreader 24 · on the photo</small></div></div><div class="r"><i>✓</i><div>Button “Book”<small>Pill · light fill</small></div></div>');
+      add('xDone', '<span>✓ Applied</span><u>Undo</u>'); comp.classList.remove('busy'); tov.style.opacity = 0; frame(false);
+      await A.wait(3400);
+    }, () => { card.classList.add('prem'); add('xU', ask); add('xReply', reply); add('xDone', '<span>✓ Applied</span><u>Undo</u>'); });
   }
 
   /* Notes: click on the page, type a note, again; Apply; Tovi fixes them */
@@ -198,33 +200,29 @@
     }, () => { tags.forEach((t) => t.classList.add('on')); rows.forEach((r) => r.classList.add('on')); });
   }
 
-  /* Version history: changes arrive, name the version, save it, it joins the timeline */
+  /* Code changes: each edit morphs on screen (before → after), then its diff lines land */
   {
-    const root = $('xHi'), cur = $('xHiCur'), n = $('xHiN'), ch = $('xHiCh'), name = $('xHiName'), save = $('xHiSave'), nw = $('xHiNew');
-    const CH = [['Title “Nights under the…”', 'Size 72 → 96'], ['Button “Find your stay”', 'Corners 8 → full'], ['Image “Geirangerfjord”', 'Corner radius 6 → 24']];
-    const reset = () => { ch.innerHTML = ''; n.textContent = '0 changes not in a version yet'; name.className = 'xName'; name.textContent = 'Name it (optional)'; nw.innerHTML = ''; };
-    scene(root, async (A) => {
-      reset(); A.to(cur, [40, 320]); await A.wait(600);
-      for (let i = 0; i < CH.length; i++) { const d = document.createElement('div'); d.className = 'ch'; d.innerHTML = `${CH[i][0]} <span>· ${CH[i][1]}</span>`; ch.appendChild(d); n.textContent = `${i + 1} change${i ? 's' : ''} not in a version yet`; await A.wait(800); }
-      await A.move(cur, name, 0.3, 0.5, 800); await press(A, cur); name.className = 'xName typing';
-      await typeInto(A, name, 'Editorial hero', 45); await A.wait(300);
-      await A.move(cur, save, 0.5, 0.5, 600); await press(A, cur);
-      nw.innerHTML = '<div class="xVer new"><b>Editorial hero</b><small>3 changes · Tobi · just now</small></div>';
-      ch.innerHTML = ''; n.textContent = '0 changes not in a version yet'; name.className = 'xName'; name.textContent = 'Name it (optional)';
-      await A.wait(2800);
-    }, () => { nw.innerHTML = '<div class="xVer new"><b>Editorial hero</b><small>3 changes · Tobi · just now</small></div>'; cur.style.opacity = 0; });
-  }
-
-  /* Changes this session: each edit lands as its file and its exact classes */
-  {
-    const list = $('xCoL');
-    const R = [['Size 72 → 96', 'src/sections/Hero.jsx', 'text-7xl', 'text-8xl'], ['Corner radius 6 → 24', 'src/sections/Destinations.jsx', 'rounded-md', 'rounded-3xl'], ['Corners 8 → full', 'src/components/Button.jsx', 'rounded-lg', 'rounded-full'], ['Letter spacing 0 → −2%', 'src/sections/Hero.jsx', '—', 'tracking-[-0.02em]']];
-    const row = (r) => `<div class="xRow"><b>${r[0]}</b><code>${r[1]} · <del>${r[2]}</del> → <ins>${r[3]}</ins></code></div>`;
+    const tabs = [...$('xCoTabs').children], els = [...document.querySelectorAll('#xCoEl .xE')], ba = $('xCoBA'), F = $('xCoF'), N = $('xCoN'), L = $('xCoL');
+    const esc = (x) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const mk = (x) => esc(x).replace(/\[\[(.+?)\]\]/g, '<mark>$1</mark>');
+    const C = [
+      { f: 'src/sections/Hero.jsx', n: '+1 −1', l: [['c', '<div className="relative z-10 px-10 pb-16">'], ['c', '  <p className="text-xs uppercase text-primary">'], ['m', '-  <h1 className="font-display [[text-7xl]] text-content">'], ['p', '+  <h1 className="font-display [[text-8xl tracking-tight]] text-content">'], ['c', '     Nights under the northern sky'], ['c', '   </h1>']] },
+      { f: 'src/components/Button.jsx', n: '+1 −1', l: [['c', 'const base ='], ['m', '-  "inline-flex items-center gap-2 [[rounded-lg px-6]] py-3"'], ['p', '+  "inline-flex items-center gap-2 [[rounded-full px-7]] py-3"'], ['c', 'const variants = {'], ['c', '  solid: "bg-primary text-primary-fg",'], ['c', '};']] },
+      { f: 'src/components/PlaceCard.jsx', n: '+1 −1', l: [['c', 'export function PlaceCard({ place }) {'], ['c', '  return ('], ['m', '-    <article className="[[rounded-md]] bg-surface">'], ['p', '+    <article className="[[rounded-3xl]] bg-surface">'], ['c', '      <img src={place.image} alt={place.name} />'], ['c', '      <h3 className="p-3 font-medium">{place.name}</h3>']] },
+    ];
+    const show = (i, after) => {
+      tabs.forEach((t, k) => t.classList.toggle('on', k === i));
+      els.forEach((e, k) => { e.classList.toggle('on', k === i); e.classList.toggle('after', k === i && after); });
+      ba.textContent = after ? 'After' : 'Before'; ba.classList.toggle('after', after);
+      F.textContent = C[i].f; N.textContent = C[i].n;
+      L.innerHTML = C[i].l.map(([k, x]) => `<div class="${k}${!after && k !== 'c' ? ' hide' : ''}">${mk(x)}</div>`).join('');
+    };
+    let i = 0; show(0, false);
     scene($('xCo'), async (A) => {
-      list.innerHTML = R.slice(0, 2).reverse().map(row).join(''); await A.wait(900);
-      for (const r of R.slice(2)) { list.insertAdjacentHTML('afterbegin', row(r)); await A.wait(1100); }
-      await A.wait(2400);
-    }, () => { list.innerHTML = R.slice().reverse().map(row).join(''); });
+      show(i, false); await A.wait(1300);
+      show(i, true); await A.wait(2600);
+      i = (i + 1) % C.length;
+    }, () => show(0, true));
   }
 
   /* Hand off: add a note, Create pull request, the pull request opens and its checks pass */

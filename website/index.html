@@ -427,6 +427,79 @@ h1 em{font-style:normal;color:var(--pink)}
 @keyframes tap{0%{opacity:1;transform:scale(.2)}100%{opacity:0;transform:scale(1.35)}}
 .hcur{width:2.1%;min-width:20px}
 .hcur::before{content:"";position:absolute;left:20%;top:12%;width:260%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;background:radial-gradient(circle,rgba(252,189,221,.35),transparent 65%);box-shadow:0 0 0 2px rgba(252,189,221,.85);opacity:0;transform:scale(.2);pointer-events:none}
+/* AI improvements, take two: Tovi's chat as a floating card, beside a destination card that Tovi makes more premium. */
+#xAi{height:380px}
+.xAiStage{position:absolute;inset:0;display:grid;place-items:center;padding-left:330px;background:#090A0E radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px) 0 0/18px 18px}
+.xDest{position:relative;width:236px;overflow:hidden;border-radius:6px;background:#14161C;box-shadow:0 0 0 1px rgba(255,255,255,.06);font-family:Inter,sans-serif;color:#F0F2F7;transition:border-radius .6s var(--ease),box-shadow .6s var(--ease),transform .6s var(--ease)}
+.xDi{position:relative;height:130px;background:#14161C url(img/aster/interior.jpg) center 60%/cover;transition:height .6s var(--ease)}
+.xDi::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(9,10,14,.85));opacity:0;transition:opacity .6s var(--ease)}
+.xDtag{position:absolute;left:10px;top:10px;z-index:1;padding:3px 8px;border-radius:4px;background:rgba(9,10,14,.6);font-size:10.5px;font-weight:600;transition:all .6s var(--ease)}
+.xDover{position:absolute;left:14px;bottom:12px;z-index:1;opacity:0;transform:translateY(6px);transition:opacity .5s var(--ease) .15s,transform .5s var(--ease) .15s}
+.xDover b{display:block;font:400 24px/1 "Newsreader",serif}
+.xDover small{font-size:11.5px;color:rgba(240,242,247,.75)}
+.xDt{padding:10px 12px 4px;transition:opacity .3s,height .5s var(--ease)}
+.xDt b{display:block;font-size:14px;font-weight:600}
+.xDt small{font-size:11.5px;color:rgba(240,242,247,.55)}
+.xDf{display:flex;align-items:center;justify-content:space-between;padding:8px 12px 12px}
+.xDp{font-size:11.5px;color:rgba(240,242,247,.7)}
+.xDbtn{padding:6px 12px;border-radius:4px;background:#84F0BA;color:#090A0E;font-size:11.5px;font-weight:600;transition:all .6s var(--ease)}
+.xDest.prem{border-radius:20px;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 30px 60px -20px rgba(0,0,0,.9);transform:translateY(-4px)}
+.xDest.prem .xDi{height:200px}
+.xDest.prem .xDi::after{opacity:1}
+.xDest.prem .xDtag{border-radius:99px;background:rgba(255,255,255,.14);backdrop-filter:blur(8px)}
+.xDest.prem .xDover{opacity:1;transform:none}
+.xDest.prem .xDt{display:none}
+.xDest.prem .xDf{padding:12px 14px 14px}
+.xDest.prem .xDbtn{border-radius:99px;padding:8px 16px;background:#F0F2F7}
+.xDsel{position:absolute;pointer-events:none;border:1.5px solid #2B66D9;opacity:0;transition:all .45s var(--ease)}
+.xDsel.on{opacity:1}
+.xDsel span{position:absolute;left:-1.5px;top:-20px;padding:1px 6px;border-radius:4px;background:#2B66D9;color:#fff;font-size:10.5px;line-height:16px}
+.xDsel.pk{border-color:#FCBDDD;border-style:dashed}.xDsel.pk span{background:#FCBDDD;color:#1A0F14}
+.xChatCard{position:absolute;left:24px;top:24px;bottom:24px;width:300px;display:flex;flex-direction:column;border-radius:16px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 30px 70px -20px rgba(0,0,0,.9);overflow:hidden;z-index:2}
+.xChatHd{display:flex;align-items:center;gap:8px;height:42px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,.06);flex:0 0 auto}
+.xChatHd img{width:20px;height:20px;object-fit:contain}
+.xChatHd b{font-size:13px;font-weight:600}
+.xChatHd span{margin-left:auto;padding:2px 8px;border-radius:6px;background:rgba(255,255,255,.06);font-size:11px;color:rgba(255,255,255,.6)}
+.xChatCard .xThread{-webkit-mask-image:linear-gradient(180deg,transparent,#000 36px);mask-image:linear-gradient(180deg,transparent,#000 36px)}
+.xChatCard .xComp{margin:6px 10px 10px}
+#xAi::after{display:none}
+@container (max-width:560px){.xAiStage{display:none}.xChatCard{left:14px;right:14px;width:auto}}
+/* Code changes: the element changing on screen, beside the exact diff it writes. */
+#xCo{height:400px;display:block;background:none}
+.xCoTabs{position:absolute;left:28px;top:24px;display:flex;gap:2px;padding:2px;border-radius:10px;background:rgba(255,255,255,.05);z-index:2}
+.xCoTabs span{padding:6px 12px;border-radius:8px;font-size:12.5px;color:rgba(255,255,255,.55);transition:background .25s,color .25s,box-shadow .25s}
+.xCoTabs span.on{background:rgba(255,255,255,.07);color:#EEE;box-shadow:inset 0 1px #ffffff08,inset 0 0 1px .5px #ffffff22,0 0 3px -1px #000000aa}
+.xCoWrap{position:absolute;left:28px;right:28px;top:72px;bottom:0;display:grid;grid-template-columns:0.9fr 1.1fr;gap:16px}
+.xCoPrev{position:relative;border-radius:14px 14px 0 0;background:#090A0E radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px) 0 0/16px 16px;box-shadow:0 0 0 1px rgba(255,255,255,.08);overflow:hidden;display:grid;place-items:center}
+.xCoLab{position:absolute;left:12px;top:12px}
+.xCoLab span{padding:2px 9px;border-radius:99px;background:rgba(255,255,255,.08);font-size:11px;color:rgba(255,255,255,.7);transition:background .3s,color .3s}
+.xCoLab span.after{background:rgba(252,189,221,.16);color:#FCBDDD}
+.xCoEl{position:relative;width:100%;height:100%}
+.xE{position:absolute;inset:0;display:grid;place-items:center;opacity:0;transition:opacity .35s}
+.xE.on{opacity:1}
+.xE.t{place-items:center start;padding:0 28px}
+.xE.t .e{display:block;font:600 9.5px/1 Inter,sans-serif;letter-spacing:.2em;text-transform:uppercase;color:#84F0BA;margin-bottom:10px}
+.xE.t b{display:block;font:400 30px/1 "Newsreader",serif;color:#F0F2F7;max-width:330px;letter-spacing:0;transition:font-size .6s var(--ease),letter-spacing .6s var(--ease)}
+.xE.t.after b{font-size:42px;letter-spacing:-.02em}
+.xEb{display:inline-flex;align-items:center;gap:8px;padding:13px 22px;border-radius:8px;background:#84F0BA;color:#090A0E;font:600 15px/1 Inter,sans-serif;transition:border-radius .6s var(--ease),padding .6s var(--ease)}
+.xEb svg{width:15px;height:15px}
+.xE.b.after .xEb{border-radius:99px;padding:14px 26px}
+.xE.c{grid-template-columns:1fr 1fr;gap:12px;padding:0 28px;place-items:center stretch}
+.xEc{overflow:hidden;border-radius:6px;background:#14161C;transition:border-radius .6s var(--ease)}
+.xEc img{width:100%;aspect-ratio:1/1;object-fit:cover}
+.xEc b{display:block;padding:9px 11px;font:500 13px/1 Inter,sans-serif;color:#F0F2F7}
+.xE.c.after .xEc{border-radius:22px}
+.xCoDiff{border-radius:14px 14px 0 0;background:#0D1117;box-shadow:0 0 0 1px rgba(255,255,255,.1);overflow:hidden}
+.xCoFile{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid #21262D;font:12px ui-monospace,"SF Mono",Menlo,monospace;color:#C9D1D9}
+.xCoFile em{margin-left:auto;font-style:normal;font-family:Inter,sans-serif;font-size:11.5px;color:#7EE787}
+.xCoLines{padding:8px 0;font:12px/1.8 ui-monospace,"SF Mono",Menlo,monospace;color:#8B949E}
+.xCoLines div{padding:0 16px;white-space:pre;overflow:hidden;text-overflow:ellipsis;transition:background .3s,opacity .3s}
+.xCoLines .m{background:rgba(248,81,73,.14);color:#FFA198}
+.xCoLines .p{background:rgba(63,185,80,.14);color:#7EE787}
+.xCoLines .hide{opacity:0}
+.xCoLines .p mark{background:rgba(63,185,80,.35);color:#AFF5B4;border-radius:3px}
+.xCoLines .m mark{background:rgba(248,81,73,.35);color:#FFC1BA;border-radius:3px}
+@container (max-width:560px){#xCo{height:420px}.xCoWrap{grid-template-columns:1fr;grid-template-rows:170px 1fr}.xCoTabs span{padding:6px 9px;font-size:11.5px}}
 /* works with: a slow marquee */
 .works{padding:64px 0 0;text-align:center}
 .works p{margin:0 0 24px;font-size:13px;color:var(--ink3)}
@@ -883,11 +956,12 @@ footer .sp{flex:1}
           </div><div class="ct"><p><b>Edit by hand, like Figma.</b> Spacing, type, colour, corners and layout, on your real components. Values snap to your design scale.</p></div></article>
 
         <article class="card w2"><div class="xv" id="xAi">
-            <div class="xChat">
+            <div class="xAiStage"><div class="xDest" id="xAiD"><div class="xDi"><span class="xDtag">Wood stove</span><div class="xDover"><b>The Fireside Suite</b><small>Tromsø · 2 guests · from €380</small></div></div><div class="xDt"><b>The Fireside Suite</b><small>Tromsø · 2 guests · from €380</small></div><div class="xDf"><span class="xDp">★ 4.9</span><span class="xDbtn">Book</span></div></div><div class="xDsel" id="xAiSel"><span>Card</span></div></div>
+            <div class="xChatCard"><div class="xChatHd"><img src="img/tovi-avatar.png" alt=""><b>Tovi</b><span>Chat</span></div>
               <div class="xThread" id="xAiTh"></div>
-              <div class="xComp" id="xAiComp"><span class="xChip"><i></i>Button “Find your stay”</span><div class="xCompIn" id="xAiIn">Describe a change, or follow up…</div><div class="xCompRow"><span>On system</span><span class="xSend" id="xAiSend"><svg viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
+              <div class="xComp" id="xAiComp"><span class="xChip"><i></i>Card “The Fireside Suite”</span><div class="xCompIn" id="xAiIn">Describe a change…</div><div class="xCompRow"><span>On system</span><span class="xSend" id="xAiSend"><svg viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div>
             </div>
-            <div class="xStage"><div class="xBtns" id="xAiB"><span class="xB1">Find your stay <svg viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="xB2">Watch the film</span></div></div><div class="xTovi" id="xAiTv"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#FCBDDD" stroke="#3A1730" stroke-width="1.1" stroke-linejoin="round"/></svg><b>Tovi</b></div>
+            <div class="xTovi" id="xAiTv"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#FCBDDD" stroke="#3A1730" stroke-width="1.1" stroke-linejoin="round"/></svg><b>Tovi</b></div>
           </div><div class="ct"><p><b>AI design improvements.</b> Ask for a change in plain words. Tovi keeps to your design system, tells you what it did, and every edit can be undone.</p></div></article>
 
         <article class="card"><div class="xv" id="xNo">
@@ -922,25 +996,19 @@ footer .sp{flex:1}
     <div class="wrap">
       <div class="secHead"><div><span class="pill rvl">Hand off</span><h2 class="rvl" style="transition-delay:.08s">From your fix to a <em>pull request</em>.</h2><p class="rvl" style="transition-delay:.16s">Every change is saved as a version, shown as the exact code it touched, and handed to developers as one pull request.</p></div></div>
       <div class="bento">
-        <article class="card lit"><div class="xv" id="xHi">
-            <div class="xHist">
-              <div class="xHistH"><span>Version history</span><i>×</i></div>
-              <p>Tovi saves a version every few minutes, when you change page and when you present.</p>
-              <div class="xTl">
-                <div class="xVer cur"><b>Current version</b><small id="xHiN">0 changes not in a version yet</small><div id="xHiCh"></div><div class="xName" id="xHiName">Name it (optional)</div><span class="xPink" id="xHiSave">Save version</span></div>
-                <div id="xHiNew"></div>
-                <div class="xVer"><b>Today, 09:12</b><small>Tobi</small></div>
+                <article class="card w3 lit2"><div class="xv" id="xCo">
+            <div class="xCoTabs" id="xCoTabs"><span class="on">Hero title</span><span>Book button</span><span>Place cards</span></div>
+            <div class="xCoWrap">
+              <div class="xCoPrev"><div class="xCoLab"><span id="xCoBA">Before</span></div>
+                <div class="xCoEl" id="xCoEl">
+                  <div class="xE t"><span class="e">Winter 2026 · Arctic Norway</span><b>Nights under the northern sky</b></div>
+                  <div class="xE b"><span class="xEb">Book a night <svg viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                  <div class="xE c"><div class="xEc"><img src="img/aster/fjord.jpg" alt=""><b>Geiranger</b></div><div class="xEc"><img src="img/aster/dunes.jpg" alt=""><b>Wadi Rum</b></div></div>
+                </div>
               </div>
+              <div class="xCoDiff"><div class="xCoFile"><span id="xCoF">src/sections/Hero.jsx</span><em id="xCoN">+1 −1</em></div><div class="xCoLines" id="xCoL"></div></div>
             </div>
-            <div class="cur" id="xHiCur"><svg viewBox="0 0 22 22"><path d="M5 3l12 7.2-5.2 1.3 3 5.6-2.2 1.2-3-5.7L5 16.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
-          </div><div class="ct"><p><b>Version history.</b> Every stop is saved as a version. Name the ones that matter, restore one, or undo a single edit.</p></div></article>
-
-        <article class="card w2"><div class="xv" id="xCo">
-            <div class="xChg">
-              <div class="xChgH"><span>Changes this session</span><span class="lk">Version history</span><i>×</i></div>
-              <div id="xCoL"></div>
-            </div>
-          </div><div class="ct"><p><b>Every code change, visible.</b> Each edit is listed with its exact file and the classes before and after. No hidden rewrites, nothing generated.</p></div></article>
+          </div><div class="ct"><p><b>Every code change, visible.</b> Each edit shows what changed on screen and the exact line it touched in your code: one class, your own tokens, nothing generated.</p></div></article>
 
         <article class="card w3 photo" style="background-image:linear-gradient(180deg,rgba(14,16,20,.86),rgba(14,16,20,.94)),url(img/bg/fjord.jpg)"><div class="xv" id="xPr">
             <div class="xHand" id="xPrD">
