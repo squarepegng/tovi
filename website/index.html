@@ -190,7 +190,7 @@ h1 em{font-style:normal;color:var(--pink)}
 .toast b{display:block;font-weight:500}.toast small{color:rgba(255,255,255,.5)}
 
 /* Hero: real screenshots of Tovi, played in order with a cursor. */
-.shotP{position:relative;aspect-ratio:1440/900;border-radius:26px 26px 0 0;transform-origin:50% 100%;transform:rotateX(var(--tilt,2.3deg));will-change:transform;overflow:hidden;background:#1C1C1C;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 40px 120px -30px rgba(229,139,184,.22),0 30px 80px -20px rgba(0,0,0,.8);-webkit-mask-image:linear-gradient(180deg,#000 88%,transparent);mask-image:linear-gradient(180deg,#000 88%,transparent)}
+.shotP{position:relative;aspect-ratio:1440/900;border-radius:16px;overflow:hidden;background:#1C1C1C;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 40px 120px -30px rgba(229,139,184,.22),0 30px 80px -20px rgba(0,0,0,.8);}
 .shotP .fr{position:absolute;inset:0;width:100%;height:100%;opacity:0;transition:opacity .45s cubic-bezier(.2,0,0,1)}
 .shotP .fr.on{opacity:1}
 .hcur{position:absolute;left:0;top:0;z-index:5;width:1.6%;min-width:14px;transition:left .8s cubic-bezier(.3,.1,.2,1),top .8s cubic-bezier(.3,.1,.2,1);pointer-events:none}
@@ -415,7 +415,7 @@ h1 em{font-style:normal;color:var(--pink)}
 /* Reveals, like Sketch: the hero screen tilts up into place on load and flattens as you scroll;
    section labels, titles and text drop softly into place when they come into view. */
 .shotP.enter{animation:tiltUp 1.1s cubic-bezier(.2,0,0,1) both}
-@keyframes tiltUp{from{opacity:0;transform:translateY(60px) rotateX(18deg)}to{opacity:1;transform:rotateX(var(--tilt,2.3deg))}}
+@keyframes tiltUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
 .rvl{opacity:0;transform:translateY(-2rem);transition:opacity .8s cubic-bezier(.2,0,0,1),transform .8s cubic-bezier(.2,0,0,1)}
 .rvl.shown{opacity:1;transform:none}
 .heroTop .rvl{transform:translateY(-1.2rem)}

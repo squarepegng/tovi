@@ -62,8 +62,6 @@
     if (shot && !still) {
       shot.classList.add('enter');
       shot.addEventListener('animationend', () => shot.classList.remove('enter'), { once: true });
-      const tilt = () => { const k = Math.min(1, Math.max(0, scrollY / 520)); shot.style.setProperty('--tilt', (2.3 * (1 - k)).toFixed(3) + 'deg'); };
-      tilt(); addEventListener('scroll', () => requestAnimationFrame(tilt), { passive: true });
     }
   }
 
