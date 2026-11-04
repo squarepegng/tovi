@@ -54,6 +54,19 @@
   }
   const fade = async (A, el, f) => { el.style.transition = 'opacity .35s cubic-bezier(.2,0,0,1)'; el.style.opacity = 0; await A.wait(380); f(); el.style.opacity = 1; await A.wait(380); };
 
+  /* Reveals: text drops into place when it comes into view; the hero screen tilts up, then flattens as you scroll. */
+  {
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('shown'); io.unobserve(e.target); } }), { threshold: 0.2 });
+    document.querySelectorAll('.rvl').forEach((el) => io.observe(el));
+    const shot = $('hero');
+    if (shot && !still) {
+      shot.classList.add('enter');
+      shot.addEventListener('animationend', () => shot.classList.remove('enter'), { once: true });
+      const tilt = () => { const k = Math.min(1, Math.max(0, scrollY / 520)); shot.style.setProperty('--tilt', (2.3 * (1 - k)).toFixed(3) + 'deg'); };
+      tilt(); addEventListener('scroll', () => requestAnimationFrame(tilt), { passive: true });
+    }
+  }
+
   /* ---------- Hero: real screenshots of Tovi, starting in the AI conversation ---------- */
   // Ask Tovi → its edit lands → Diagnose from the toolbar → notes pinned → the notes tool → Tovi applies the notes
   // → a hand edit in the panel → Hand off. Every frame is the real editor; the cursor moves between real controls.
