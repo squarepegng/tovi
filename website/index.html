@@ -313,7 +313,7 @@ h1 em{font-style:normal;color:var(--pink)}
 .xAuTxt{padding-top:20px;font-family:Inter,sans-serif}
 .xAuTxt .e{font-size:10px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:#84F0BA}
 .xAuTxt b{display:block;margin:10px 0;font:400 30px/1.02 "Newsreader",serif;color:#F0F2F7}
-.xAuTxt p{margin:0 0 16px;font-size:12px;color:rgba(240,242,247,.35)}
+.xAuTxt p{max-width:200px;margin:0 0 16px;font-size:12px;color:rgba(240,242,247,.35)}
 .xAuTxt .btn{display:inline-block;padding:9px 16px;border-radius:99px;background:#F0F2F7;color:#090A0E;font-size:11.5px;font-weight:600}
 .xAuPage .sweep{top:-90px}
 .xAuPage .sweep.go{animation:sweep2 1.6s var(--ease) forwards}
@@ -356,7 +356,7 @@ h1 em{font-style:normal;color:var(--pink)}
 
 /* Changes this session */
 #xCo{display:grid;place-items:center;background:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px) 0 0/18px 18px}
-.xChg{width:min(520px,92%);padding:6px;border-radius:14px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 24px 60px -18px rgba(0,0,0,.9);margin-top:10px;align-self:start}
+.xChg{width:min(560px,92%);padding:6px;border-radius:14px;background:#2A2A2A;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 24px 60px -18px rgba(0,0,0,.9);margin-top:28px;align-self:start;min-height:330px}
 .xChgH{display:flex;align-items:center;gap:12px;padding:8px 10px 10px;font-weight:600}
 .xChgH span:first-child{flex:1}
 .xChgH .lk{font-weight:400;color:#9DBBF5;font-size:12.5px}
@@ -401,6 +401,15 @@ h1 em{font-style:normal;color:var(--pink)}
   .xChat{width:100%;border:0}.xStage{display:none}
   .xAuPage{display:none}.xAuList{left:14px;right:14px;width:auto}
 }
+@media (max-width:720px){
+  .shotP{aspect-ratio:4/3.4}
+  .shotP .fr{object-fit:cover;object-position:46% 18%}
+  .hcur{display:none}
+}
+@container (max-width:560px){
+  .xAuList{top:20px}
+  .xAuRow{opacity:1;transform:none}
+}
 @media (max-width:1000px){.card.w3{grid-column:span 2}}
 @media (max-width:720px){.card.w3{grid-column:auto}.xv{height:330px}}
 /* Reveals, like Sketch: the hero screen tilts up into place on load and flattens as you scroll;
@@ -411,6 +420,13 @@ h1 em{font-style:normal;color:var(--pink)}
 .rvl.shown{opacity:1;transform:none}
 .heroTop .rvl{transform:translateY(-1.2rem)}
 @media (prefers-reduced-motion:reduce){.rvl{opacity:1;transform:none}.shotP{transform:none}}
+/* Cursors: larger, and every click sends out a soft pulsing ring from the tip. */
+.cur svg{width:26px;height:26px}
+.cur::before{content:"";position:absolute;left:5px;top:4px;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:radial-gradient(circle,rgba(252,189,221,.35),transparent 65%);box-shadow:0 0 0 2px rgba(252,189,221,.85);opacity:0;transform:scale(.2);pointer-events:none}
+.cur.click::before,.hcur.click::before{animation:tap .62s cubic-bezier(.2,0,0,1)}
+@keyframes tap{0%{opacity:1;transform:scale(.2)}100%{opacity:0;transform:scale(1.35)}}
+.hcur{width:2.1%;min-width:20px}
+.hcur::before{content:"";position:absolute;left:20%;top:12%;width:260%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;background:radial-gradient(circle,rgba(252,189,221,.35),transparent 65%);box-shadow:0 0 0 2px rgba(252,189,221,.85);opacity:0;transform:scale(.2);pointer-events:none}
 /* works with: a slow marquee */
 .works{padding:64px 0 0;text-align:center}
 .works p{margin:0 0 24px;font-size:13px;color:var(--ink3)}
@@ -639,7 +655,7 @@ details[open] summary::after{transform:rotate(45deg)}
 details p{margin:0 0 20px;color:var(--ink2);max-width:600px}
 
 /* last call */
-.end{position:relative;margin-top:150px;padding:120px 0 130px;text-align:center;overflow:hidden;isolation:isolate}
+.end{position:relative;margin-top:60px;padding:120px 0 130px;text-align:center;overflow:hidden;isolation:isolate}
 .end h2{margin:0 auto;font-size:clamp(46px,6vw,84px)}
 .end p{margin:18px auto 32px;color:var(--ink2);font-size:18px;max-width:520px}
 form{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
@@ -885,9 +901,9 @@ footer .sp{flex:1}
         <article class="card w3 lit2"><div class="xv" id="xAu">
             <div class="xAuPage"><div class="xCabin"></div><div class="xAuTxt"><span class="e">The stay</span><b>A cabin that turns the lights off for you</b><p>Every Aster cabin is placed for the clearest view north.</p><span class="btn">See the cabins</span></div>
               <div class="sweep" id="xAuSw"></div>
-              <div class="xTag" style="left:56%;top:22%" data-i="1"><i></i><b>1</b></div>
-              <div class="xTag" style="left:78%;top:50%" data-i="2"><i></i><b>2</b></div>
-              <div class="xTag" style="left:62%;top:72%" data-i="3"><i></i><b>3</b></div>
+              <div class="xTag" style="left:92%;top:20%" data-i="1"><i></i><b>1</b></div>
+              <div class="xTag" style="left:86%;top:47%" data-i="2"><i></i><b>2</b></div>
+              <div class="xTag" style="left:76%;top:60%" data-i="3"><i></i><b>3</b></div>
             </div>
             <div class="xAuList" id="xAuL">
               <div class="xAuHead"><img src="img/tovi-avatar.png" alt=""><span>Tovi reviewed this section and left 3 notes.</span></div>
@@ -952,12 +968,12 @@ footer .sp{flex:1}
     </div>
   </section>
 
-  <section class="sec wrap" id="faq">
+  <section class="sec" id="faq"><div class="wrap">
     <div class="faq">
       <aside><span class="pill rvl">Questions</span><h2 class="rvl" style="transition-delay:.08s">Good to know.</h2><p class="rvl" style="transition-delay:.16s">Something else on your mind? Write to <a href="mailto:hello@usetovi.com">hello@usetovi.com</a>.</p></aside>
       <div><details><summary>What is Tovi?</summary><p>A design editor for your real product. You open the app your team built, edit it by hand like in Figma or with AI, and Tovi turns your edits into code and a pull request.</p></details><details><summary>Do I need to know how to code?</summary><p>No. You edit visually. Tovi writes the code, and developers review it before anything is merged.</p></details><details><summary>Which apps does it work with?</summary><p>React apps styled with Tailwind, built with Vite or Next.js. Other setups aren&#x27;t supported yet.</p></details><details><summary>Where does my code go?</summary><p>Tovi runs on your Mac and your code stays there. When you use the AI, the screen and the relevant code go to the AI provider you chose, with your own key.</p></details><details><summary>Do I pay for AI credits?</summary><p>No. You bring your own key from Claude, OpenAI or Gemini and pay the provider directly.</p></details><details><summary>Will it touch our main branch?</summary><p>No. Changes go to a new branch and a pull request. Nothing merges without your team.</p></details><details><summary>Does it replace Figma?</summary><p>No. Figma is still the place to explore new ideas. Tovi is for the product once it&#x27;s built.</p></details></div>
     </div>
-  </section>
+  </div></section>
 
   <section class="end" id="invite">
     <div class="aurora" aria-hidden="true"><i class="a1" style="top:30%"></i><i class="a2" style="top:40%"></i><i class="a3"></i></div>

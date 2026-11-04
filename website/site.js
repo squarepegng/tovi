@@ -140,7 +140,7 @@
   {
     const root = $('xAi'), th = $('xAiTh'), inp = $('xAiIn'), send = $('xAiSend'), comp = $('xAiComp'), btns = $('xAiB'), tov = $('xAiTv');
     const add = (cls, html) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; th.appendChild(d); return d; };
-    const reset = () => { th.innerHTML = ''; inp.className = 'xCompIn'; inp.textContent = 'Describe a change, or follow up…'; send.classList.remove('on'); comp.classList.remove('busy'); btns.classList.remove('soft', 'picked'); tov.style.opacity = 0; };
+    const reset = () => { th.innerHTML = '<div class="xCtx">Title “Nights under the…”</div><div class="xU">Make the hero feel more editorial</div><div class="xMeta"><img src="img/tovi-avatar.png" alt="">Looked at 3 elements · Thought for 6s</div><div class="xReply">I set the title larger with tighter tracking, so it reads like a magazine cover.</div><div class="xDone"><span>✓ Applied</span><u>Undo</u></div>'; inp.className = 'xCompIn'; inp.textContent = 'Describe a change, or follow up…'; send.classList.remove('on'); comp.classList.remove('busy'); btns.classList.remove('soft', 'picked'); tov.style.opacity = 0; };
     const ask = 'Make the buttons feel softer';
     const reply = 'I softened both hero buttons: fully rounded corners, a slightly lighter mint and a quieter outline, so they sit more gently on the photo.';
     scene(root, async (A) => {
@@ -166,14 +166,14 @@
     const spots = () => { const c = [...page.children], o = root.getBoundingClientRect(); const at = (el, fx, fy) => { const r = el.getBoundingClientRect(); return { x: r.left - o.left + r.width * fx, y: r.top - o.top + r.height * fy }; }; return [{ ...at(c[0], 0.7, 0.18), t: 'Round these cards more' }, { ...at(c[1], 0.4, 0.62), t: 'Titles feel too small' }]; };
     const draw = (done) => {
       tagsEl.innerHTML = notes.map((n, i) => `<div class="xTag on" style="left:${n.x - 3}px;top:${n.y - 16}px"><i></i><b style="${done ? 'background:#238636;color:#fff' : 'background:rgba(28,28,28,.92);color:#F2F2F2'}">${done ? '✓' : i + 1}</b></div>`).join('');
-      tk.style.display = notes.length ? '' : 'none';
-      tk.innerHTML = notes.map((n, i) => `<div class="tk${done ? ' done' : ''}"><em>${i + 1}</em>${n.t}</div>`).join('') + `<div class="ft"><span>${done ? 'All fixed' : notes.length + ' task' + (notes.length === 1 ? '' : 's')}</span>${done ? '' : '<span class="xGhost">Discard</span><span class="xPink" id="xNoAp">Apply</span>'}</div>`;
+      const shown = notes.filter((n) => n.t); tk.style.display = shown.length ? '' : 'none';
+      tk.innerHTML = shown.map((n, i) => `<div class="tk${done ? ' done' : ''}"><em>${i + 1}</em>${n.t}</div>`).join('') + `<div class="ft"><span>${done ? 'All fixed' : shown.length + ' task' + (shown.length === 1 ? '' : 's')}</span>${done ? '' : '<span class="xGhost">Discard</span><span class="xPink" id="xNoAp">Apply</span>'}</div>`;
     };
     scene(root, async (A) => {
       notes = []; page.classList.remove('fixed'); draw(false); A.to(cur, [60, 290]); await A.wait(600);
       for (const s of spots()) {
         await A.move(cur, [s.x, s.y], 0, 0, 800); await press(A, cur);
-        notes.push({ ...s, t: '' }); draw(false);
+        notes.push({ ...s, t: '' }); tagsEl.insertAdjacentHTML('beforeend', `<div class="xTag on" style="left:${s.x - 3}px;top:${s.y - 16}px"><i></i><b style="background:rgba(28,28,28,.92);color:#F2F2F2">${notes.length}</b></div>`);
         Object.assign(pop.style, { left: Math.min(s.x + 12, root.offsetWidth - 214) + 'px', top: s.y + 14 + 'px' }); popT.textContent = ''; pop.classList.add('on');
         await typeInto(A, popT, s.t, 40); await A.wait(350); pop.classList.remove('on');
         notes[notes.length - 1].t = s.t; draw(false); await A.wait(450);
@@ -221,8 +221,8 @@
     const R = [['Size 72 → 96', 'src/sections/Hero.jsx', 'text-7xl', 'text-8xl'], ['Corner radius 6 → 24', 'src/sections/Destinations.jsx', 'rounded-md', 'rounded-3xl'], ['Corners 8 → full', 'src/components/Button.jsx', 'rounded-lg', 'rounded-full'], ['Letter spacing 0 → −2%', 'src/sections/Hero.jsx', '—', 'tracking-[-0.02em]']];
     const row = (r) => `<div class="xRow"><b>${r[0]}</b><code>${r[1]} · <del>${r[2]}</del> → <ins>${r[3]}</ins></code></div>`;
     scene($('xCo'), async (A) => {
-      list.innerHTML = ''; await A.wait(700);
-      for (const r of R) { list.insertAdjacentHTML('afterbegin', row(r)); await A.wait(1100); }
+      list.innerHTML = R.slice(0, 2).reverse().map(row).join(''); await A.wait(900);
+      for (const r of R.slice(2)) { list.insertAdjacentHTML('afterbegin', row(r)); await A.wait(1100); }
       await A.wait(2400);
     }, () => { list.innerHTML = R.slice().reverse().map(row).join(''); });
   }
