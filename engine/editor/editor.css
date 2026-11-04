@@ -1680,3 +1680,9 @@ aside.side.r{border-left-color:var(--chromeLine)}
 :root{--noteLine:rgba(252,189,221,.75);--noteArea:rgba(252,189,221,.06)}
 :root[data-theme="light"]{--noteLine:rgba(194,80,138,.7);--noteArea:rgba(194,80,138,.05)}
 @media (prefers-color-scheme: light){:root[data-theme="system"]{--noteLine:rgba(194,80,138,.7);--noteArea:rgba(194,80,138,.05)}}
+/* Diagnose's page list (only when several pages were reviewed): plain rows like the chat text, no extra box, no pink.
+   The task card below is the one container; pink is kept for Tovi itself and the Apply button. */
+.diagPages{margin-top:6px;padding:0;border:0;gap:0}
+.diagPages button{height:28px;padding:0 8px;margin:0 -8px}
+.diagPages button.on{background:rgba(var(--hi),.06)}
+.diagPages b{color:var(--ink3);font-weight:400;font-size:12px}
