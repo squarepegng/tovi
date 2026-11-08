@@ -599,6 +599,13 @@ h1 em{font-style:normal;color:var(--pink)}
 .cur.tap.click::before{animation:ripple .7s cubic-bezier(.2,0,0,1)}
 @keyframes tapFade{0%,55%{opacity:1}100%{opacity:0}}
 @keyframes ripple{0%{opacity:1;transform:scale(.6)}100%{opacity:0;transform:scale(2.6)}}
+/* Tap ripple, stronger: two rings spread out from the touch, one after the other. */
+.cur.tap::before,.cur.tap::after{content:""!important;position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;pointer-events:none;opacity:0;
+  background:radial-gradient(circle,rgba(255,255,255,.22),rgba(255,255,255,.06) 60%,transparent 70%)!important;box-shadow:0 0 0 2px rgba(255,255,255,.85)!important}
+.cur.tap.click::before{animation:ripple2 .85s cubic-bezier(.15,.6,.3,1)}
+.cur.tap.click::after{animation:ripple2 .85s cubic-bezier(.15,.6,.3,1) .16s}
+@keyframes ripple2{0%{opacity:.95;transform:scale(.5)}100%{opacity:0;transform:scale(3.4)}}
+.cur.tap.click{animation:tapFade 1.25s ease forwards}
 /* works with: a slow marquee */
 .works{padding:64px 0 0;text-align:center}
 .works p{margin:0 0 24px;font-size:13px;color:var(--ink3)}
