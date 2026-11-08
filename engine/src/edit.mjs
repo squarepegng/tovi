@@ -451,12 +451,14 @@ export function editElement(code, line, col, { ops = [], text, props = [], cva, 
 // File-level wrapper with an undo history, used by the dev server.
 export function createEditor(webRoot, getTheme, library) {
   const history = [];
+  // The app page the designer is on (sent with each request), so each edit knows which screen it changed.
+  let page = '/';
   // more: other files changed by the same edit (e.g. a style table in lib/format.ts); one undo covers all.
   const record = (file, rel, before, code, loc, change, summary, more = []) => {
     summary.labels = summaryLabels(summary);
     fs.writeFileSync(file, code);
     for (const m of more) fs.writeFileSync(m.file, m.after);
-    history.push({ file, rel, before, after: code, loc, change, summary, source: change.source || 'hand', at: Date.now(), ...(more.length ? { more } : {}) });
+    history.push({ file, rel, before, after: code, loc, change, summary, source: change.source || 'hand', page, at: Date.now(), ...(more.length ? { more } : {}) });
     return { file: rel, changed: true, summary, n: history.length, files: [rel, ...more.map((m) => path.relative(webRoot, m.file))] };
   };
   // Several files: the first changed one is the entry's main file.
@@ -467,6 +469,7 @@ export function createEditor(webRoot, getTheme, library) {
     return record(main.file, path.relative(webRoot, main.file).split(path.sep).join('/'), main.before, main.after, loc, change, summary, more);
   };
   return {
+    setPage(p) { if (typeof p === 'string' && /^\/(?!\/)/.test(p)) page = p.split(/[?#]/)[0].slice(0, 200); },
     history,
     // Delete, duplicate, move, swap, insert, image.
     structure(loc, op, source, name) {

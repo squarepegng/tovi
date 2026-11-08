@@ -42,7 +42,7 @@ const b64 = (buf) => Buffer.from(buf).toString('base64');
 
 // origin: the app's own address (http://localhost:5173). path: the page. locs: elements to picture one by one
 // (each whole, e.g. every section). full: the whole page top to bottom.
-export async function realShots({ origin, path, width = 1280, height = 800, theme = null, locs = [], full = false }) {
+export async function realShots({ origin, path, width = 1280, height = 800, theme = null, locs = [], full = false, maxH = MAX_H }) {
   if (!/^\/(?!\/)/.test(String(path || '/'))) return null;
   const b = await getBrowser().catch(() => null);
   if (!b) return null;
@@ -62,7 +62,7 @@ export async function realShots({ origin, path, width = 1280, height = 800, them
     const out = { width: w, sections: {} };
     if (full) {
       const docH = await page.evaluate(() => document.documentElement.scrollHeight);
-      out.full = b64(await page.screenshot({ type: 'jpeg', quality: 72, clip: { x: 0, y: 0, width: w, height: Math.min(docH, MAX_H) }, captureBeyondViewport: true }));
+      out.full = b64(await page.screenshot({ type: 'jpeg', quality: 72, clip: { x: 0, y: 0, width: w, height: Math.min(docH, maxH, MAX_H) }, captureBeyondViewport: true }));
     }
     if (locs.length) {
       // A sticky header would cover the top of each section as it scrolls into view: pin it in place first.

@@ -7,6 +7,8 @@ import os from 'node:os';
 import { readPerson } from './person.mjs';
 import { KerfError } from './edit.mjs';
 import { parseCode } from './ast.mjs';
+import { chromePath, realShots } from './shots.mjs';
+import { changedPages, contentBefore, pushShots, shotUrl, shotsMarkdown } from './prshots.mjs';
 
 export function createSession(webRoot, editor) {
   const versions = []; // { n, at, from, to } — indices into editor.history
@@ -181,7 +183,41 @@ export function createSession(webRoot, editor) {
   //  - a branch whose PR was merged or closed isn't reused: a new branch and PR are made
   //  - the PR targets the branch the designer started from
   //  - if the push fails, the commit stays on the branch and the next Hand off just pushes again
-  function pullRequest({ title, body, dryRun }) {
+  // Before/after pictures of each page changed since the last hand off, taken by Tovi's hidden Chrome:
+  // "after" is the app as it is now; "before" briefly puts back the files as they were, then restores them.
+  // Returns [{ page, before: Buffer|null, after: Buffer|null }] (empty when Chrome isn't available).
+  async function takePictures(origin, fresh) {
+    if (!origin || !fresh.length || !chromePath()) return [];
+    const pages = changedPages(fresh, 3);
+    const shoot = async (p) => {
+      const r = await realShots({ origin, path: p, width: 1280, height: 800, full: true, maxH: 2400 }).catch(() => null);
+      return r?.full ? Buffer.from(r.full, 'base64') : null;
+    };
+    const shots = [];
+    for (const p of pages) shots.push({ page: p, before: null, after: await shoot(p) });
+    const now = new Map(), before = contentBefore(fresh);
+    try {
+      for (const [f, content] of before) { now.set(f, fs.readFileSync(f, 'utf8')); fs.writeFileSync(f, content); }
+      await new Promise((r) => setTimeout(r, 900)); // let the dev server notice the files
+      for (const s of shots) s.before = await shoot(s.page);
+    } finally {
+      for (const [f, content] of now) fs.writeFileSync(f, content);
+    }
+    await new Promise((r) => setTimeout(r, 600));
+    return shots;
+  }
+  // Put the pictures on the side branch and return the markdown for the PR ('' if anything fails).
+  function picturesMarkdown(info, branch, shots, id) {
+    if (!info.repo || !shots.some((x) => x.before || x.after)) return '';
+    const name = (p) => (p === '/' ? 'home' : p.replace(/^\/|\/$/g, '').replace(/[^\w-]+/g, '-')) || 'page';
+    const files = [];
+    for (const x of shots) for (const k of ['before', 'after']) if (x[k]) files.push({ name: `${name(x.page)}-${k}-${stamp()}.jpg`, data: x[k], page: x.page, k });
+    const sha = pushShots({ root: info.root, branch, files, id });
+    if (!sha) return '';
+    return shotsMarkdown(shots.map((x) => ({ page: x.page, before: x.before ? shotUrl(info.repo, sha, files.find((f) => f.page === x.page && f.k === 'before').name) : null, after: x.after ? shotUrl(info.repo, sha, files.find((f) => f.page === x.page && f.k === 'after').name) : null })), branch);
+  }
+
+  async function pullRequest({ title, body, dryRun, origin }) {
     if (peek) throw new KerfError('Close the before view first.');
     snapshot();
     const info = repoInfo();
@@ -204,6 +240,8 @@ export function createSession(webRoot, editor) {
     const plan = { branch, base, files: info.files, title };
     if (dryRun) return { dryRun: true, reuse, unpushed, ...plan };
     buildCheck(info);
+    const fresh = editor.history.slice(handoff.sent || 0);
+    const shots = info.files.length ? await takePictures(origin, fresh) : [];
     const id = [];
     try { git(['config', 'user.email'], info.root); } catch {
       // No git identity in this copy: use the GitHub account's noreply address if gh knows it.
@@ -219,17 +257,19 @@ export function createSession(webRoot, editor) {
     handoff.sent = editor.history.length;
     save();
     try { git(['push', '-u', 'origin', branch], info.root); } catch (e) { throw pushError(e.message, branch); }
+    const pics = shots.length ? picturesMarkdown(info, branch, shots, id) : '';
+    const withPics = (t) => (pics ? `${t}\n\n${pics}` : t);
     let url = null, updated = false, viaGh = false;
     if (info.gh && reuse && pr?.url) {
       // An open PR from this branch: the push updated it. Say what's new in a comment.
       url = pr.url; updated = true; viaGh = true;
-      if (info.files.length) spawnSync('gh', ['pr', 'comment', branch, '--body', `**More design updates**\n\n${String(body || title)}`], { cwd: info.root, encoding: 'utf8' });
+      if (info.files.length) spawnSync('gh', ['pr', 'comment', branch, '--body', withPics(`**More design updates**\n\n${String(body || title)}`)], { cwd: info.root, encoding: 'utf8' });
     } else if (info.gh) {
-      const made = spawnSync('gh', ['pr', 'create', '--head', branch, ...(base ? ['--base', base] : []), '--title', title, '--body', String(body || '')], { cwd: info.root, encoding: 'utf8' });
+      const made = spawnSync('gh', ['pr', 'create', '--head', branch, ...(base ? ['--base', base] : []), '--title', title, '--body', withPics(String(body || ''))], { cwd: info.root, encoding: 'utf8' });
       if (made.status === 0) { url = made.stdout.trim().split('\n').pop(); viaGh = true; }
     }
     if (!url && info.repo) url = `https://github.com/${info.repo}/compare/${base ? `${encodeURIComponent(base)}...` : ''}${encodeURIComponent(branch)}?expand=1`;
-    return { ...plan, url, updated, needsGitHubStep: !viaGh };
+    return { ...plan, url, updated, needsGitHubStep: !viaGh, pictures: !!pics };
   }
 
   ignoreInGit();

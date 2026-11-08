@@ -158,6 +158,7 @@ export async function createKerf(webRoot) {
         // Every change is saved to .kerf/ so a restart keeps undo, versions and chat.
         const s0 = send;
         const send2 = (status, b) => { if (status === 200 && route !== '/inspect' && route !== '/ai') session.save(); return s0(status, b); };
+        if (typeof body?._page === 'string') editor.setPage(body._page);
         const writes = ['/edit', '/undo', '/ai/apply', '/structure'];
         if (writes.includes(route) && session.isPeeking()) return send(409, { error: 'You’re looking at an earlier version. Close it to keep editing.' });
         if (route === '/person') return send(200, { name: savePerson(body?.name) });
@@ -186,7 +187,7 @@ export async function createKerf(webRoot) {
         if (route === '/restore') return send2(200, session.restore(Number(body.n)));
         if (route === '/peek') return send2(200, session.peekBefore(Number(body.n)));
         if (route === '/unpeek') return send2(200, session.unpeek());
-        if (route === '/pr') return send2(200, session.pullRequest(body));
+        if (route === '/pr') return send2(200, await session.pullRequest({ ...body, origin: `http://${req.headers.host}` }));
         if (route === '/inspect') return send(200, editor.describe(body.loc, body.dom));
         if (route === '/edit') return send2(200, editor.edit(body.loc, { ops: body.ops, text: body.text, props: body.props, propText: body.propText, cva: body.cva, bp: body.bp, dom: body.dom, scope: body.scope, target: body.target, name: body.name }));
         if (route === '/undo') return send2(200, editor.undo());

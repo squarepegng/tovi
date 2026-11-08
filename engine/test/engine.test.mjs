@@ -492,3 +492,18 @@ test('grid columns change on the screen size being edited only', () => {
   // Every screen: one value everywhere.
   assert.equal(rsp('grid md:grid-cols-2', [{ prop: 'cols', value: 3 }], { mode: 'all' }), 'grid grid-cols-3');
 });
+
+test('hand off pictures: changed pages, files as they were, the side branch and the PR markdown', async () => {
+  const { changedPages, contentBefore, shotsBranch, shotsMarkdown, shotUrl } = await import('../src/prshots.mjs');
+  const h = [{ file: 'a', before: 'A0', page: '/' }, { file: 'b', before: 'B0', page: '/stays' }, { file: 'a', before: 'A1', page: '/' }, { file: 'c', before: 'C0', more: [{ file: 'b', before: 'Bx' }] }];
+  assert.deepEqual(changedPages(h), ['/', '/stays']);
+  const before = contentBefore(h);
+  assert.equal(before.get('a'), 'A0');
+  assert.equal(before.get('b'), 'B0');
+  assert.equal(shotsBranch('kerf/design-updates-1'), 'tovi-screenshots/design-updates-1');
+  assert.equal(shotUrl('o/r', 'abc', 'home before.jpg'), 'https://github.com/o/r/blob/abc/home%20before.jpg?raw=true');
+  const md = shotsMarkdown([{ page: '/', before: 'u1', after: 'u2' }, { page: '/x', before: null, after: null }], 'kerf/b');
+  assert.ok(md.includes('| Before | After |') && md.includes('src="u1"') && md.includes('src="u2"'));
+  assert.ok(!md.includes('/x'));
+  assert.equal(shotsMarkdown([], 'kerf/b'), '');
+});

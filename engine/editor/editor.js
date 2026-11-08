@@ -16,7 +16,9 @@
     const path = route.split('?')[0], read = !body || READS.has(path) || (path === '/pr' && body?.dryRun);
     for (let attempt = 0; ; attempt++) {
       let r;
-      try { r = await fetch('/__kerf' + route, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined); }
+      // Every request says which page of the app the designer is on, so edits remember their screen.
+      let pg = null; try { pg = S.path; } catch {}
+      try { r = await fetch('/__kerf' + route, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pg && !Array.isArray(body) ? { ...body, _page: pg } : body) } : undefined); }
       catch (e) {
         if (read && attempt < 5) { await new Promise((res) => setTimeout(res, [300, 700, 1500, 2500, 4000][attempt])); continue; }
         const err = new Error(OFFLINE); err.offline = true; throw err;
