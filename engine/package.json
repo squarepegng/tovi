@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Kerf Phase 1: tag rendered elements with their source, and edit Tailwind classes in that source safely.",
+  "description": "Tovi Phase 1: tag rendered elements with their source, and edit Tailwind classes in that source safely.",
   "bin": {
     "kerf": "./bin/kerf.mjs"
   },
@@ -15,6 +15,7 @@
     "@anthropic-ai/sdk": "^0.135.0",
     "@babel/parser": "^7.26.3",
     "magic-string": "^0.30.17",
+    "puppeteer-core": "^24.43.1",
     "zod": "^4.6.7"
   },
   "engines": {

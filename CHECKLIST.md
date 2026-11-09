@@ -1,4 +1,4 @@
-# Kerf: decision checklist
+# Tovi: decision checklist
 
 Everything I've suggested so far, in plain words. For each item, mark what you want:
 
@@ -14,50 +14,53 @@ When you've decided, tell me which items to keep and which to remove. I'll build
 
 | # | Item | What it means | Status | Decision |
 |---|---|---|---|---|
-| 1.1 | One-step install | A single download or command that checks everything a tester needs (Node, git, GitHub login) and sets it up. Today a developer has to do this. | Not started | [ ] Keep [ ] Later [ ] Remove |
-| 1.2 | Sign-in to the tester's app | If the app needs a login or access code, a clear "sign in here once" step, so the preview is signed in too. | Not started | [ ] Keep [ ] Later [ ] Remove |
-| 1.3 | Safer pull requests | Before opening a PR, Kerf checks the code still builds, attaches before/after screenshots, and never writes straight to main. | Partly done (no build check or screenshots yet) | [ ] Keep [ ] Later [ ] Remove |
-| 1.4 | Error reporting and "Report a problem" | Testers can send a report with one click, and you see what failed without asking them. Opt-in. | Not started | [ ] Keep [ ] Later [ ] Remove |
+| 1.1 | One-step install | A single download or command that checks everything a tester needs (Node, git, GitHub login) and sets it up. Today a developer has to do this. | Not started | [x] Keep [ ] Later [ ] Remove |
+| 1.2 | Sign-in to the tester's app | If the app needs a login or access code, a clear "sign in here once" step, so the preview is signed in too. | Not started | [x] Keep [ ] Later [ ] Remove |
+| 1.3 | Safer pull requests | Before opening a PR, Tovi checks the code still builds, attaches before/after screenshots, and never writes straight to main. | **Done** on PR #10 (build check, parse check, never main, before/after pictures; tested on northfold-demo PR #2) | [ ] Keep [ ] Later [ ] Remove |
+| 1.4 | Error reporting and "Report a problem" | Testers can send a report with one click, and you see what failed without asking them. Opt-in. | Not started | [x] Keep [ ] Later [ ] Remove |
 | 1.5 | Next.js support | Apps built with Next.js can be opened and edited, not just Vite apps. | Done, on main (sample app tested; not yet a real project) | [ ] Keep [ ] Later [ ] Remove |
 | 1.6 | Edit per screen size | Choose "all sizes" or "only on mobile" (or tablet, desktop) so a change on one size doesn't leak onto the others. | Done, on main | [ ] Keep [ ] Later [ ] Remove |
-| 1.7 | Tailwind v4 support | Newer projects that use Tailwind v4 can be opened. Kerf reads Tailwind v3 only today. | Not started | [ ] Keep [ ] Later [ ] Remove |
+| 1.7 | Tailwind v4 support | Newer projects that use Tailwind v4 can be opened. Tovi reads Tailwind v3 only today. | Not started | [x] Keep [ ] Later [ ] Remove |
+| 1.8 | **Choose your AI model** | An **AI** section in Settings: pick a provider, paste its key, choose a model. Tiers: **Recommended** Claude (default, fully tested); **Verified** latest OpenAI and Google Gemini (tested with every Tovi AI feature: screen reading, structured edits, illustrations); **Any model (advanced)** via one OpenRouter key, labelled "not tested, results may vary"; **Later** local models (e.g. Ollama) for privacy-focused teams. Models that can't draw well say so instead of drawing badly. | Not started. **Decided:** Claude only for the private beta; add Verified (OpenAI + Gemini) before the public launch; advanced and local after launch, by demand. Testing needs the founder's OpenAI and Google keys, saved in Settings. | [x] Later (before public launch) |
+| 1.9 | **Use people's existing AI subscriptions** | Let people use the Claude or ChatGPT plan they already pay for instead of pasting a key (Wonder does this by running Claude Code and Codex on the user's Mac). | **Checked October 2026:** Anthropic doesn't allow apps to offer Claude subscription sign-in unless Anthropic approves it first; API keys are the allowed route. Next step if wanted: ask Anthropic for approval. OpenAI's rules for ChatGPT sign-in in other apps still to check. | [ ] Ask Anthropic [x] Skip |
 
-## 2. Features that make Kerf stand out
+## 2. Features that make Tovi stand out
 
 | # | Item | What it means | Status | Decision |
 |---|---|---|---|---|
-| 2.1 | **Match to Figma** | Paste a Figma frame link. Kerf compares it with the live screen and marks everywhere the build differs (spacing, colour, type, radius, missing parts). One click fixes them as a PR. This is my top recommendation. | Not started | [ ] Keep [ ] Later [ ] Remove |
-| 2.2 | Polish pass | One button checks a screen and lists problems with one-click fixes: spacing off the scale, near-duplicate greys, low-contrast text, misaligned items, buttons that differ from their siblings. | Not started | [ ] Keep [ ] Later [ ] Remove |
-| 2.3 | States and real content | Edit hover, focus, disabled, loading, empty and error states. Test with long names, empty lists and large numbers. | Not started | [ ] Keep [ ] Later [ ] Remove |
-| 2.4 | "Used in 12 places" | Before changing a shared component, show every screen it appears on, with thumbnails. | Not started | [ ] Keep [ ] Later [ ] Remove |
-| 2.5 | Live preview of AI changes | See the AI's proposed change on the screen before applying it, with a before/after slider. | Not started | [ ] Keep [ ] Later [ ] Remove |
-| 2.6 | Edit the design system | Change the brand colour, type scale or corner radius once, and it updates the Tailwind config everywhere. | Not started | [ ] Keep [ ] Later [ ] Remove |
-| 2.7 | Before/after screenshots in PRs | Every pull request includes images of the screen before and after the change, so reviewers see it without running the app. | Not started (part of 1.3) | [ ] Keep [ ] Later [ ] Remove |
-| 2.8 | Share a link to a screen | A PM or developer opens an edited screen in a browser and leaves comments, with no install. Needs cloud mode. | Not started (later phase) | [ ] Keep [ ] Later [ ] Remove |
-| 2.9 | Onboarding for the first edit | A short guided first change, so new users learn by doing. | Not started | [ ] Keep [ ] Later [ ] Remove |
+| 2.1 | **Match to Figma** | Paste a Figma frame link. Tovi compares it with the live screen and marks everywhere the build differs (spacing, colour, type, radius, missing parts). One click fixes them as a PR. This is my top recommendation. | Not started | [x] Keep [ ] Later [ ] Remove |
+| 2.2 | **Diagnose (was: Polish pass)** | Tovi reviews a screen like a design lead and leaves notes on the exact spots that need work: what's wrong and what it would change (contrast, hierarchy, spacing, alignment, consistency, off-system values, small controls, clutter). Keep, edit or remove notes, then Apply fixes the rest through Tasks, as one undoable batch that ships with Hand off. Bottom bar: Diagnose → This page / This selection / Whole product. | **Done:** This page, This selection, Whole product (follows the app's links, up to 10 pages, each reviewed a screen at a time, notes kept per page, Stop any time), and "Check my product" when opening a project (on by default). Next: merge near-duplicate notes across screens, instant measured checks (contrast, near-duplicate colours), faster scans. | [x] Keep |
+| 2.3 | States and real content | Edit hover, focus, disabled, loading, empty and error states. Test with long names, empty lists and large numbers. | Not started | [x] Keep [ ] Later [ ] Remove |
+| 2.4 | "Used in 12 places" | Before changing a shared component, show every screen it appears on, with thumbnails. | Not started | [ ] Keep [x] Later [ ] Remove |
+| 2.5 | Live preview of AI changes | See the AI's proposed change on the screen before applying it, with a before/after slider. | Not started | [ ] Keep [x] Later [ ] Remove |
+| 2.6 | Edit the design system | Change the brand colour, type scale or corner radius once, and it updates the Tailwind config everywhere. | Colours done (select the page via its frame name); type scale and radius not yet | [ ] Keep [x] Later [ ] Remove |
+| 2.7 | Before/after screenshots in PRs | Every pull request includes images of the screen before and after the change, so reviewers see it without running the app. | **Done** on PR #10 (pictures on a `tovi-screenshots/` side branch, diff stays clean) | [ ] Keep [ ] Later [ ] Remove |
+| 2.8 | Share a link to a screen | A PM or developer opens an edited screen in a browser and leaves comments, with no install. Needs cloud mode. | Not started (later phase) | [ ] Keep [x] Later [ ] Remove |
+| 2.9 | Onboarding for the first edit | A short guided first change, so new users learn by doing. | Not started | [ ] Keep [x] Later [ ] Remove |
+| 2.10 | **Start from a website link** | Paste your live site's URL and start fixing it in seconds, no repo or setup. Edits apply on the live page; the hand off is a change report (before/after screenshots, a plain list of changes, the CSS for each) that developers apply, or a real pull request once a GitHub repo is connected (edits carry over). Only for sites you own or work on; no rebuilding sites into new code. Great for onboarding and for designers without repo access. | Not started. **Decided (Oct 2026):** park until after the private beta, then build before the public launch as the way new people get in. | [x] Later (after beta) |
 
 ## 3. Merge and simplify (decide each one)
 
 | # | Item | What it means | Decision |
 |---|---|---|---|
-| 3.1 | Merge Ask bar and ⌘K chat | One "Ask Kerf" box. It works on whatever is selected, or the whole screen if nothing is. Removes one of the three AI entry points. | [ ] Keep [ ] Later [ ] Remove |
-| 3.2 | Merge Ask bar with notes (marks) | One box for everything. Marks become a way to point at things, not a separate mode. Note: this is different from 3.1. I earlier suggested keeping notes separate, then suggested merging them. Choose one. | [ ] Keep [ ] Remove |
-| 3.3 | Keep notes as their own mode | Notes stay separate: one mark, one note, one result per note. My earlier advice. | [ ] Keep [ ] Remove |
-| 3.4 | One "Changes" list | Combine undo, the Changes list, Versions and the PR into one list. Each item can be undone. Versions become automatic checkpoints. | [ ] Keep [ ] Later [ ] Remove |
-| 3.5 | Margin moved under "More" | Figma has no margin, and it leads to messy layouts. Steer people to padding and gap, and hide margin unless asked. | [ ] Keep [ ] Remove |
-| 3.6 | Hide code by default | Code stays hidden unless someone asks for it. Already mostly the case. | [ ] Keep [ ] Remove |
-| 3.7 | API key moves into Settings | Remove the key box from the start page; put it in a small Settings panel. | [ ] Keep [ ] Later [ ] Remove |
+| 3.1 | Merge Ask bar and ⌘K chat | One "Ask Tovi" box. It works on whatever is selected, or the whole screen if nothing is. Removes one of the three AI entry points. | **Done** (one chat on the left, ⌘K) |
+| 3.2 | Merge Ask bar with notes (marks) | One box for everything. Marks become a way to point at things, not a separate mode. Note: this is different from 3.1. I earlier suggested keeping notes separate, then suggested merging them. Choose one. | [ ] Keep [x] Remove |
+| 3.3 | Keep notes as their own mode | Notes stay separate: one mark, one note, one result per note. My earlier advice. | [x] Keep [ ] Remove |
+| 3.4 | One "Changes" list | Combine undo, the Changes list, Versions and the PR into one list. Each item can be undone. Versions become automatic checkpoints. | [ ] Keep [x] Later [ ] Remove |
+| 3.5 | Margin moved under "More" | Figma has no margin, and it leads to messy layouts. Steer people to padding and gap, and hide margin unless asked. | [ ] Keep [x] Remove |
+| 3.6 | Hide code by default | Code stays hidden unless someone asks for it. Already mostly the case. | [x] Keep [ ] Remove |
+| 3.7 | API key moves into Settings | Remove the key box from the start page; put it in a small Settings panel. | **Done** (start page → Settings) |
 
 ## 4. Things to never add
 
 | # | Item | Why not | Decision |
 |---|---|---|---|
-| 4.1 | Free positioning, drag anywhere | Breaks responsive layouts, and developers reject the code it produces. Auto layout stays the backbone, as the PRD says. | [ ] Agree [ ] Disagree |
+| 4.1 | Free positioning, drag anywhere | Breaks responsive layouts, and developers reject the code it produces. Auto layout stays the backbone, as the PRD says. | [x] Agree [ ] Disagree |
 
 ---
 
 ## Notes for your decision
 
-- **Items 3.2 and 3.3 conflict.** Pick one.
+- **Decided (9 Nov 2026), all recommendations accepted.** Build order: 1.1 one-step install → 1.7 Tailwind v4 → 1.2 app sign-in → 1.4 report a problem → 2.1 Match to Figma → 2.3 states and real content. Notes stay their own mode (3.3); one Changes list later (3.4); margin stays visible (3.5 removed); code hidden by default (3.6); never free positioning (4.1); skip Claude subscription sign-in for now (1.9). Already decided earlier: 1.8 (Claude for beta, OpenAI + Gemini before launch), 2.10 (later, after beta).
 - **1.5 and 1.6** are finished and merged into main.
-- **Your call on order:** my recommendation is 2.1 (Match to Figma) first, then 2.3 (states and real content), with 1.1 and 1.3 needed before any tester uses Kerf alone.
+- **Your call on order:** my recommendation is 2.1 (Match to Figma) first, then 2.3 (states and real content), with 1.1 and 1.3 needed before any tester uses Tovi alone.

@@ -183,6 +183,33 @@ test('insert next to a page’s outer box goes inside it instead', () => {
   assert.match(summary.action, /went inside/);
 });
 
+test('editing for all screen sizes keeps the class in its place', () => {
+  const r = applyResponsive('mt-4 text-sm font-bold text-content'.split(' '), [{ prop: 'fontSize', value: 18 }], th, { mode: 'all' });
+  assert.equal(r.classes.join(' '), 'mt-4 text-lg font-bold text-content');
+});
+test('a small line height is a ratio, not pixels', () => {
+  assert.equal(ops('text-xl', [{ prop: 'lineHeight', value: 1.2 }]), 'text-xl leading-[1.2]');
+  assert.equal(ops('text-xl', [{ prop: 'lineHeight', value: 1.25 }]), 'text-xl leading-tight');
+});
+test('equal horizontal and vertical padding become one class', () => {
+  assert.equal(ops('card', [{ prop: 'padX', value: 24 }, { prop: 'padY', value: 24 }]), 'card p-6');
+  assert.equal(ops('card px-6 py-2', [{ prop: 'padY', value: 24 }]), 'card p-6');
+  assert.equal(ops('card px-6 py-4', [{ prop: 'padY', value: 16 }]), 'card px-6 py-4');
+});
+test('font family uses the project’s own font keys', () => {
+  assert.equal(ops('text-xl font-bold', [{ prop: 'fontFamily', value: 'display' }]), 'text-xl font-bold font-display');
+  assert.equal(ops('font-display text-xl', [{ prop: 'fontFamily', value: 'sans' }]), 'font-sans text-xl');
+});
+test('top and bottom margin are separate, and split my-* / m-* so the other side keeps its value', () => {
+  assert.equal(ops('mt-4 text-xl', [{ prop: 'mT', value: 8 }]), 'mt-2 text-xl');
+  assert.equal(ops('my-4 text-xl', [{ prop: 'mT', value: 8 }]), 'mb-4 text-xl mt-2');
+  assert.equal(ops('my-4 text-xl', [{ prop: 'mB', value: null }]), 'mt-4 text-xl');
+  assert.equal(ops('m-4', [{ prop: 'mB', value: 0 }]), 'mx-4 mt-4 mb-0');
+});
+test('gradient stops can carry positions, written only when not the usual 0 / 50 / 100', () => {
+  assert.equal(ops('bg-surface p-4', [{ prop: 'gradient', value: 'r #FCBDDD@10 primary@37 #967184' }]), 'p-4 bg-gradient-to-r from-[#FCBDDD] from-10% via-primary via-[37%] to-[#967184]');
+  assert.equal(ops('bg-gradient-to-r from-primary from-10% to-surface p-4', [{ prop: 'gradient', value: 'r primary@0 surface@100' }]), 'bg-gradient-to-r from-primary to-surface p-4');
+});
 test('gradients replace solid fills, gradient text replaces the text color', () => {
   assert.equal(ops('bg-surface p-4', [{ prop: 'gradient', value: 'r primary surface-2' }]), 'p-4 bg-gradient-to-r from-primary to-surface-2');
   assert.equal(ops('bg-gradient-to-r from-primary to-surface p-4', [{ prop: 'bg', value: 'surface' }]), 'p-4 bg-surface');
@@ -203,7 +230,7 @@ test('a transparent fill does not cancel a gradient', () => {
 
 test('layout: margin, size, direction, alignment, wrap', () => {
   assert.equal(ops('m-4 text-sm', [{ prop: 'mY', value: 24 }]), 'mx-4 text-sm my-6');
-  assert.equal(ops('block w-64', [{ prop: 'layout', value: 'row' }, { prop: 'w', value: 'fill' }]), 'flex flex-row w-full');
+  assert.equal(ops('block w-64', [{ prop: 'layout', value: 'row' }, { prop: 'w', value: 'fill' }]), 'flex w-full');
   assert.equal(ops('flex flex-col items-start', [{ prop: 'alignItems', value: 'center' }, { prop: 'justify', value: 'between' }, { prop: 'wrap', value: 'wrap' }]), 'flex flex-col items-center justify-between flex-wrap');
   assert.equal(ops('flex flex-row gap-2', [{ prop: 'layout', value: 'none' }]), 'gap-2');
   assert.equal(ops('h-10', [{ prop: 'h', value: 'hug' }]), 'h-fit');
@@ -295,7 +322,7 @@ test('grouping reports where each element moved', () => {
 
 const rsp = (list, o, bp) => applyResponsive(list.split(' '), o, th, bp).classes.join(' ');
 test('only on mobile keeps the old value from tablet up', () => {
-  assert.equal(rsp('text-lg px-4', [{ prop: 'fontSize', value: 14 }], { mode: 'only', start: null, end: 'md' }), 'px-4 text-sm md:text-lg');
+  assert.equal(rsp('text-lg px-4', [{ prop: 'fontSize', value: 14 }], { mode: 'only', start: null, end: 'md' }), 'text-sm px-4 md:text-lg');
 });
 test('only on tablet sets md: and keeps desktop as it was', () => {
   assert.equal(rsp('px-4', [{ prop: 'padX', value: 24 }], { mode: 'only', start: 'md', end: 'lg' }), 'px-4 md:px-6 lg:px-4');
@@ -304,8 +331,179 @@ test('only on desktop replaces lg: and drops bigger overrides', () => {
   assert.equal(rsp('px-4 lg:px-5 xl:px-6', [{ prop: 'padX', value: 8 }], { mode: 'only', start: 'lg', end: null }), 'px-4 lg:px-2');
 });
 test('all sizes sets the base value and removes size overrides', () => {
-  assert.equal(rsp('text-sm md:text-lg font-bold', [{ prop: 'fontSize', value: 16 }], { mode: 'all' }), 'font-bold text-base');
+  assert.equal(rsp('text-sm md:text-lg font-bold', [{ prop: 'fontSize', value: 16 }], { mode: 'all' }), 'text-base font-bold');
 });
 test('an existing override at the end screen is left alone', () => {
-  assert.equal(rsp('px-4 md:px-6', [{ prop: 'padX', value: 8 }], { mode: 'only', start: null, end: 'md' }), 'md:px-6 px-2');
+  assert.equal(rsp('px-4 md:px-6', [{ prop: 'padX', value: 8 }], { mode: 'only', start: null, end: 'md' }), 'px-2 md:px-6');
+});
+
+// Styles that live outside the element: a status table in another file, like Stratemark's chips.
+import fs0 from 'node:fs';
+import os0 from 'node:os';
+import path0 from 'node:path';
+import { createEditor } from '../src/edit.mjs';
+function chipProject() {
+  const root = fs0.mkdtempSync(path0.join(os0.tmpdir(), 'kerf-src-'));
+  fs0.mkdirSync(path0.join(root, 'src/lib'), { recursive: true });
+  fs0.writeFileSync(path0.join(root, 'src/lib/cn.ts'), "import { twMerge } from 'tailwind-merge';\nexport function cn(...a: string[]) { return twMerge(a.join(' ')); }\n");
+  fs0.writeFileSync(path0.join(root, 'src/lib/format.ts'), "export const STYLES: Record<string, string> = {\n  verified: 'border-surface bg-surface text-content',\n  estimated: 'border-muted bg-muted text-content',\n};\n");
+  fs0.writeFileSync(path0.join(root, 'src/Badge.tsx'), "import { cn } from '@/lib/cn';\nimport { STYLES } from '@/lib/format';\nexport function Badge({ c }: { c: string }) {\n  return <span className={cn('chip', STYLES[c], 'cursor-help')}>x</span>;\n}\n");
+  return root;
+}
+const editorFor = (root) => createEditor(root, () => th, { findIcon: () => null, componentList: () => new Map() });
+const chipLoc = 'src/Badge.tsx:4:9';
+const dom = ['chip', 'border-surface', 'bg-surface', 'text-content', 'cursor-help'];
+
+test('a style from a status table is changed in the table, for that status', () => {
+  const root = chipProject(), ed = editorFor(root);
+  const d = ed.describe(chipLoc, dom);
+  assert.equal(d.classKind, 'sourced');
+  assert.equal(d.sources.find((s) => s.kind === 'table').key, 'verified');
+  ed.edit(chipLoc, { ops: [{ prop: 'bg', value: 'primary' }], dom });
+  const t = fs0.readFileSync(path0.join(root, 'src/lib/format.ts'), 'utf8');
+  assert.match(t, /verified: 'border-surface bg-primary text-content'/);
+  assert.match(t, /estimated: 'border-muted bg-muted text-content'/);
+  ed.undo();
+  assert.match(fs0.readFileSync(path0.join(root, 'src/lib/format.ts'), 'utf8'), /verified: 'border-surface bg-surface text-content'/);
+});
+test('a table target can change every status, or one other status', () => {
+  const root = chipProject(), ed = editorFor(root);
+  ed.edit(chipLoc, { ops: [{ prop: 'padX', value: 8 }], dom, target: 'table:STYLES:*' });
+  const t = fs0.readFileSync(path0.join(root, 'src/lib/format.ts'), 'utf8');
+  assert.equal((t.match(/px-2/g) || []).length, 2);
+  ed.edit(chipLoc, { ops: [{ prop: 'color', value: 'muted' }], dom, target: 'table:STYLES:estimated' });
+  assert.match(fs0.readFileSync(path0.join(root, 'src/lib/format.ts'), 'utf8'), /estimated: 'border-muted bg-muted text-muted px-2'/);
+});
+test('"only this one" adds an override after the table when cn merges classes', () => {
+  const root = chipProject(), ed = editorFor(root);
+  ed.edit(chipLoc, { ops: [{ prop: 'bg', value: 'primary' }], dom, scope: 'here' });
+  assert.match(fs0.readFileSync(path0.join(root, 'src/Badge.tsx'), 'utf8'), /cn\('chip', STYLES\[c\], 'cursor-help bg-primary'\)/);
+  assert.match(fs0.readFileSync(path0.join(root, 'src/lib/format.ts'), 'utf8'), /verified: 'border-surface bg-surface text-content'/);
+});
+
+import { valueToHex, hexToValue } from '../src/tokens.mjs';
+test('colour tokens are read and written in the format the app uses', () => {
+  assert.equal(valueToHex('15 118 110', 'rgb'), '#0F766E');
+  assert.equal(hexToValue('#14B8A6', '45 200 182', 'rgb'), '20 184 166');
+  assert.equal(hexToValue('#14B8A6', '45, 200, 182', 'rgb'), '20, 184, 166');
+  assert.equal(valueToHex(hexToValue('#14B8A6', '173 58% 39%', 'hsl'), 'hsl'), '#14B8A6');
+  assert.equal(hexToValue('#14b8a6', '#2DC8B6'), '#14B8A6');
+});
+
+test('a new class string is added after the last argument even with a trailing comma', () => {
+  const root = fs0.mkdtempSync(path0.join(os0.tmpdir(), 'kerf-tc-'));
+  fs0.mkdirSync(path0.join(root, 'src/lib'), { recursive: true });
+  fs0.writeFileSync(path0.join(root, 'src/lib/cn.ts'), "import { twMerge } from 'tailwind-merge';\nexport function cn(...a: string[]) { return twMerge(a.join(' ')); }\n");
+  fs0.writeFileSync(path0.join(root, 'src/Chip.tsx'), "import { cn } from '@/lib/cn';\nexport function Chip({ on }: { on: boolean }) {\n  return (\n    <button\n      className={cn(\n        'rounded-full px-2',\n        on ? 'bg-primary text-content' : 'bg-surface text-muted',\n      )}\n    >x</button>\n  );\n}\n");
+  const ed = editorFor(root);
+  ed.edit('src/Chip.tsx:4:4', { ops: [{ prop: 'bg', value: '#2A2350' }], dom: ['rounded-full', 'px-2', 'bg-surface', 'text-muted'], target: 'element' });
+  const out = fs0.readFileSync(path0.join(root, 'src/Chip.tsx'), 'utf8');
+  assert.match(out, /'bg-surface text-muted',\n        'bg-\[#2A2350\]',\n      \)\}/);
+});
+
+import { cleanSvg } from '../src/images.mjs';
+test('illustrations are cleaned of scripts, event handlers and outside links', () => {
+  const s = cleanSvg('junk<svg viewBox="0 0 10 10"><script>alert(1)</script><defs><linearGradient id="g"/></defs><rect onclick="x()" fill="url(#g)" width="10" height="10"/><image href="https://evil.example/x.png"/><a href="https://x.example"><circle r="2"/></a><use href="#g"/></svg>tail');
+  assert.ok(s.startsWith('<svg xmlns="http://www.w3.org/2000/svg"'));
+  assert.ok(!/script|onclick|evil|x\.example/.test(s));
+  assert.ok(s.includes('url(#g)') && s.includes('<use href="#g"/>'));
+  assert.equal(cleanSvg('no svg here'), null);
+});
+
+test('text passed in as a component prop is traced to the prop', async () => {
+  const { propText, findElement } = await import('../src/edit.mjs');
+  const code = `export function SectionHeading({ eyebrow, title, children }) {\n  return (\n    <div>\n      <p>{eyebrow}</p>\n      <h2>{title}</h2>\n      {children}\n    </div>\n  );\n}\nconst Button = forwardRef(function Button(props, ref) { return <button ref={ref}>{props.label}</button>; });\nfunction Card({ data }) { return <h3>{data.name}</h3>; }\n`;
+  const at = (needle) => { const i = code.indexOf(needle); const before = code.slice(0, i); return findElement(code, before.split('\n').length, i - before.lastIndexOf('\n') - 1); };
+  assert.deepEqual(propText(code, at('<h2>')), { comp: 'SectionHeading', prop: 'title' });
+  assert.deepEqual(propText(code, at('<button')), { comp: 'Button', prop: 'label' });
+  assert.equal(propText(code, at('<h3>')), null);
+});
+
+test('a variant the usage does not set yet can be added from its options', async () => {
+  const { editElement } = await import('../src/edit.mjs');
+  const code = `import { Button } from './Button';\nexport const A = () => <Button size="lg">Go</Button>;\n`;
+  const { code: out } = editElement(code, 2, 23, { props: [{ name: 'variant', value: 'outline', options: ['primary', 'outline', 'ghost'] }] }, { colors: {}, spacing: {} });
+  assert.match(out, /<Button size="lg" variant="outline">|<Button variant="outline" size="lg">/);
+  assert.throws(() => editElement(code, 2, 23, { props: [{ name: 'variant', value: 'huge', options: ['primary', 'outline'] }] }, { colors: {}, spacing: {} }));
+  assert.throws(() => editElement(code, 2, 23, { props: [{ name: 'onClick', value: 'x', options: ['x'] }] }, { colors: {}, spacing: {} }));
+});
+
+test('a picture can replace an icon, keeping its size', async () => {
+  const { structureEdit } = await import('../src/structure.mjs');
+  const code = `import { Leaf, Truck } from 'lucide-react';\nexport const A = () => (<div>\n  <Leaf className="h-6 w-6 text-primary" />\n  <Truck className="h-6 w-6" />\n</div>);\n`;
+  const { code: out } = structureEdit(code, 3, 2, { type: 'image', src: '/kerf/leaf.svg', alt: 'Leaf drawing', kind: 'illustration' }, {});
+  assert.match(out, /<img src="\/kerf\/leaf.svg" alt="Leaf drawing" className="h-16 w-16 object-contain" \/>/);
+  assert.match(out, /import \{ Truck \} from 'lucide-react'/);
+});
+
+// Google Fonts: joining the project's font link and naming the font in tailwind.config.
+import { htmlWithFont, configWithFont } from '../src/fonts.mjs';
+test('a Google Font joins the existing font link, or gets its own in <head>', () => {
+  const html = '<head>\n    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet" />\n  </head>';
+  assert.match(htmlWithFont(html, 'Lora:wght@400..700'), /family=Inter:wght@400;700&family=Lora:wght@400\.\.700&display=swap/);
+  const bare = '<html>\n  <head>\n    <title>x</title>\n  </head>\n</html>';
+  const out = htmlWithFont(bare, 'Lora:wght@400..700');
+  assert.match(out, /\n    <link href="https:\/\/fonts\.googleapis\.com\/css2\?family=Lora:wght@400\.\.700&display=swap" rel="stylesheet" \/>\n  <\/head>/);
+});
+test('a Google Font is named in tailwind.config, in the file’s own style', () => {
+  const cfg = "export default {\n  theme: {\n    extend: {\n      fontFamily: {\n        sans: ['Inter', 'sans-serif'],\n      },\n    },\n  },\n};\n";
+  assert.equal(configWithFont(cfg, 'tailwind.config.js', 'playfair-display', 'Playfair Display', 'serif'),
+    "export default {\n  theme: {\n    extend: {\n      fontFamily: {\n        sans: ['Inter', 'sans-serif'],\n        'playfair-display': ['\"Playfair Display\"', 'serif'],\n      },\n    },\n  },\n};\n");
+  const noFonts = "export default {\n  theme: {\n    extend: {\n      colors: { a: '#fff' },\n    },\n  },\n};\n";
+  assert.match(configWithFont(noFonts, 'tailwind.config.js', 'lora', 'Lora', 'serif'), /colors: \{ a: '#fff' \},\n      fontFamily: \{\n        lora: \['"Lora"', 'serif'\],\n      \},\n/);
+});
+test('a gradient only on tablet prefixes every part of it', () => {
+  const out = rsp('mt-6 bg-surface', [{ prop: 'gradient', value: 'r surface primary' }], { mode: 'only', start: 'md', end: 'lg' });
+  assert.ok(out.includes('md:bg-gradient-to-r') && out.includes('md:from-surface') && out.includes('md:to-primary'), out);
+  assert.ok(!/(^| )from-surface( |$)/.test(out) && !/(^| )to-primary( |$)/.test(out), out);
+});
+
+test('hide, clip, text case and decoration switch their class on and off', () => {
+  const on = (cls, op) => applyOps(cls.split(' '), [op], th).classes.join(' ');
+  assert.equal(on('flex gap-2', { prop: 'hide', value: 'on' }), 'flex gap-2 hidden');
+  assert.equal(on('flex gap-2 hidden', { prop: 'hide', value: 'off' }), 'flex gap-2');
+  assert.equal(on('rounded-xl', { prop: 'clip', value: 'on' }), 'rounded-xl overflow-hidden');
+  assert.equal(on('rounded-xl overflow-hidden', { prop: 'clip', value: 'off' }), 'rounded-xl');
+  assert.equal(on('text-sm', { prop: 'case', value: 'upper' }), 'text-sm uppercase');
+  assert.equal(on('text-sm uppercase', { prop: 'case', value: 'none' }), 'text-sm');
+  assert.equal(on('text-sm', { prop: 'decor', value: 'underline' }), 'text-sm underline');
+  assert.equal(on('text-sm underline', { prop: 'decor', value: 'strike' }), 'text-sm line-through');
+  assert.equal(on('text-sm line-through', { prop: 'decor', value: 'none' }), 'text-sm');
+});
+
+test('image fills: a background photo, how it fills the box, and removing it', () => {
+  const on = (cls, ops) => applyOps(cls.split(' '), ops, th).classes.join(' ');
+  const set = [{ prop: 'bgImg', value: '/images/cabin night.jpg' }, { prop: 'bgSize', value: 'cover' }, { prop: 'bgPos', value: 'center' }];
+  assert.equal(on('rounded-xl bg-surface p-6', set), "rounded-xl bg-surface p-6 bg-[url('/images/cabin%20night.jpg')] bg-cover bg-center");
+  // Replacing the photo swaps only the image class; the colour fill underneath stays.
+  assert.equal(on("bg-surface bg-[url('/a.jpg')] bg-cover", [{ prop: 'bgImg', value: '/b.png' }]), "bg-surface bg-[url('/b.png')] bg-cover");
+  assert.equal(on("bg-[url('/a.jpg')] bg-cover bg-center", [{ prop: 'bgSize', value: 'contain' }]), "bg-[url('/a.jpg')] bg-contain bg-center");
+  assert.equal(on("p-4 bg-[url('/a.jpg')] bg-cover bg-center", [{ prop: 'bgImg', value: 'none' }, { prop: 'bgSize', value: 'none' }, { prop: 'bgPos', value: 'none' }]), 'p-4');
+  // A link with characters that would break the class is encoded, and a script link is refused.
+  assert.equal(on('p-4', [{ prop: 'bgImg', value: "https://x.com/a(1)'.jpg" }]), "p-4 bg-[url('https://x.com/a%281%29%27.jpg')]");
+  assert.throws(() => on('p-4', [{ prop: 'bgImg', value: 'javascript:alert(1)' }]));
+});
+
+test('grid columns change on the screen size being edited only', () => {
+  // From tablet up: the phone layout (one column) stays as it is.
+  const out = rsp('grid gap-14 md:grid-cols-2', [{ prop: 'cols', value: 3 }], { mode: 'only', start: 'md', end: null });
+  assert.ok(out.includes('md:grid-cols-3') && !out.includes('md:grid-cols-2'), out);
+  assert.ok(!/(^| )grid-cols-3( |$)/.test(out), out);
+  // Every screen: one value everywhere.
+  assert.equal(rsp('grid md:grid-cols-2', [{ prop: 'cols', value: 3 }], { mode: 'all' }), 'grid grid-cols-3');
+});
+
+test('hand off pictures: changed pages, files as they were, the side branch and the PR markdown', async () => {
+  const { changedPages, contentBefore, shotsBranch, shotsMarkdown, shotUrl } = await import('../src/prshots.mjs');
+  const h = [{ file: 'a', before: 'A0', page: '/' }, { file: 'b', before: 'B0', page: '/stays' }, { file: 'a', before: 'A1', page: '/' }, { file: 'c', before: 'C0', more: [{ file: 'b', before: 'Bx' }] }];
+  assert.deepEqual(changedPages(h), ['/', '/stays']);
+  const before = contentBefore(h);
+  assert.equal(before.get('a'), 'A0');
+  assert.equal(before.get('b'), 'B0');
+  assert.equal(shotsBranch('kerf/design-updates-1'), 'tovi-screenshots/design-updates-1');
+  assert.equal(shotUrl('o/r', 'abc', 'home before.jpg'), 'https://github.com/o/r/blob/abc/home%20before.jpg?raw=true');
+  const md = shotsMarkdown([{ page: '/', before: 'u1', after: 'u2' }, { page: '/x', before: null, after: null }], 'kerf/b');
+  assert.ok(md.includes('| Before | After |') && md.includes('src="u1"') && md.includes('src="u2"'));
+  assert.ok(!md.includes('/x'));
+  assert.equal(shotsMarkdown([], 'kerf/b'), '');
 });
