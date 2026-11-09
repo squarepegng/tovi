@@ -477,6 +477,7 @@
     if (!el) { S.multi = []; S.sel = null; S.cpick = S.cp = null; renderPanel(); renderLayers(); chatCtx(); return; }
     S.pageSel = false;
     const list = [...sameLoc(el)], prev = S.sel;
+    S.ctxOff = false;
     S.sel = { el, def: defOf(el), use: useOf(el), idx: Math.max(0, list.indexOf(el)), repeat: list.length, defInfo: null, useInfo: null, path: pathOf(el) };
     // "This one" / "Only here" is a choice for one element: a new selection starts from the default again
     // (all copies, every look-alike), so edits keep reaching every copy unless you choose otherwise.
@@ -505,9 +506,15 @@
     const t = (el.innerText || '').split('\n').map((x) => x.trim()).find(Boolean);
     return t ? `${n} “${t.length > 28 ? t.slice(0, 27) + '…' : t}”` : n;
   }
+  // The chat talks about the selection unless the designer removed it from the chip (then: the whole screen).
+  const useSel = () => !!S.sel && !S.ctxOff;
+  function ctxChip() {
+    if (useSel()) return `<span class="kcCtx" title="Tovi looks at this. Remove it to ask about the whole screen.">${ico('frame', 12)}<span class="kcCtxT">${esc(ctxName(S.sel.el))}</span><button type="button" class="kcCtxX" data-act2="ctxOff" aria-label="Ask about the whole screen instead">${ico('x', 10)}</button></span>`;
+    return `<span class="kcCtx" title="Tovi looks at the whole screen">${ico('desktop', 12)}Whole screen</span>${S.sel ? `<button type="button" class="kcCtxAdd" data-act2="ctxOn" title="Ask about ${esc(ctxName(S.sel.el))} instead">${ico('plus', 11)}Selection</button>` : ''}`;
+  }
   function chatCtx() {
-    const c = document.querySelector('#lbody .kcCtx');
-    if (c) c.innerHTML = `${ico(S.sel ? 'frame' : 'desktop', 12)}${S.sel ? esc(ctxName(S.sel.el)) : 'Whole screen'}`;
+    const c = document.querySelector('#lbody .kcTop');
+    if (c) c.innerHTML = ctxChip();
   }
   // Where this instance of a component is used. Components that don't pass their props through to the HTML
   // leave no tag on the page, but React (in development) still knows each element's component and its props.
@@ -3054,7 +3061,7 @@
     if (!text || (S.card?.busy && !opts.review)) return;
     if (!targets.length) { toast('Nothing on screen to work with yet. Wait for the page to load, or select something.', '', true); return; }
     const history = historyFor();
-    const ctx = followUp ? 'Follow-up' : where === 'chat' && S.sel ? ctxName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
+    const ctx = followUp ? 'Follow-up' : where === 'chat' && useSel() ? ctxName(S.sel.el) : where === 'notes' ? `${S.notes.length} task${S.notes.length === 1 ? '' : 's'}` : 'Whole screen';
     if (!opts.review) S.chat.push({ role: 'user', text, shown: shown || text, ctx, where, atts: atts.map((a) => ({ name: a.name, thumb: a.thumb })) });
     const m = { role: 'kerf', batch: !!opts.notes, second: !!opts.review, checkLabel: opts.notes ? (opts.round > 1 ? 'Final check' : 'Checking the fixes') : opts.round > 1 ? 'Final check' : null, busy: true, status: 'pending', where, targets, noteTexts: where === 'notes' && !followUp ? S.notes.map((n) => n.text) : null, skip: [], started: Date.now(), looked: uniq(targets).map((t) => t.name).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).slice(0, 40), lookedN: targets.length };
     S.chat.push(m);
@@ -3232,7 +3239,7 @@
   const askPick = (m, k) => {
     if (!m?.proposal?.ask || m.picked != null || S.card?.busy) return;
     m.picked = k;
-    runAI(m.proposal.ask.options[k], m.targets?.length ? m.targets : S.sel ? selectionTargets() : visibleTargets(), m.where, null, true);
+    runAI(m.proposal.ask.options[k], m.targets?.length ? m.targets : useSel() ? selectionTargets() : visibleTargets(), m.where, null, true);
   };
   // "Looked at 14 elements · Thought for 9s", which opens to show what Tovi read.
   function stepsHTML(m, live) {
@@ -3314,7 +3321,7 @@
       <div class="comp">${tasksShown() && !(S.card?.busy && S.card.steps) ? tasksHTML(S.card?.busy && S.card.where === 'notes') : ''}${composer('chatIn', { form: 'chat', ctx, placeholder: 'Describe a change, or follow up…' })}</div>`;
   }
   function sendChat() {
-    take('chatIn', (v, atts) => runAI(v, S.sel ? selectionTargets() : visibleTargets(), 'chat', null, false, atts));
+    take('chatIn', (v, atts) => runAI(v, useSel() ? selectionTargets() : visibleTargets(), 'chat', null, false, atts));
   }
 
   /* composer: one message box for Ask, replies, chat and notes, with images and dictation */
@@ -3328,7 +3335,7 @@
     const rec = mic?.id === id, has = (S.drafts[id] || '').trim() || atts.length;
     return `<form class="kc${o.big ? ' big' : ''}${o.bar ? ' slim' : ''}" data-form="${o.form}" data-where="${o.where || ''}" data-kc="${id}">
       ${atts.length ? `<div class="kcAtt">${atts.map((a, i) => `<span class="kcThumb" title="${esc(a.name)}"><img src="${a.thumb}" alt="${esc(a.name)}"><button type="button" data-act2="attX" data-id="${id}" data-i="${i}" aria-label="Remove ${esc(a.name)}">${ico('x', 10)}</button></span>`).join('')}</div>` : ''}
-      ${o.ctx ? `<div class="kcTop"><span class="kcCtx" title="What Tovi will look at">${ico(S.sel ? 'frame' : 'desktop', 12)}${o.ctx}</span></div>` : ''}
+      ${o.ctx ? `<div class="kcTop">${o.form === 'chat' ? ctxChip() : `<span class="kcCtx" title="What Tovi will look at">${ico(S.sel ? 'frame' : 'desktop', 12)}${o.ctx}</span>`}</div>` : ''}
       <div class="kcRow">${o.lead || ''}<textarea id="${id}" rows="1" placeholder="${esc(o.placeholder)}" aria-label="${esc(o.placeholder)}">${esc(S.drafts[id] || '')}</textarea></div>
       <div class="kcBar">
         <button type="button" class="kcB" data-act2="attach" data-id="${id}" title="Attach images · or paste / drop them here" aria-label="Attach images">${ico(o.bar ? 'plus' : 'clip', 15)}</button>
@@ -3741,12 +3748,13 @@
     const a = e.target.closest('[data-act2]');
     if (a) {
       const act = a.dataset.act2, v = a.dataset.v;
+      if (act === 'ctxOff' || act === 'ctxOn') { S.ctxOff = act === 'ctxOff'; chatCtx(); $('chatIn')?.focus(); return; }
       if (act === 'askHint') runAI(v, visibleTargets(), 'ask');
-      else if (act === 'chatHint') runAI(v, S.sel ? selectionTargets() : visibleTargets(), 'chat');
+      else if (act === 'chatHint') runAI(v, useSel() ? selectionTargets() : visibleTargets(), 'chat');
       else if (act === 'decide') decide(S.chat[+a.dataset.i], v);
       else if (act === 'askPick') askPick(S.chat[+a.dataset.i], +v);
       // Tovi did what you asked; its better option is one click away.
-      else if (act === 'altRun') { const m = S.chat[+a.dataset.i]; if (m?.proposal?.alt && !m.altUsed && !S.card?.busy) { m.altUsed = true; runAI(m.proposal.alt.request, m.targets?.length ? m.targets : S.sel ? selectionTargets() : visibleTargets(), m.where, m.proposal.alt.label, true); } }
+      else if (act === 'altRun') { const m = S.chat[+a.dataset.i]; if (m?.proposal?.alt && !m.altUsed && !S.card?.busy) { m.altUsed = true; runAI(m.proposal.alt.request, m.targets?.length ? m.targets : useSel() ? selectionTargets() : visibleTargets(), m.where, m.proposal.alt.label, true); } }
       else if (act === 'cardMin') { S.cardMin = !S.cardMin; renderAI(); }
       else if (act === 'closeCard') { S.cardMin = false; S.cardPos = {}; if (S.card?.previewing) { S.card.previewing = false; previewTokens(S.card, false); } if (S.card?.status === 'pending') S.card.status = 'discarded'; S.card = null; S.amber = []; renderAI(); }
       else if (act === 'modeMenu') { const r = a.getBoundingClientRect(); modeMenu({ x: r.left, y: r.top - 230 }); }
@@ -3757,7 +3765,7 @@
         const go = () => {
           S.modeOnce = act === 'keepLook' ? 'improve' : v;
           if (act === 'keepLook') runAI('Make the design system match the look I just applied, so it is reusable everywhere: adjust the colour tokens to it and keep type and spacing consistent.', visibleTargets(), m.where, null, true);
-          else runAI(u.text, m.targets?.length ? m.targets : S.sel ? selectionTargets() : visibleTargets(), m.where, u.shown, true);
+          else runAI(u.text, m.targets?.length ? m.targets : useSel() ? selectionTargets() : visibleTargets(), m.where, u.shown, true);
         };
         if ((act === 'keepLook' || v !== 'system') && !S.direction) { S._afterDir = go; openDirection(); } else go();
       }

@@ -1687,3 +1687,14 @@ aside.side.r{border-left-color:var(--chromeLine)}
 .diagPages button.on{background:rgba(var(--hi),.06)}
 .diagPages b{color:var(--ink3);font-weight:400;font-size:12px}
 .noteTag .nLead{fill:none;stroke:#FCBDDD;stroke-width:1;opacity:.8}
+/* Chat context chip: what Tovi looks at. × drops the selection (ask about the whole screen); + brings it back. */
+.kcTop{display:flex;align-items:center;gap:6px;min-width:0}
+.kcCtx{gap:6px;padding-right:4px}
+.kcCtxT{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kcCtxX{flex:0 0 auto;width:16px;height:16px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:transparent;color:var(--ink3);cursor:pointer;transition:background var(--t-fast),color var(--t-fast)}
+.kcCtxX:hover{background:rgba(var(--hi),.1);color:var(--ink)}
+.kcCtx:not(:has(.kcCtxX)){padding-right:9px}
+.kcCtxAdd{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:150px;height:24px;padding:0 8px;border:1px dashed rgba(var(--hi),.14);border-radius:999px;background:transparent;color:var(--ink3);font:500 11px/14px var(--ui);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:color var(--t-fast),border-color var(--t-fast)}
+.kcCtxAdd:hover{color:var(--ink2);border-color:rgba(var(--hi),.25)}
+.kcTop .kcCtx:not(:has(.kcCtxX)){flex:0 0 auto;max-width:none}
+.kcCtxAdd{flex:0 0 auto}
