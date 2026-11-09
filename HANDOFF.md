@@ -155,7 +155,7 @@ cd /Users/mac/Documents/kerf/engine && node bin/kerf.mjs $SP/sm/apps/web   # usu
 
 ## 10. Open decisions (waiting on the user)
 
-The user is marking **`CHECKLIST.md`** (Keep / Later / Remove) and will say which items to build and in what order. Highlights:
+**Decided 9 Nov 2026 (all recommendations accepted; see CHECKLIST.md):** build next, in order, 1.1 one-step install → 1.7 Tailwind v4 → 1.2 app sign-in → 1.4 report a problem → 2.1 Match to Figma → 2.3 states. Notes stay their own mode; margin stays visible; never free positioning. Earlier highlights:
 
 - **My top recommendations:**
   - **2.1 "Match to Figma":** compare a Figma frame with the live screen and fix the drift as a PR.
