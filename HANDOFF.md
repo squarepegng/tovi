@@ -1,180 +1,291 @@
-# Tovi: handoff for the next AI session
+# Tovi: the complete brief for the next agent
 
-**Read this first, then `CLAUDE.md` (product decisions, PRD links, design tokens), then `CHECKLIST.md` (open decisions).**
-Last updated: 2026-10-21.
+**Read this first, then `CLAUDE.md` (product decisions, design tokens, PRD links), then `CHECKLIST.md` (every feature idea with the founder's decision).**
+Last updated: 2026-11-16.
 
 ---
 
-## 1. What Tovi is (one paragraph)
+## 1. What Tovi is
 
-_Renamed from Kerf in October 2026. Internal names (`data-kerf`, `/__kerf/`, `.kerf/`, `~/Kerf/projects/`, `kerf/…` branches, `kerf-*.mjs`) are kept on purpose; see CLAUDE.md._
+Tovi lets designers and founders edit their team's **real, running React + Tailwind app** the way they'd edit in Figma. They can select anything and change its colour, type, spacing, layout, size, images or structure, or ask AI to do it. Tovi writes each change into the source code the way a careful developer would: AST edits of Tailwind classes on the exact JSX element, never find-and-replace. **All the changes go to developers as one GitHub pull request**, with before/after pictures.
 
-Tovi lets designers and founders edit their team's **real, running React + Tailwind app** the way they'd edit in Figma: select anything, change colour, type, spacing, layout, size, images, structure. Tovi writes the change into the source code as a careful developer would (AST edits of Tailwind classes, never find-and-replace), and the changes go to developers as one **GitHub pull request**. It also has AI that does the same edits from plain-English requests: an Ask bar, ⌘K chat and on-screen notes. "Tovi" is the working name. The user sometimes types "Kev" or "karf". The GitHub repo is `squarepegng/tovi`.
+- **Who it's for:** product designers on React + Tailwind teams, and founders or builders without design training. The second group gets guardrails: values snap to the design scale, and contrast warnings appear.
+- **Goal:** a public launch, after a private beta with 20–50 invited users.
+- **Naming:** renamed from "Kerf" in October 2026. Everything people see says Tovi. Internal names keep "kerf" on purpose: `data-kerf`, `/__kerf/`, `.kerf/`, `~/Kerf/`, `kerf/…` branches, `kerf-*.mjs`, `createKerf`. Don't rename them; that would break saved sessions.
+- **Repo:** `squarepegng/tovi` (public), local at `/Users/mac/Documents/kerf`. Planned domains: usetovi.com and tovi.design.
 
-## 2. Who you're working with (important)
+## 2. Who you're working with (read carefully)
 
-- **The founder is a designer, not an engineer.** Explain briefly in plain language, do the work directly, and don't re-ask for permission they already gave. They say "you" and "it" loosely.
-- **They're careful with credits.** Prefer CLI and direct routes over long browser-clicking loops (a Vercel clicking loop once burned their credits and frustrated them). Keep replies short.
-- **They want Figma/Framer-quality UI.** It should be clean, intuitive and Figma-like, never developer-ish. "Speak designer, not developer" is a standing rule.
-- **Security rules:**
-  - Never ask them to paste tokens or passwords in chat.
-  - Never read, print or repeat the Anthropic API key. It lives in `engine/.env` (git-ignored) and is set from the key field on the Tovi start page.
-  - Keys were pasted in chat earlier in this project. Treat those as compromised; the user was told to revoke them.
-  - Don't copy sign-in tokens or other credentials between sites or apps, even for testing.
-- **Git rules:**
+- **Tobi, the founder, is a designer, not an engineer, with very high taste.** Explain briefly in plain language and do the work directly. Don't re-ask for permission already given. "Speak designer, not developer."
+- **Push back.** When an idea is weak, give an honest verdict and a better option before building. Don't just agree.
+- **"Learn from X"** means: report a short list plus a recommendation, then wait. Don't rebuild Tovi to look like X.
+- **Don't treat ambiguous words as a go-ahead.** A typo is not an approval.
+- **They watch credits.** Prefer the CLI over long browser-clicking loops. Keep replies short. Real AI calls cost them money, so keep AI tests few.
+- **Security:**
+  - Never ask them to paste tokens or passwords. Sign-ins happen on the service's own pages.
+  - Never read, print or repeat API keys. Keys live in `engine/.env` (git-ignored) and are set from Tovi's Settings page.
+  - Don't sign in, create accounts or accept terms for them.
+- **Git:**
   - Work on branches with pull requests.
-  - **Merge to `main` only when the user explicitly approves** (for example: "I've reviewed PR N and approve it. Squash-merge it into main now…").
+  - **Merge to `main` only when Tobi explicitly says so.**
   - Commit messages end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. PR bodies end with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
-- **Never test on the user's real Stratemark repo in a way that pushes or changes it.** Use a throwaway `git worktree` copy (see section 7), and never click "Create pull request" against it.
+  - Big pushes may need `git -c http.postBuffer=524288000 push`.
+- **Never run `git checkout`, `reset` or `clean` in `~/Kerf/projects/*`.** Those are Tovi's copies of real projects and hold the user's unsent edits. Test on throwaway copies in your scratchpad. To undo, use Tovi's own `.kerf` history.
+- **Never push to, or make a PR against, the real Stratemark repo.**
 
 ## 3. Where everything is
 
 | What | Where |
 |---|---|
-| Tovi repo (git root) | `/Users/mac/Documents/kerf` → GitHub `squarepegng/tovi` |
-| The real product (engine + editor) | `/Users/mac/Documents/kerf/engine` |
-| Original single-file prototype | `index.html` on `main` of `squarepegng/tovi`, deployed by Vercel from `main` |
-| Project context and decisions | `/Users/mac/Documents/kerf/CLAUDE.md` |
-| Open decisions checklist | `/Users/mac/Documents/kerf/CHECKLIST.md` |
-| The user's own test app: Stratemark | `/Users/mac/Documents/STRATEMARK-app` → GitHub `squarepegng/STRATEMARK-app` (web app in `apps/web`, Vite + React + Tailwind v3) |
-| Tovi's own copy of Stratemark (opened from its GitHub link) | `/Users/mac/Kerf/projects/squarepegng-stratemark-app`. **The user's ~63 unsent Tovi edits live here**, saved in `apps/web/.kerf/session.json`. Do not reset or delete. |
-| PRD | https://claude.ai/code/artifact/dcb2536a-92df-4e67-b457-ef372bced01b |
-| Design system | https://claude.ai/artifact/9zuJsZn7HJ4JoPgjHpsgDH |
-| Editor UI designs (6 screens) | https://claude.ai/artifact/HvAysqH9RWNmgXdTbJanM9 |
-| Live prototype | https://claude.ai/artifact/XCK8KwfQjqVnceGr1PvoYt |
+| Tovi repo | `/Users/mac/Documents/kerf` → `squarepegng/tovi` |
+| The real product (engine + editor + start page) | `engine/` |
+| Marketing website | `website/` (static: `index.html`, `site.js`, `fonts/`, `img/`) |
+| Website copy | `docs/landing-page-copy.md` |
+| Original single-file prototype (demo only) | `index.html` at the repo root, deployed by Vercel from `main` |
+| Product decisions, design tokens | `CLAUDE.md` |
+| Every feature idea + the founder's decision | `CHECKLIST.md` |
+| Tobi's full design language (UI rules, learned the hard way) | `~/.claude/skills/ui-craft/SKILL.md` (copy: `~/Documents/Tobi-design-language.md`). **Load it before any UI work.** |
+| Tovi's data on the Mac | `~/Kerf/`: `projects/` (cloned repos), `recent.json`, `prefs.json` (theme), `person.json` (name), `cards.json` (renamed or hidden project cards) |
+| Test repos | `squarepegng/northfold-demo` (sample shop; copy in `~/Kerf/projects/squarepegng-northfold-demo`), `aster-demo` (local only), `~/Documents/northfold` |
+| Tobi's real app: Stratemark | `/Users/mac/Documents/STRATEMARK-app` (Vite + React + Tailwind v3). Tovi's copy is `~/Kerf/projects/squarepegng-stratemark-app`, **with ~63 unsent edits in `apps/web/.kerf/session.json`. Do not touch.** |
+| PRD / design system / editor designs / old prototype | Links in `CLAUDE.md` |
 
 ## 4. How to run it
 
 ```bash
-cd ~/Documents/kerf/engine && node bin/kerf-home.mjs
+cd ~/Documents/kerf/engine && npm install      # once
+node bin/kerf-home.mjs                         # start page → http://localhost:4100
 ```
 
-- This opens the **start page at http://localhost:4100**: paste a GitHub link or a folder path, save the Anthropic key, open the project.
-- The user usually runs this in the Claude terminal tab `c4`.
-- If port 4100 or 5173 is busy, stop the old processes first: `lsof -t -iTCP:4100 -sTCP:LISTEN | xargs kill`.
-- The app opens with the editor at `http://localhost:<port>/__kerf/`.
-- To run one app directly: `node bin/kerf.mjs /path/to/app`. It picks Vite or Next.js automatically.
-- Tests: `cd engine && node --test test/`. 33 tests, all passing.
+- **Start page** (port 4100):
+  - Paste a GitHub link or a folder path. Tovi clones the repo into `~/Kerf/projects/`, finds the React + Tailwind app (monorepos too), installs it with the repo's own package manager, starts it with Tovi attached, and opens the editor at `http://localhost:<port>/__kerf/`.
+  - Settings has four tabs: Account, AI, Appearance, About.
+- **Open one app directly:** `node bin/kerf.mjs /path/to/app`. It picks Vite or Next.js automatically.
+- **If ports are busy:** `lsof -t -iTCP:4100 -sTCP:LISTEN | xargs kill` (same for 5173…).
+- **Website locally:** `cd website && python3 -m http.server 4300` → http://localhost:4300
+- **Tests:** `cd engine && npm test` → **55 tests, all passing**.
+- **End-to-end edit check against a running app:** `node scripts/live-check.mjs http://localhost:5173`
+- **After any engine change:** restart Tovi so Tobi gets the new code. Kill 4100 and the app port, then rerun `kerf-home.mjs`. Tobi often runs it in a Claude terminal tab.
 
-## 5. Branches and pull requests (state right now)
+## 5. How the engine works
 
-**`main` is current. It has everything below, and there are no open pull requests.** The local copy is on `main`.
+**Core loop:**
+1. **Tag.** Before the framework compiles the app, the tagger stamps every JSX element with `data-kerf="file.tsx:line:col"`, and every component usage with `data-kerf-use` + `data-kerf-n`. Vite uses a plugin; Next.js uses a webpack pre-loader.
+2. **Show.** The editor (`/__kerf/`) runs the app in a same-origin iframe at `/`. Clicking an element maps it back to its exact place in the source.
+3. **Edit.** Each panel change becomes an operation such as `{prop:'padding', value:16}`.
+   - `tailwind.mjs` turns the operation into the right Tailwind class for the project's theme.
+   - `edit.mjs` rewrites that one JSX node with Babel + magic-string.
+   - If the style really lives elsewhere (a style table, constant, cva variant or `@apply` class), `sources.mjs` finds it and edits it there.
+4. **Remember.** Every edit stores the file contents before and after. Undo, versions, "show before" and restore all come from this history, which is saved in `<app>/.kerf/session.json` (git-ignored via `.git/info/exclude`), along with versions and chat.
+5. **Hand off.** `session.mjs` makes the pull request:
+   - Branch `kerf/…`, never `main`.
+   - Build check and parse check first.
+   - Takes before/after pictures of up to 3 changed pages with a hidden Chrome.
+   - Pushes the pictures to a separate `tovi-screenshots/<name>` branch, so the code diff stays clean.
+   - Pushes the code and opens the PR with `gh`. The body is plain language with the code details folded away and a Before | After picture table.
+   - A second hand-off updates the same PR and adds a comment.
 
-| PR | What's in it | State |
-|---|---|---|
-| #1, #2 | Prototype Edit mode; the engine that opens a GitHub project and edits it like Figma | Merged |
-| [#3](https://github.com/squarepegng/tovi/pull/3) | AI (Ask, ⌘K chat, notes with per-note results, image attachments, dictation); component properties; structure edits (delete, duplicate, move, swap, insert, replace, group/ungroup, images); layout tools and on-canvas handles; plain-language changes; saved sessions; cva variant editing; history and Create PR | Merged 2026-10-21 |
-| [#4](https://github.com/squarepegng/tovi/pull/4) | Designer names everywhere; panel shows only what fits; Figma-style canvas (zoom, fit, device frames); fixes (disabled elements selectable, autofocus no longer steals shortcuts, plain PR dialog, Save as a version, start-page logs hidden) | Merged 2026-10-21 |
-| [#5](https://github.com/squarepegng/tovi/pull/5) | Edit per screen size ("All sizes" / "Mobile only"…); Next.js 13+ support; clear messages for unsupported projects; Tailwind TS configs; `HANDOFF.md`, `CHECKLIST.md`, updated README | Merged 2026-10-21 |
+**Supported today:**
+- React with **Vite**, or **Next.js 13+** (webpack dev server, not Turbopack)
+- **Tailwind v3** (JS or TS config)
 
-All were squash-merged. The old branches `kerf/ai-layer`, `kerf/sprint-1` and `kerf/sprint-2` are fully contained in `main`; don't build on them. Start new work on a fresh branch from `main`.
+Anything else gets a plain explanation: CRA, Remix, Astro, Gatsby, Tailwind v4, no Tailwind, Next 12.
 
-**Stacked PRs:** after a squash merge, the next PR in the stack conflicts. If `main` matches the merged branch exactly (check with `git diff origin/main origin/<merged-branch>`), run `git merge -s ours origin/main` on the next branch and push. That records the merge without changing any files, and the PR becomes clean.
+### Engine files (`engine/`)
 
-## 6. How the engine works (map for a developer)
-
-**Core idea:**
-- A tagger stamps every JSX element with `data-kerf="file.tsx:line:col"`, and component usages with `data-kerf-use` + `data-kerf-n`, before the framework compiles it.
-- The editor runs the app in a same-origin iframe at `/`, maps clicks back to source, and changes code through AST edits (Babel parser + magic-string).
-
-| File (`engine/`) | Job |
+| File | Job |
 |---|---|
-| `bin/kerf-home.mjs` | Start page (port 4100): open a GitHub link or folder, save the key, show status (logs hidden under "Technical details") |
-| `bin/kerf.mjs` | Runner. Next.js apps go to `kerf-next.mjs`; otherwise it loads the app's own `vite.config` with Tovi's plugin first |
-| `bin/kerf-next.mjs` | Next.js runner: custom HTTP server; `/__kerf/*` goes to Tovi, the rest to Next. Adds Tovi's loader by hooking Next's config loader through `Module._load`, so the user's `next.config` is never touched |
-| `src/next-loader.cjs` | Webpack "pre" loader that tags JSX for Next |
-| `src/plugin.mjs` | `createKerf(webRoot)`: the shared core (tagging + `/__kerf` API routes). The default export is the Vite plugin |
-| `src/project.mjs` | Clone or locate the project, find apps, `appProblem()` gives plain reasons for unsupported setups, install, start |
+| `bin/kerf-home.mjs` | Start page and Settings (port 4100). APIs: `/api/open`, `recent`, `card` (rename, remove, show in Finder), `job`, `key`, `key-status`, `ai-key`, `ai-provider`, `models`, `unsplash-key`, `prefs`, `me`, `about`, `thumb` |
+| `bin/kerf.mjs` | Runner: loads the app's own `vite.config` with Tovi's plugin first, or hands off to the Next runner |
+| `bin/kerf-next.mjs` | Next.js runner: own HTTP server, `/__kerf/*` → Tovi, the rest → Next. Hooks Next's config loader, so the user's `next.config` is never touched |
+| `src/next-loader.cjs` | Webpack pre-loader that tags JSX for Next |
+| `src/plugin.mjs` | `createKerf(webRoot)`: tagging plus every `/__kerf` API route (list below). Default export = Vite plugin |
+| `src/project.mjs` | Clone or find the project, find apps in monorepos, `appProblem()` plain reasons, install, start |
 | `src/ast.mjs` | `tagSource`, `parseCode`, `walk` |
-| `src/edit.mjs` | `editElement` (class ops, text, props, cva), `applyResponsive` (per-size edits), `describe`, `createEditor` (history, undo), `parseLoc` (only the app's own .jsx/.tsx, not node_modules) |
-| `src/tailwind.mjs` | `loadTheme` (JS/TS configs; includes `screens`), `buildTheme`, `matcher`, `applyOps` (each design property ↔ Tailwind class) |
-| `src/cva.mjs` | Variant components (shadcn `cva`): base, one variant, or a compound variant |
-| `src/sources.mjs` | Where styles really live: style tables, constants, branches, class objects, `@apply` CSS classes; follows imports. `editSourced` in `edit.mjs` changes them there (scope here / key / all, or an AI target) |
-| `src/tokens.mjs` | Design tokens: reads colour tokens (CSS variables per light/dark selector, or hex in the Tailwind config) and writes them back in their own format |
-| `src/structure.mjs` | Delete, duplicate, move, swap, insert, replace, group/ungroup, image |
-| `src/props.mjs` | Component properties (e.g. icon weight, button variant) |
+| `src/edit.mjs` | `editElement` (classes, text, props, cva), `applyResponsive` (per-size edits with `md:`/`lg:`), `createEditor` (history, undo, current page), `parseLoc` (only the app's own files) |
+| `src/tailwind.mjs` | Reads the theme; maps each design property ↔ Tailwind class, including background images (`bgImg`, `bgSize`, `bgPos`) |
+| `src/sources.mjs` | Finds where a style really lives (style tables, constants, branches, class objects, `@apply` CSS) and follows imports |
+| `src/cva.mjs` | shadcn-style variant components: base, one variant, or a compound variant |
+| `src/tokens.mjs` | Colour tokens (CSS variables per light/dark, or config hex): read and write in their own format |
+| `src/structure.mjs` | Delete, duplicate, move, swap, insert, replace, group/ungroup, images |
+| `src/props.mjs` | Component properties (icon weight, button variant…) |
 | `src/library.mjs` | Icons (lucide, phosphor), project components, uploads to `public/kerf/` |
-| `src/session.mjs` | Saves history, versions and chat to `<app>/.kerf/session.json` (git-ignored via `.git/info/exclude`); repo info; creates the PR via git + `gh` |
-| `src/ai.mjs` | Claude calls (`claude-opus-5-5`, structured output via Zod). Schema covers style ops, structure actions, per-note results and image attachments (`attachment:N`) |
-| `src/labels.mjs` | Plain-language labels: `changeLabel`, `designName` ("Title “Stratemark”") |
-| `editor/index.html`, `editor.js`, `editor.css` | The whole editor UI: canvas with zoom, layers, design panel, toolbar, Ask/chat/notes composer, history, PR dialog |
-| `test/engine.test.mjs` | Engine tests |
+| `src/fonts.mjs` | Adds a Google Font the way a developer would (link + `fontFamily` in the config) as one undoable edit |
+| `src/images.mjs` | Unsplash photos, and SVG illustrations drawn by Claude |
+| `src/ai.mjs` | All AI calls (see section 7) |
+| `src/labels.mjs` | Plain-language names for elements and changes ("Title 'Stratemark'", "Padding 12 → 16") |
+| `src/session.mjs` | Saved history, versions and chat; repo info; `pullRequest()` with build check and pictures |
+| `src/shots.mjs` | Real screenshots via the installed Chrome (puppeteer-core, no download); full-page with a height cap |
+| `src/prshots.mjs` | PR pictures: which pages changed, push the images to the `tovi-screenshots/` side branch, build the Before/After markdown |
+| `src/person.mjs`, `prefs.mjs`, `recent.mjs` | The designer's name, theme preference and recent projects, kept in `~/Kerf/` |
+| `editor/index.html`, `editor.js` (~4,600 lines, plain-JS IIFE, state in `S`), `editor.css` (~1,700 lines; later override blocks are appended at the end) | The entire editor UI |
+| `test/engine.test.mjs` | 55 engine tests |
+| `scripts/live-check.mjs` | Real edits through the API against a running app |
 
-**Supported today:** React with **Vite** or **Next.js 13+ (webpack dev, not Turbopack)**, styled with **Tailwind v3**. Unsupported setups get a plain message: Create React App, Remix, Astro, Gatsby, Tailwind v4, no Tailwind, Next 12.
+**Editor API routes** (`/__kerf/…`):
+- **Editing:** `edit`, `undo`, `restore`, `peek`, `unpeek`, `inspect`, `structure`, `tokens`, `token`, `theme`, `fonts`, `icons`, `icons/suggest`, `components`, `upload`, `uploads`, `images/photos`, `images/photo-used`, `images/illustrate`
+- **History and hand-off:** `changes`, `versions`, `version`, `shots`, `thumb`, `pr`
+- **AI:** `ai`, `ai/apply`, `ai-config`, `chat`, `diagnose`, `direction`, `keys`
+- **Project and account:** `project`, `rename`, `prefs`, `person`, `accounts` (GitHub logins via `gh`, tokens never returned), `account` (switches only between accounts already signed in)
 
-## 7. How to test safely (the pattern used so far)
+Every POST from the editor also carries `_page`, so each edit remembers which page it was made on. The PR pictures use this.
 
-```bash
-SP=<your scratchpad>
-cd /Users/mac/Documents/STRATEMARK-app && git worktree add -q --detach $SP/sm HEAD
-ln -s /Users/mac/Documents/STRATEMARK-app/node_modules $SP/sm/node_modules
-ln -s /Users/mac/Documents/STRATEMARK-app/apps/web/node_modules $SP/sm/apps/web/node_modules
-cd /Users/mac/Documents/kerf/engine && node bin/kerf.mjs $SP/sm/apps/web   # usually lands on :5174
-# afterwards: kill the server, then: git -C /Users/mac/Documents/STRATEMARK-app worktree remove --force $SP/sm
-```
+## 6. What the editor does today (all built and working)
 
-- Stratemark's screens beyond the access-code page need a sign-in Tovi can't do. Test on the access-code screen and the 404 page. **Don't** copy sign-in data across.
-- For Next.js, a sample app was made with `npx create-next-app@14.2.15 shop --ts --tailwind --no-eslint --app --no-src-dir --import-alias "@/*" --use-npm` in a scratch folder.
-- Real AI calls cost the user money. Keep AI tests few.
-- Use the built-in browser to check the UI; `javascript_tool` is handy for reading state inside the iframe.
+**Layout:**
+- No top bar (Paper-style). The left panel header holds the Tovi menu, project and page. The right panel header holds the avatar (with a menu to switch GitHub account), history, zoom and **Hand off** (pink).
+- Screen sizes and Present float at the top centre of the canvas.
+- One minimal bottom toolbar holds the Preview/Edit switch, tools in flyouts, and a pending-changes dot on the history icon.
+- A hidden panel shrinks to a small floating pill.
+- Light and dark themes; dark is the default.
 
-## 8. What works (verified)
+**Selection and canvas:**
+- Select anything, including disabled buttons. Designer names show everywhere.
+- Shift-click to multi-select.
+- Padding and size handles (snap 4px, Shift for 1px). Alt to measure. Drag to reorder.
+- Zoom, fit and pinch. Desktop, tablet and mobile frames. Present mode.
 
-- **Selection and naming:** select any element, including disabled buttons. Designer names show on the canvas, in layers, panel, toasts, history and the PR.
-- **Design panel:**
-  - Typography (size, weight, line height, letter spacing, align), text colour, fill (incl. gradients and gradient text), stroke, radius (incl. per corner), opacity, shadow.
-  - Auto layout (direction, wrap, 3×3 align, gap, space between, padding), size (Hug / Fill / Fixed), margin.
-  - Component properties and cva variants ("Only this one / All ghost / Every Button").
-- **On the canvas:** padding and size handles (snap 4px, Shift for 1px), Alt to measure, Shift-click to multi-select, drag to reorder, zoom/fit/100%/pinch, desktop/tablet/mobile frames.
-- **Structure:** delete, duplicate, move, swap icons and components, insert, replace, group/ungroup (⌘⌥G / ⇧⌘G), add and replace images (uploads).
-- **Per-size edits:** "All sizes" vs "Mobile only" (and tablet, desktop) via mobile-first `md:`/`lg:` classes. Verified on Next.js: desktop 20px, tablet 16px, mobile 18px.
-- **AI:**
-  - Ask bar, ⌘K chat and notes (pin, box, circle, arrow) share one conversation, which is saved.
-  - Proposals show in amber, then Apply or Discard. Notes results are grouped per note with Done / Partly / Not here, a switch per note, and hover highlighting.
-  - Image attachments (paste, drop or button): Claude sees them and can place one in the design. Mic dictation uses the Web Speech API (Chrome and Safari).
-- **History and PR:** undo, saved versions ("Save as a version", and automatically when going back to Preview), "Show before", Create PR (one PR, plain-language body with code details folded).
-- **Saved sessions:** history, versions and chat survive restarts.
+**Design panel** (Paper-style controls, Figma vocabulary):
+- **Type:** size, weight, line height, spacing, align, decoration, case.
+- **Colour:** text colour; fill (solid, gradient, gradient text, **image fill**); stroke; radius, including per corner; opacity; shadow; hide; clip.
+- **Layout:** auto layout (direction, wrap, 3×3 align, gap, space between, padding); Hug / Fill / Fixed; margin.
+- **Components:** component properties; cva variants ("Only this one / All ghost / Every Button").
+- **Images:** a dedicated image panel (fit, find a photo, upload, link). Fonts from Google Fonts.
+- **Per screen size:** the "where" choice ("All sizes / Mobile only") appears only when it matters.
+- **Nothing selected:** a compact colour palette, grouped by role with light/dark split swatches, which edits the design tokens.
 
-**Edit anywhere (built 2026-10-21):**
-- Styles in style tables, constants, branches and CSS classes are edited at their source, with a reach choice in the panel.
-- A colour palette (light/dark tokens) shows when nothing is selected.
-- The AI chooses the approach and reach first and says it in one sentence. It can also change tokens, or make a last-resort code edit (diff shown, auto-undo if the page breaks).
-- Tested with the Stratemark chip request: Claude added dark-theme colours to all four statuses in `CONFIDENCE_STYLES`, the TypeScript check passed, and undo restored everything.
+**Structure:** delete, duplicate, move, swap icons and components, insert, replace, group/ungroup, add and replace images.
 
-## 9. Known gaps and not-verified items
+**Edit anywhere:** styles in style tables, constants, branches and CSS classes are changed at their source, with a reach choice.
 
-- **Not verified:** double-clicking text to retype it. The code path works when triggered directly, but the test tool couldn't do a real double-click. Ask the user to try it.
-- **Next.js** is tested only on a sample app, not a real team project. Turbopack isn't supported.
-- **Not supported yet:** Tailwind v4 (common in new Next apps); signing in to the tester's app.
-- **Setup needs a developer** (Node, git, `gh`). There's no one-step install.
-- **PRs** have no build/type check and no before/after screenshots yet.
-- **No hover/focus/disabled state editing**, and no "used in N places".
-- **No error reporting** or "Report a problem".
-- **Font size changes can change line height:** Tailwind size classes carry their own line height (e.g. 24 → 36 also set the line height 32 → 40).
-- **At very narrow windows, Fit stays at a 50% minimum**, so the canvas scrolls sideways.
+**AI:** one chat on the left (⌘K).
+- It works on the selection, or on the whole screen.
+- **Newest:** the context chip has an × to switch to "Whole screen", and "+ Selection" brings it back. This is on branch `kerf/chat-context`, not merged; see section 9.
+- Proposals show in amber with Apply / Discard. Every AI change is an undoable version.
+- Image attachments (paste, drop or button), and mic dictation (Web Speech API).
+- When unsure, the AI offers "Try instead" or "Choose: a | b | c".
 
-## 10. Open decisions (waiting on the user)
+**Notes:**
+- Pin, box, circle or arrow on the screen, typed or by voice.
+- Markers are a dot plus a small dark tag; tags stack so they don't overlap.
+- "Apply all" runs them; results come back per note (Done / Partly / Not here).
 
-**Decided 9 Nov 2026 (all recommendations accepted; see CHECKLIST.md):** build next, in order, 1.1 one-step install → 1.7 Tailwind v4 → 1.2 app sign-in → 1.4 report a problem → 2.1 Match to Figma → 2.3 states. Notes stay their own mode; margin stays visible; never free positioning. Earlier highlights:
+**Diagnose:** Tovi reviews like a design lead and leaves notes on exact spots.
+- Scopes: This page, This selection, or Whole product (follows links, up to 10 pages, Stop any time).
+- "Check my product" runs on open (on by default).
 
-- **My top recommendations:**
-  - **2.1 "Match to Figma":** compare a Figma frame with the live screen and fix the drift as a PR.
-  - **2.3 States and real content.**
-  - **1.1 One-step install** and **1.3 Safer PRs**, which must come before testers use Tovi alone.
-- **Conflict to resolve:** 3.2 (merge notes into the Ask box) vs 3.3 (keep notes as their own mode). 3.1 (merge the Ask bar and ⌘K chat) is a separate choice.
-- **Never add free positioning** (drag anywhere). Auto layout stays the backbone.
+**History:** undo; saved versions (automatic when going back to Preview, plus "Save as a version"); show before; restore. The designer's name is on their versions.
 
-**Readiness verdict given to the user:** ready for a small **guided** test (5–10 friendly designers on a call), not yet for the 20–50 person private beta. That waits on one-step install, safer PRs and app sign-in.
+**Hand off:** see section 5. It was verified for real on `squarepegng/northfold-demo` PR #2 (25-second hand-off; the pictures are visibly different; only the changed file was in the diff).
 
-## 11. Conversation history in brief
+**Saved sessions:** history, versions and chat survive restarts.
 
-1. Pushed the prototype and `CLAUDE.md` to `squarepegng/tovi` and deployed it on Vercel. A browser-clicking deploy loop wasted credits; prefer CLI.
-2. The user clarified the goal: real Figma-style editing of any element, not a demo. We rebuilt Edit mode (PR #1, merged), then made it Figma/Framer-clean on request.
-3. Built the real engine to open any React + Tailwind codebase from a GitHub link or folder (the start page) instead of per-app editors. Tested on Stratemark.
-4. Added real Claude AI (Ask, ⌘K, notes) using the user's saved key (PR #2 merged; PR #3 open with much more).
-5. On user feedback: AI must "do what it can" rather than refuse. Added structure edits (delete, replace, swap, insert, images), gradients, grouping, layout tools, plain language, saved sessions, cva variants.
-6. Chat redesign: modern composer, image attachments, mic dictation, then notes answered one by one.
-7. Full product review, followed by Sprint 1 (designer language, Figma canvas, quick fixes; PR #4) and Sprint 2 (per-size edits, Next.js, unsupported messages; PR #5).
-8. Wrote `CHECKLIST.md` of every suggestion for the user to decide on. They'll come back with choices.
+## 7. AI details (lessons that cost time)
 
-**Next step for whoever picks this up:** wait for the user's checklist choices, or answer their question. Don't start new features unasked. After any engine change, restart their Tovi (kill ports 4100/5173, then run `node bin/kerf-home.mjs` in terminal tab c4) so they get the new code.
+- **Providers:** Claude (default, `claude-opus-5-5`), OpenAI and Gemini are wired in. Tobi chose Claude in Settings.
+  - Gemini returned 400 errors and isn't verified.
+  - Decision: Claude only for the private beta; verify OpenAI + Gemini before the public launch.
+- **Structured output:** proposals use the Anthropic SDK's `betaZodOutputFormat` with a Zod `Proposal` schema. **Provider limits:**
+  - At most **16 nullable/union fields** in the schema.
+  - The compiled grammar must not get "too large".
+  - We hit both. The fix was to pack fields into small objects (`group {with, className}`, `image {src, alt}`, unpacked at the start of the edits loop) and to drop the `ask`/`alt` fields.
+  - The model now writes a last line, `Try instead: <label> => <request>` or `Choose: a | b | c`, which code parses back into `p.alt` / `p.ask`.
+  - **Before adding a schema field, test that the call still succeeds** (a cheap Haiku probe is fine).
+- **Behaviour rules:** the AI is visual/layout only (no behaviour, data or backend). It says its approach and reach in one sentence first. It can change tokens, or make a last-resort code edit (diff shown, auto-undo if the page breaks).
+
+## 8. The website (`website/`)
+
+Static and dark, with no build step. It isn't deployed yet.
+
+**Type and grid:** Geist Serif for headings (`fonts/GeistSerifVF.woff2`, OFL) and Geist for body. A ruled grid with "+" marks at the intersections. No gradient glows (Tobi: gradients look cheap). Neutral textures per cell.
+
+**Hero:**
+- H1 "Designers, fix the *real* thing." at up to 72px. The lede is two lines at most.
+- A wide stage plays **real screenshots** of Tovi (`img/real/*.webp`) with one cursor and a shimmering rim around the AI chat box. No tilt and no fade.
+
+**#design section** (5 cells):
+- connect GitHub (New project dialog)
+- edit by hand (properties panel scrubbing a card)
+- AI edits (Tovi's chat plus a phone booking app that turns premium)
+- notes
+- Diagnose / audit (full width)
+
+**#ship section** (2 cells): code changes (before/after element beside its diff), and Hand off to the PR. The Version history card was removed on request.
+
+**Then:** a logo marquee, a values band, an FAQ, an invite form (it only confirms on the page; there's no backend), and the footer.
+
+**Animation:**
+- The `scene()` helper in `site.js` plays each animation only while it's on screen.
+- Cursors are an orange "You" dart, used only in the hero and one or two cells. Everything else uses a tap dot with a double ripple.
+- Features are animated components, not pasted screenshots, and they aren't numbered or lumped together.
+
+## 9. Branches and PRs right now
+
+- **`main`** has everything up to the merge of PR #10 (`16c840d`): one workspace, design-tool UI, edit styles where they live, AI, before/after pictures. PRs #1–#5 and #10 are merged; #7 was absorbed and #8 closed. **There are no open PRs.**
+- **`kerf/chat-context`** (`459ca11`) is pushed but has no PR yet. It's the "talk to Tovi without a selection" chat chip. Open a PR when Tobi says so.
+- Old branches (`kerf/design-ui`, `kerf/edit-anywhere`, `kerf/one-workspace`, `site/landing`) are contained in main. Don't build on them.
+- **Untracked files in the repo root** are Tobi's (`Tuvi Avatar.png`, `files.zip`, `.DS_Store`). Don't commit or delete them.
+
+## 10. How to test safely
+
+- **Always work on a copy.** For example:
+
+  ```bash
+  cp -R ~/Kerf/projects/squarepegng-northfold-demo $SCRATCH/nf
+  ```
+
+  Or use a `git worktree add --detach` of Stratemark, with `node_modules` symlinked. Then run `node bin/kerf.mjs $SCRATCH/nf`.
+- **Drive it** with puppeteer-core and the installed Chrome, or with the built-in browser. `javascript_tool` reads state inside the iframe.
+- **Test PRs** go to `squarepegng/northfold-demo` only, and only with Tobi's OK.
+- Stratemark screens past the access code need a sign-in Tovi can't do yet. Never copy sign-in data across.
+
+## 11. What's left: the decided build order
+
+Tobi accepted all recommendations on 9 Nov 2026 (see `CHECKLIST.md`). **Build in this order. Each needs a go-ahead before starting.**
+
+1. **1.1 One-step install.** One download or command that checks and sets up Node, git and the GitHub login. Today a developer has to do this, and it's the biggest blocker for beta testers.
+2. **1.7 Tailwind v4 support.** Most new projects use v4, which is CSS-first (`@theme` in CSS, no config file). Needs a new theme reader and class mapping.
+3. **1.2 Sign in to the tester's app.** A clear "sign in here once" step, so the preview, Diagnose and the PR pictures can reach screens behind a login.
+4. **1.4 Report a problem.** Opt-in error reporting plus a one-click report, so Tobi sees what failed.
+5. **2.1 Match to Figma.** Paste a Figma frame link; Tovi marks every difference from the live screen and fixes them as a PR. The top differentiator.
+6. **2.3 States and real content.** Edit hover, focus, disabled, loading, empty and error states; test with long names, empty lists and big numbers.
+
+**Before the public launch:** 1.8 verified OpenAI + Gemini, and 2.10 "start from a website link" (parked until after the beta).
+
+**Later:**
+- 2.4 "Used in N places"
+- 2.5 live preview of AI changes
+- 2.6 type scale and radius in the design system (colours are done)
+- 2.8 share a link (needs cloud mode)
+- 2.9 first-edit onboarding
+- 3.4 one combined Changes list
+
+**Decided, don't revisit:**
+- Notes stay their own mode (3.3).
+- Margin stays visible.
+- Code stays hidden by default.
+- **Never free positioning:** auto layout is the backbone.
+- Skip Claude-subscription sign-in (1.9).
+
+**Bigger phases after that (from `CLAUDE.md`):**
+- **Cloud mode:** the repo copied into Tovi's cloud, with Vercel preview deployments per PR.
+- Website launch and deploy, the beta invite backend, a light-theme pass, billing (free with your own key, paid with Tovi's AI).
+
+**Known gaps:**
+- Next.js has only been tested on a sample app; Turbopack isn't supported.
+- Font size changes can also change line height, because Tailwind size classes carry one.
+- Fit has a 50% minimum in very narrow windows.
+- Double-click-to-retype text wasn't verified with a real double-click.
+- Diagnose: near-duplicate notes across pages aren't merged yet.
+
+**Open questions for Tobi:** free-plan preview hosting (local vs cloud), beta user sourcing, success targets, whether hover and hidden states are in scope at launch.
+
+## 12. Design rules in one breath
+
+Full rules are in the `ui-craft` skill and `CLAUDE.md`.
+
+- **Colour:** neutral greys only (equal R, G and B). **Tovi pink is the primary colour**: #FCBDDD in dark, #C2508A in light. Pink buttons are 3D: Hand off and the active tool. Blue #2B66D9 means "what you're touching" on the canvas.
+- **Type and icons:** the Mac system font in the app; Geist Mono for code; Lucide icons at 1.25px.
+- **Controls and spacing:** Paper's control style (24px, 6px corners, flat 5% track, raised chosen item). Spacing 4/8/12/16; radii 4/6/10.
+- **Feel:** Framer finish with Figma structure.
+- **Don't:** heavy shadows, gradients as decoration, tinted greys, developer words in the UI, or empty placeholder panels.
